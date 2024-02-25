@@ -1,7 +1,7 @@
 # The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
+# Copyright © 2021 Yuma Rao
+# Copyright © 2023 Opentensor Foundation
+# Copyright © 2023 Opentensor Technologies Inc
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -17,38 +17,28 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import torch
-from typing import List
+import bittensor as bt
+from typing import List, Optional, Union, Any, Dict
+from sturdy.protocol import AllocateAssets
+from bittensor.subnets import SubnetsAPI
 
 
-def reward(query: int, response: int) -> float:
-    """
-    Reward the miner response to the dummy request. This method returns a reward
-    value for the miner, which is used to update the miner's score.
+class AllocateAssetsAPI(SubnetsAPI):
+    def __init__(self, wallet: "bt.wallet"):
+        super().__init__(wallet)
+        self.netuid = 33
+        self.name = "dummy"
 
-    Returns:
-    - float: The reward value for the miner.
-    """
+    def prepare_synapse(self, assets_and_pools: Dict) -> AllocateAssets:
+        synapse = AllocateAssets(assets_and_pools=assets_and_pools)
+        return synapse
 
-    return 1.0 if response == query * 2 else 0
-
-
-def get_rewards(
-    self,
-    query: int,
-    responses: List[float],
-) -> torch.FloatTensor:
-    """
-    Returns a tensor of rewards for the given query and responses.
-
-    Args:
-    - query (int): The query sent to the miner.
-    - responses (List[float]): A list of responses from the miner.
-
-    Returns:
-    - torch.FloatTensor: A tensor of rewards for the given query and responses.
-    """
-    # Get all the reward results by iteratively calling your reward() function.
-    return torch.FloatTensor(
-        [reward(query, response) for response in responses]
-    ).to(self.device)
+    def process_responses(
+        self, responses: List[Union["bt.Synapse", Any]]
+    ) -> List[int]:
+        outputs = []
+        for response in responses:
+            if response.dendrite.status_code != 200:
+                continue
+            return outputs.append(response.allocations)
+        return outputs

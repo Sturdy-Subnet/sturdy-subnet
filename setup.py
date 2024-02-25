@@ -26,6 +26,7 @@ from io import open
 from setuptools import setup, find_packages
 from pkg_resources import parse_requirements
 
+# TODO: take a look at https://github.com/ifrit98/storage-subnet/blob/da94f3309f05424f2b755055f041c11ce38f0a87/setup.py - and see what I might wanna add later
 
 def read_requirements(path):
     with open(path, "r") as f:
@@ -55,7 +56,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 
 # loading version from setup.py
 with codecs.open(
-    os.path.join(here, "template/__init__.py"), encoding="utf-8"
+    os.path.join(here, "sturdy/__init__.py"), encoding="utf-8"
 ) as init_file:
     version_match = re.search(
         r"^__version__ = ['\"]([^'\"]*)['\"]", init_file.read(), re.M
@@ -63,18 +64,18 @@ with codecs.open(
     version_string = version_match.group(1)
 
 setup(
-    name="bittensor_subnet_template",  # TODO(developer): Change this value to your module subnet name.
+    name="sturdy_subnet", 
     version=version_string,
-    description="bittensor_subnet_template",  # TODO(developer): Change this value to your module subnet description.
+    description="Decentralized allocation protocol for DeFi lending pools, enabling miner-driven asset distribution for optimal yield generation.", 
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/opentensor/bittensor-subnet-template",  # TODO(developer): Change this url to your module subnet github url.
-    author="bittensor.com",  # TODO(developer): Change this value to your module subnet author name.
+    url="https://github.com/Shr1ftyy/sturdy-subnet",
+    author="Shr1ftyy",  # TODO(developer): Change this value to your module subnet author name.
     packages=find_packages(),
     include_package_data=True,
-    author_email="",  # TODO(developer): Change this value to your module subnet author email.
+    author_email="syeamtechdemon@gmail.com",  # TODO(developer): Change this value to your module subnet author email.
     license="MIT",
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=requirements,
     classifiers=[
         "Development Status :: 3 - Alpha",

@@ -28,9 +28,9 @@ import bittensor as bt
 from typing import List
 from traceback import print_exception
 
-from template.base.neuron import BaseNeuron
-from template.mock import MockDendrite
-from template.utils.config import add_validator_args
+from sturdy.base.neuron import BaseNeuron
+from sturdy.mock import MockDendrite
+from sturdy.utils.config import add_validator_args
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -136,21 +136,24 @@ class BaseValidatorNeuron(BaseNeuron):
         self.sync()
 
         bt.logging.info(f"Validator starting at block: {self.block}")
+        last_query_block = self.block
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                bt.logging.info(f"step({self.step}) block({self.block})")
 
-                # Run multiple forwards concurrently.
-                self.loop.run_until_complete(self.concurrent_forward())
+                # Run multiple forwards concurrently - runs every block
+                current_block = self.subtensor.block
+                if(current_block - last_query_block > 0):
+                    bt.logging.info(f"step({self.step}) block({self.block})")
+                    self.loop.run_until_complete(self.concurrent_forward())
+                    last_query_block = current_block
+                    # Sync metagraph and potentially set weights.
+                    self.sync()
 
                 # Check if we should exit.
                 if self.should_exit:
                     break
-
-                # Sync metagraph and potentially set weights.
-                self.sync()
 
                 self.step += 1
 

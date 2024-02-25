@@ -39,38 +39,39 @@ import bittensor as bt
 #   dummy_output = dendrite.query( Dummy( dummy_input = 1 ) )
 #   assert dummy_output == 2
 
+#  1. AllocateAssets
+#  2. AllocateAssetsUser  - TODO: is this really needed?
+#  3. SubmitAllocations
 
-class Dummy(bt.Synapse):
+
+class AllocateAssets(bt.Synapse):
     """
-    A simple dummy protocol representation which uses bt.Synapse as its base.
-    This protocol helps in handling dummy request and response communication between
-    the miner and the validator.
+    This protocol helps in handling the distribution of validator-generated pools from
+    the validator to miners, and then gathering miner-generated allocations afterwards.
 
     Attributes:
-    - dummy_input: An integer value representing the input request sent by the validator.
-    - dummy_output: An optional integer value which, when filled, represents the response from the miner.
+    - pools: A list of pools sent by the validator.
+    - allocations: A list of pools and their respective allocations, when filled, represents the response from the miner.
     """
 
     # Required request input, filled by sending dendrite caller.
-    dummy_input: int
+    # todo: what type should this be?
+    assets_and_pools: typing.Dict[
+        int | str, typing.Dict | float
+    ]  # pools for miners to produce allocation amounts for - uid -> pool_info
 
     # Optional request output, filled by recieving axon.
-    dummy_output: typing.Optional[int] = None
+    allocations: typing.Optional[typing.Dict[int, float]] = None
 
-    def deserialize(self) -> int:
-        """
-        Deserialize the dummy output. This method retrieves the response from
-        the miner in the form of dummy_output, deserializes it and returns it
-        as the output of the dendrite.query() call.
+    # Saw this in https://github.com/ifrit98/storage-subnet/blob/HEAD/storage/protocol.py
+    # TODO: can this just be removed lol? - (Probably)
+    # required_request_fields = typing.List[str] = pydantic.Field(
+    #     [
+    #         "pools"
+    #     ]
+    #     ...
+    # )
 
-        Returns:
-        - int: The deserialized response, which in this case is the value of dummy_output.
-
-        Example:
-        Assuming a Dummy instance has a dummy_output value of 5:
-        >>> dummy_instance = Dummy(dummy_input=4)
-        >>> dummy_instance.dummy_output = 5
-        >>> dummy_instance.deserialize()
-        5
-        """
-        return self.dummy_output
+    def __str__(self):
+        # TODO: figure out hwo to only show certain keys from pools and/or allocations
+        return f"AllocateAssets(assets_and_pools={self.assets_and_pools})" f"allocations={self.allocations}"

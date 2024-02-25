@@ -1,7 +1,6 @@
 # The MIT License (MIT)
 # Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
+# Copyright © 2023 Syeam Bin Abdullah 
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -24,11 +23,11 @@ import time
 import bittensor as bt
 
 # Bittensor Validator Template:
-import template
-from template.validator import forward
+import sturdy
+from sturdy.validator import forward
 
 # import base validator class which takes care of most of the boilerplate
-from template.base.validator import BaseValidatorNeuron
+from sturdy.base.validator import BaseValidatorNeuron
 
 
 class Validator(BaseValidatorNeuron):
@@ -42,7 +41,6 @@ class Validator(BaseValidatorNeuron):
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
-
         bt.logging.info("load_state()")
         self.load_state()
 
@@ -51,13 +49,13 @@ class Validator(BaseValidatorNeuron):
     async def forward(self):
         """
         Validator forward pass. Consists of:
-        - Generating the query
+        - Generating the query.
         - Querying the miners
         - Getting the responses
         - Rewarding the miners
         - Updating the scores
         """
-        # TODO(developer): Rewrite this function based on your protocol definition.
+        bt.logging.debug("forward()")
         return await forward(self)
 
 
