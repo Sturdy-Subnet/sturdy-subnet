@@ -17,6 +17,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import sys
 import bittensor as bt
 import torch
 from typing import List, Dict
@@ -52,7 +53,8 @@ def get_rewards(
     """
 
     # maximum yield to scale all rewards by
-    max_apy = -1.7976931348623157e+308
+    # TODO: what to set smallest yield value to?
+    max_apy = sys.float_info.min
     # total apys of allocations per miner
     apys = []
 
@@ -61,7 +63,7 @@ def get_rewards(
         allocations = response.allocations
 
         if allocations == None:
-            apys.append(-1.7976931348623157e+308)
+            apys.append(sys.float_info.min)
             continue
 
         initial_balance = assets_and_pools["total_assets"]
@@ -98,7 +100,7 @@ def get_rewards(
         # punish if miner they're cheating
         # TODO: create a more forgiving penalty system?
         if cheating:
-            apys.append(-1.7976931348623157e+308)
+            apys.append(sys.float_info.min)
             continue
 
         # append total apy of miner to yields
@@ -109,8 +111,11 @@ def get_rewards(
 
         apys.append(apy)
 
-    apys_dict = {x:apys[x] for x in range(len(apys))}
-    sorted_apys = {k: v for k, v in sorted(apys_dict.items(), key=lambda item: item[1], reverse=True)}
+    apys_dict = {x: apys[x] for x in range(len(apys))}
+    sorted_apys = {
+        k: v
+        for k, v in sorted(apys_dict.items(), key=lambda item: item[1], reverse=True)
+    }
     bt.logging.debug(f"sorted apys: {sorted_apys}")
 
     # Get all the reward results by iteratively calling your reward() function.

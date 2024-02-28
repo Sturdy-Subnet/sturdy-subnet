@@ -108,22 +108,35 @@ class TestGreedyAlgorithm(TestCase):
             8: 0.0401,
             9: 0.1132,
         }
-        responses = [AllocateAssets(assets_and_pools=assets_and_pools, allocations=allocations)]
+        responses = [
+            AllocateAssets(assets_and_pools=assets_and_pools, allocations=allocations)
+        ]
 
-        sorted_responses = {k: v for k, v in sorted(allocations.items(), key=lambda item: item[1], reverse=True)}
+        sorted_responses = {
+            k: v
+            for k, v in sorted(
+                allocations.items(), key=lambda item: item[1], reverse=True
+            )
+        }
 
         print(f"sorted responses: {sorted_responses}")
         rewards = get_rewards(
             validator,
             validator.step,
             assets_and_pools=assets_and_pools,
-            responses=responses
+            responses=responses,
         )
 
-        rewards_dict = {k:v for k,v in enumerate(list(rewards))}  
-        sorted_rewards = {k: v for k, v in sorted(rewards_dict.items(), key=lambda item: item[1], reverse=True)}
+        rewards_dict = {k: v for k, v in enumerate(list(rewards))}
+        sorted_rewards = {
+            k: v
+            for k, v in sorted(
+                rewards_dict.items(), key=lambda item: item[1], reverse=True
+            )
+        }
 
         print(f"sorted rewards: {sorted_rewards}")
+
 
 if __name__ == "__main__":
     unittest.main()

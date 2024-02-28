@@ -26,6 +26,7 @@ from sturdy.pools import generate_assets_and_pools
 
 bt.metagraph
 
+
 async def forward(self):
     """
     The forward function is called by the validator every time step.
@@ -55,10 +56,16 @@ async def forward(self):
 
     # TODO(developer): Define how the validator scores responses.
     # Adjust the scores based on responses from miners.
-    rewards = get_rewards(self, query=self.step, assets_and_pools=assets_and_pools, responses=responses)
+    rewards = get_rewards(
+        self, query=self.step, assets_and_pools=assets_and_pools, responses=responses
+    )
 
     bt.logging.info(f"Scored responses: {rewards}")
-    active_uids = [uid for uid in range(len(self.metagraph.axons)) if self.metagraph.axons[uid].is_serving]
+    active_uids = [
+        uid
+        for uid in range(len(self.metagraph.axons))
+        if self.metagraph.axons[uid].is_serving
+    ]
     bt.logging.debug(f"active uids: {active_uids}")
     # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, active_uids)

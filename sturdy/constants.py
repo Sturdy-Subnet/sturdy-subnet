@@ -15,4 +15,4 @@ MAX_BORROW_THRESHOLD = 0.001
 MAX_BORROW_AMOUNT = (TOTAL_ASSETS / NUM_POOLS) - (TOTAL_ASSETS * MAX_BORROW_THRESHOLD)
 BORROW_AMOUNT_STEP = 0.001
 CHUNK_RATIO = 0.01  # chunk size as a percentage of total assets allocated during each iteration of greedy allocation algorithm
-GREEDY_SIG_FIGS = 4 # significant figures to round to for greedy algorithm allocations
+GREEDY_SIG_FIGS = 4  # significant figures to round to for greedy algorithm allocations
