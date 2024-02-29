@@ -47,6 +47,19 @@ python -m pip install -e .
 
 ---
 
+## Running
+
+### Validator
+```bash
+python3 neurons/validator.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT
+```
+
+### Miner
+```bash
+python3 neurons/miner.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT
+```
+---
+
 ## License
 This repository is licensed under the MIT License.
 ```text
