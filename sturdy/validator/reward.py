@@ -18,12 +18,67 @@
 # DEALINGS IN THE SOFTWARE.
 
 import sys
+import math
+
 import bittensor as bt
 import torch
 from typing import List, Dict
 
+from sturdy.constants import QUERY_TIMEOUT, STEEPNESS, DIV_FACTOR, NUM_POOLS
 
-def reward(query: int, max_apy: float, miner_apy: float) -> float:
+
+def get_response_times(uids: List[int], responses, timeout: float):
+    """
+    Returns a list of axons based on their response times.
+
+    This function pairs each uid with its corresponding axon's response time.
+    Lower response times are considered better.
+
+    Args:
+        uids (List[int]): List of unique identifiers for each axon.
+        responses (List[Response]): List of Response objects corresponding to each axon.
+
+    Returns:
+        List[Tuple[int, float]]: A sorted list of tuples, where each tuple contains an axon's uid and its response time.
+
+    Example:
+        >>> get_sorted_response_times([1, 2, 3], [response1, response2, response3])
+        [(2, 0.1), (1, 0.2), (3, 0.3)]
+    """
+    axon_times = {
+        uids[idx]: (
+            response.dendrite.process_time
+            if response.dendrite.process_time is not None
+            else timeout
+        )
+        for idx, response in enumerate(responses)
+    }
+    # Sorting in ascending order since lower process time is better
+    return axon_times
+
+
+def sigmoid_scale(
+    axon_time: float,
+    num_pools: int = NUM_POOLS,
+    steepness: float = STEEPNESS,
+    div_factor: float = DIV_FACTOR,
+    timeout: float = QUERY_TIMEOUT,
+) -> float:
+    offset = -float(num_pools) / div_factor
+    return (
+        (1 / (1 + math.exp(steepness * axon_time + offset)))
+        if axon_time < timeout
+        else 0
+    )
+
+
+def reward(
+    query: int,
+    max_apy: float,
+    miner_apy: float,
+    axon_time: float,
+    num_pools: int = NUM_POOLS,
+) -> float:
     """
     Reward the miner response to the dummy request. This method returns a reward
     value for the miner, which is used to update the miner's score.
@@ -31,13 +86,15 @@ def reward(query: int, max_apy: float, miner_apy: float) -> float:
     Returns:
     - float: The reward value for the miner.
     """
-
-    return miner_apy / max_apy
+    return (0.2 * sigmoid_scale(axon_time, num_pools=num_pools)) + (
+        0.8 * miner_apy / max_apy
+    )
 
 
 def get_rewards(
     self,
     query: int,
+    uids: List,
     assets_and_pools: Dict[int, Dict],
     responses: List,
 ) -> torch.FloatTensor:
@@ -56,14 +113,14 @@ def get_rewards(
     # TODO: what to set smallest yield value to?
     max_apy = sys.float_info.min
     # total apys of allocations per miner
-    apys = []
+    apys = {}
 
-    for response in responses:
+    for response_idx, response in enumerate(responses):
         alloc_yield = 0
         allocations = response.allocations
 
         if allocations == None:
-            apys.append(sys.float_info.min)
+            apys[uids[response_idx]] = sys.float_info.min
             continue
 
         initial_balance = assets_and_pools["total_assets"]
@@ -100,7 +157,7 @@ def get_rewards(
         # punish if miner they're cheating
         # TODO: create a more forgiving penalty system?
         if cheating:
-            apys.append(sys.float_info.min)
+            apys[uids[response_idx]] = sys.float_info.min
             continue
 
         # append total apy of miner to yields
@@ -109,16 +166,33 @@ def get_rewards(
         if apy > max_apy:
             max_apy = apy
 
-        apys.append(apy)
+        apys[uids[response_idx]] = apy
 
-    apys_dict = {x: apys[x] for x in range(len(apys))}
+    apys_dict = {uid: apys[idx] for idx, uid in enumerate(uids)}
     sorted_apys = {
         k: v
         for k, v in sorted(apys_dict.items(), key=lambda item: item[1], reverse=True)
     }
+    axon_times = get_response_times(
+        uids=uids, responses=responses, timeout=QUERY_TIMEOUT
+    )
+    sorted_axon_times = {
+        k: v for k, v in sorted(axon_times.items(), key=lambda item: item[1])
+    }
+
     bt.logging.debug(f"sorted apys: {sorted_apys}")
+    bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
 
     # Get all the reward results by iteratively calling your reward() function.
     return torch.FloatTensor(
-        [reward(query, max_apy=max_apy, miner_apy=miner_apy) for miner_apy in apys]
+        [
+            reward(
+                query,
+                max_apy=max_apy,
+                miner_apy=apys_dict[uid],
+                axon_time=axon_times[uid],
+                num_pools=len(uids),
+            )
+            for uid in uids
+        ]
     ).to(self.device)

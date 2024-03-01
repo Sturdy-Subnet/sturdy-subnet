@@ -23,6 +23,7 @@ from sturdy.protocol import AllocateAssets
 from sturdy.validator.reward import get_rewards
 from sturdy.utils.uids import get_random_uids
 from sturdy.pools import generate_assets_and_pools
+from sturdy.constants import QUERY_TIMEOUT
 
 bt.metagraph
 
@@ -41,14 +42,17 @@ async def forward(self):
     assets_and_pools = generate_assets_and_pools()
 
     # The dendrite client queries the network.
+    # TODO: write custom availability function later down the road
+    active_uids = [uid for uid in range(self.metagraph.n.item()) if self.metagraph.axons[uid].is_serving]
+    active_axons = [self.metagraph.axons[uid] for uid in active_uids]
+
     responses = await self.dendrite(
         # Send the query to selected miner axons in the network.
-        axons=[axon for axon in self.metagraph.axons if axon.is_serving],
+        axons=active_axons,
         # Construct a dummy query. This simply contains a single integer.
         synapse=AllocateAssets(assets_and_pools=assets_and_pools),
-        # All responses have the deserialize function called on them before returning.
-        # You are encouraged to define your own deserialization function.
         deserialize=False,
+        timeout=QUERY_TIMEOUT,
     )
 
     # Log the results for monitoring purposes.
@@ -57,15 +61,14 @@ async def forward(self):
     # TODO(developer): Define how the validator scores responses.
     # Adjust the scores based on responses from miners.
     rewards = get_rewards(
-        self, query=self.step, assets_and_pools=assets_and_pools, responses=responses
+        self,
+        query=self.step,
+        uids=active_uids,
+        assets_and_pools=assets_and_pools,
+        responses=responses,
     )
 
     bt.logging.info(f"Scored responses: {rewards}")
-    active_uids = [
-        uid
-        for uid in range(len(self.metagraph.axons))
-        if self.metagraph.axons[uid].is_serving
-    ]
-    bt.logging.debug(f"active uids: {active_uids}")
+    bt.logging.debug(f"active axons: {active_axons}")
     # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, active_uids)
