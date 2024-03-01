@@ -107,7 +107,7 @@ python3 neurons/miner.py --netuid NETUID --subtensor.network NETWORK --wallet.na
 This repository is licensed under the MIT License.
 ```text
 # The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
+# Copyright © 2023 Shr1ftyy
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
