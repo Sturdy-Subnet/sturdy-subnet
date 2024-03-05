@@ -43,12 +43,8 @@ def generate_assets_and_pools() -> typing.Dict:  # generate pools
     pools = {
         x: {
             "pool_id": x,
-            "base_rate": randrange_float(
-                MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP
-            ),
-            "base_slope": randrange_float(
-                MIN_SLOPE, MAX_SLOPE, SLOPE_STEP
-            ),
+            "base_rate": randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP),
+            "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP),
             "kink_slope": randrange_float(
                 MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP
             ),  # kink rate - kicks in after pool hits

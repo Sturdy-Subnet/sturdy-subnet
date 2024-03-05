@@ -43,7 +43,11 @@ async def forward(self):
 
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
-    active_uids = [uid for uid in range(self.metagraph.n.item()) if self.metagraph.axons[uid].is_serving]
+    active_uids = [
+        uid
+        for uid in range(self.metagraph.n.item())
+        if self.metagraph.axons[uid].is_serving
+    ]
     active_axons = [self.metagraph.axons[uid] for uid in active_uids]
 
     responses = await self.dendrite(

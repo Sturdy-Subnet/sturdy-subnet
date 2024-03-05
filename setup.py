@@ -28,6 +28,7 @@ from pkg_resources import parse_requirements
 
 # TODO: take a look at https://github.com/ifrit98/storage-subnet/blob/da94f3309f05424f2b755055f041c11ce38f0a87/setup.py - and see what I might wanna add later
 
+
 def read_requirements(path):
     with open(path, "r") as f:
         requirements = f.read().splitlines()
@@ -64,9 +65,9 @@ with codecs.open(
     version_string = version_match.group(1)
 
 setup(
-    name="sturdy_subnet", 
+    name="sturdy_subnet",
     version=version_string,
-    description="Decentralized allocation protocol for DeFi lending pools, enabling miner-driven asset distribution for optimal yield generation.", 
+    description="Decentralized allocation protocol for DeFi lending pools, enabling miner-driven asset distribution for optimal yield generation.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Shr1ftyy/sturdy-subnet",

@@ -17,7 +17,7 @@ BORROW_AMOUNT_STEP = 0.001
 CHUNK_RATIO = 0.01  # chunk size as a percentage of total assets allocated during each iteration of greedy allocation algorithm
 GREEDY_SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
-QUERY_TIMEOUT = 10 # timeout (seconds)
+QUERY_TIMEOUT = 10  # timeout (seconds)
 # latency reward curve scaling parameters
 STEEPNESS = 1.0
-DIV_FACTOR = 1.5 # a scaling factor
+DIV_FACTOR = 1.5  # a scaling factor
