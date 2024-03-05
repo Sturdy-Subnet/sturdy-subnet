@@ -1,12 +1,12 @@
 <div align="center">
 
-# **Sturdy Finance Subnet** <!-- omit in toc -->
-[![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
+# **Sturdy Subnet** <!-- omit in toc -->
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 ---
 
-## Decentralized Allocation Protocol for DeFi Lending Pools <!-- omit in toc -->
+## Decentralized Yield Farming Fund <!-- omit in toc -->
 </div>
 
 - [Introduction](#introduction)
@@ -20,7 +20,11 @@
 
 ## Introduction
 
-This is split into three primary files. 
+The Sturdy Subnet is a Bittensor subnetwork that enables miners to propose where assets should be allocated to maximize yields. The best allocations are then used by third-party applications to move real assets on the Ethereum network. The first application using the Sturdy Subnet is the [Sturdy protocol](sturdy.finance).
+
+### Codebase
+
+There are three core files. 
 1. `sturdy/protocol.py`: Contains the definition of the protocol used by subnet miners and subnet validators. At the moment it only has one kind of synapse - `AllocateAssets` - which contains the inputs (`assets_and_pools`) validators need to send to miners to generate return `allocations` for. See `generate_assets_in_pools()` in [pools.py](./sturdy/pools.py) to see how assets and pools are defined.
 2. `neurons/miner.py`: Script that defines the subnet miner's behavior, i.e., how the subnet miner responds to requests from subnet validators.
 3. `neurons/validator.py`: This script defines the subnet validator's behavior, i.e., how the subnet validator requests information from the subnet miners and determines the scores.
@@ -66,6 +70,9 @@ def generate_assets_and_pools() -> typing.Dict:  # generate pools
 <div align="center"> 
     <img src="./assets/latency_scaling.png" />
 </div> 
+
+### Succeeding as a miner
+As mentioned above, 80% of the miner's score comes from how much yield their allocation produces relative to other miners. While a default allocation generation script has been provided in [misc.py](./sturdy/utils/misc.py), there is lots of room for optimization. Miners who want to excel in the Sturdy Subnet should try to improve on this algorithm using the information shared above and by taking a close look at how pools (as well as their yields) are defined (e.g. in [pools.py](./sturdy/pools.py)).
 
 ---
 
