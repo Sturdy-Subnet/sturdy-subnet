@@ -20,7 +20,7 @@
 
 ## Introduction
 
-The Sturdy Subnet is a Bittensor subnetwork that enables miners to propose where assets should be allocated to maximize yields. The best allocations are then used by third-party applications to move real assets on the Ethereum network. The first application using the Sturdy Subnet is the [Sturdy protocol](sturdy.finance).
+The Sturdy Subnet is a Bittensor subnetwork that enables miners to propose where assets should be allocated to maximize yields. The best allocations are then used by third-party applications to move real assets on the Ethereum network. The first application using the Sturdy Subnet is the [Sturdy protocol](https://sturdy.finance/).
 
 ### Codebase
 
