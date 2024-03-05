@@ -26,6 +26,8 @@ import sturdy
 
 # import base miner class which takes care of most of the boilerplate
 from sturdy.base.miner import BaseMinerNeuron
+from sturdy.constants import CHUNK_RATIO
+from sturdy.utils.misc import calculate_apy, greedy_allocation_algorithm
 
 
 class Miner(BaseMinerNeuron):
@@ -60,7 +62,11 @@ class Miner(BaseMinerNeuron):
         """
         # TODO(developer): Replace with actual implementation logic.
         bt.logging.debug("forward()")
-        synapse.allocations = {k:synapse.assets_and_pools["total_assets"]/len(synapse.assets_and_pools["pools"]) for k,v in synapse.assets_and_pools["pools"].items()}
+        # TODO: check to see that validators don't send unacceptable responses to miners???
+
+        # use default greedy alloaction algorithm to generate allocations
+        synapse.allocations = greedy_allocation_algorithm(synapse)
+
         bt.logging.info(f"sending allocations: {synapse.allocations}")
         return synapse
 

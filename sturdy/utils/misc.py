@@ -19,14 +19,91 @@
 import time
 import math
 import random
+import sturdy
+from sturdy.constants import CHUNK_RATIO, GREEDY_SIG_FIGS
 import hashlib as rpccheckhealth
 from math import floor
-from typing import Callable, Any
+from typing import Callable, Dict, Any
 from functools import lru_cache, update_wrapper
+
 
 # rand range but float
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
+
+
+def calculate_apy(util_rate: float, pool: Dict) -> float:
+    interest_rate = (
+        pool["base_rate"] + (util_rate / pool["optimal_util_rate"]) * pool["base_slope"]
+        if util_rate < pool["optimal_util_rate"]
+        else pool["base_rate"]
+        + pool["base_slope"]
+        + ((util_rate - pool["optimal_util_rate"]) / (1 - pool["optimal_util_rate"]))
+        * pool["kink_slope"]
+    )
+
+    return interest_rate
+
+
+def greedy_allocation_algorithm(synapse: sturdy.protocol.AllocateAssets) -> Dict:
+    max_balance = synapse.assets_and_pools["total_assets"]
+    balance = max_balance
+    pools = synapse.assets_and_pools["pools"]
+
+    # must allocate borrow amount as a minimum to ALL pools
+    balance -= sum([v["borrow_amount"] for k, v in pools.items()])
+    current_allocations = {k: v["borrow_amount"] for k, v in pools.items()}
+
+    assert balance >= 0
+
+    # run greedy algorithm to allocate assets to pools
+    while balance > 0:
+        # TODO: use np.float32 instead of format()??
+        current_apys = {
+            k: float(
+                format(
+                    calculate_apy(
+                        util_rate=v["borrow_amount"] / current_allocations[k], pool=v
+                    ),
+                    f".{GREEDY_SIG_FIGS}f",
+                )
+            )
+            for k, v in pools.items()
+        }
+
+        default_chunk_size = float(
+            format(CHUNK_RATIO * max_balance, f".{GREEDY_SIG_FIGS}f")
+        )
+        to_allocate = 0
+
+        if balance < default_chunk_size:
+            to_allocate = balance
+        else:
+            to_allocate = default_chunk_size
+
+        balance = float(format(balance - to_allocate, f".{GREEDY_SIG_FIGS}f"))
+        assert balance >= 0
+        max_apy = max(current_apys.values())
+        min_apy = min(current_apys.values())
+        apy_range = max_apy - min_apy
+
+        alloc_it = current_allocations.items()
+        for pool_id, _ in alloc_it:
+            delta = float(
+                format(
+                    to_allocate * ((current_apys[pool_id] - min_apy) / (apy_range)),
+                    f".{GREEDY_SIG_FIGS}f",
+                )
+            )
+            current_allocations[pool_id] = float(
+                format(current_allocations[pool_id] + delta, f".{GREEDY_SIG_FIGS}f")
+            )
+            to_allocate = float(format(to_allocate - delta, f".{GREEDY_SIG_FIGS}f"))
+
+        assert to_allocate == 0  # should allocate everything from current chunk
+
+    return current_allocations
+
 
 # LRU Cache with TTL
 def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1):

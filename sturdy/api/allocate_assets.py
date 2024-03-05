@@ -33,9 +33,7 @@ class AllocateAssetsAPI(SubnetsAPI):
         synapse = AllocateAssets(assets_and_pools=assets_and_pools)
         return synapse
 
-    def process_responses(
-        self, responses: List[Union["bt.Synapse", Any]]
-    ) -> List[int]:
+    def process_responses(self, responses: List[Union["bt.Synapse", Any]]) -> List[int]:
         outputs = []
         for response in responses:
             if response.dendrite.status_code != 200:

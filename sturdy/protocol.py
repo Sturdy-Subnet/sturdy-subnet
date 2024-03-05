@@ -55,7 +55,7 @@ class AllocateAssets(bt.Synapse):
     """
 
     # Required request input, filled by sending dendrite caller.
-    # todo: what type should this be?
+    # TODO: what type should this be?
     assets_and_pools: typing.Dict[
         int | str, typing.Dict | float
     ]  # pools for miners to produce allocation amounts for - uid -> pool_info
@@ -74,4 +74,7 @@ class AllocateAssets(bt.Synapse):
 
     def __str__(self):
         # TODO: figure out hwo to only show certain keys from pools and/or allocations
-        return f"AllocateAssets(assets_and_pools={self.assets_and_pools})" f"allocations={self.allocations}"
+        return (
+            f"AllocateAssets(assets_and_pools={self.assets_and_pools})"
+            f"allocations={self.allocations}"
+        )
