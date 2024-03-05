@@ -1,13 +1,14 @@
 import unittest
-from unittest import TestCase
+from unittest import IsolatedAsyncioTestCase
 
 from sturdy.protocol import AllocateAssets
 from neurons.validator import Validator
 from sturdy.validator.reward import get_rewards
+from sturdy.constants import QUERY_TIMEOUT
 
 
-class TestGreedyAlgorithm(TestCase):
-    def test_get_rewards(self):
+class TestValidator(IsolatedAsyncioTestCase):
+    async def test_get_rewards(self):
         # TODO: use config.mock? create a config json file for mock validator?
         config = {"mock": True}
         validator = Validator(config=config)
@@ -108,21 +109,40 @@ class TestGreedyAlgorithm(TestCase):
             8: 0.0401,
             9: 0.1132,
         }
-        responses = [
-            AllocateAssets(assets_and_pools=assets_and_pools, allocations=allocations)
+
+        active_uids = [
+            uid
+            for uid in range(validator.metagraph.n.item())
+            if validator.metagraph.axons[uid].is_serving
         ]
 
-        sorted_responses = {
-            k: v
-            for k, v in sorted(
-                allocations.items(), key=lambda item: item[1], reverse=True
-            )
-        }
+        active_axons = [validator.metagraph.axons[uid] for uid in active_uids]
 
-        print(f"sorted responses: {sorted_responses}")
+        synapse = AllocateAssets(assets_and_pools=assets_and_pools)
+
+        responses = await validator.dendrite(
+            # Send the query to selected miner axons in the network.
+            axons=active_axons,
+            # Construct a dummy query. This simply contains a single integer.
+            synapse=AllocateAssets(
+                assets_and_pools=assets_and_pools, allocations=allocations
+            ),
+            deserialize=False,
+            timeout=QUERY_TIMEOUT,
+        )
+
+        # check that the allocations have correct amounts
+        for response in responses:
+            allocs = response.allocations
+            self.assertTrue(
+                all([amount >= assets_and_pools["pools"][pool_id]["borrow_amount"] for pool_id, amount in allocs.items()])
+            )
+
+        # TODO: better testing?
         rewards = get_rewards(
             validator,
             validator.step,
+            active_uids,
             assets_and_pools=assets_and_pools,
             responses=responses,
         )

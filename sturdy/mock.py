@@ -5,6 +5,7 @@ import random
 import bittensor as bt
 
 from typing import List
+from sturdy.constants import QUERY_TIMEOUT
 
 
 class MockSubtensor(bt.MockSubtensor):
@@ -63,7 +64,7 @@ class MockDendrite(bt.dendrite):
         self,
         axons: List[bt.axon],
         synapse: bt.Synapse = bt.Synapse(),
-        timeout: float = 12,
+        timeout: float = QUERY_TIMEOUT,
         deserialize: bool = True,
         run_async: bool = True,
         streaming: bool = False,
@@ -87,12 +88,12 @@ class MockDendrite(bt.dendrite):
                     s.dendrite.process_time = str(time.time() - start_time)
                     # Update the status code and status message of the dendrite to match the axon
                     # TODO (developer): replace with your own expected synapse data
-                    s.dummy_output = s.dummy_input * 2
+                    # s.dummy_output = s.dummy_input * 2
                     s.dendrite.status_code = 200
                     s.dendrite.status_message = "OK"
                     synapse.dendrite.process_time = str(process_time)
                 else:
-                    s.dummy_output = 0
+                    # s.dummy_output = 0
                     s.dendrite.status_code = 408
                     s.dendrite.status_message = "Timeout"
                     synapse.dendrite.process_time = str(timeout)
