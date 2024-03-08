@@ -58,9 +58,11 @@ async def forward(self):
         deserialize=False,
         timeout=QUERY_TIMEOUT,
     )
+    allocations = {uid: responses[idx].allocations for idx, uid in enumerate(active_uids)}
 
     # Log the results for monitoring purposes.
-    bt.logging.info(f"Received responses: {responses}")
+    bt.logging.debug(f"Pools: {assets_and_pools['pools']}")
+    bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
     # TODO(developer): Define how the validator scores responses.
     # Adjust the scores based on responses from miners.

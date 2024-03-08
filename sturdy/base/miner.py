@@ -34,7 +34,7 @@ class BaseMinerNeuron(BaseNeuron):
     """
 
     neuron_type: str = "MinerNeuron"
-
+    
     @classmethod
     def add_args(cls, parser: argparse.ArgumentParser):
         super().add_args(parser)
@@ -186,7 +186,6 @@ class BaseMinerNeuron(BaseNeuron):
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        bt.logging.info("resync_metagraph()")
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)
