@@ -20,17 +20,27 @@ import time
 import math
 import random
 import sturdy
+from pydantic import BaseModel
+import bittensor as bt
 from sturdy.constants import CHUNK_RATIO, GREEDY_SIG_FIGS
 import hashlib as rpccheckhealth
 from math import floor
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, Type
 from functools import lru_cache, update_wrapper
 
+# TODO: cleanup functions - lay them out better across files?
 
 # rand range but float
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
 
+def get_synapse_from_body(
+    body: BaseModel,
+    synapse_model: Type[bt.Synapse],
+) -> bt.Synapse:
+    body_dict = body.dict()
+    synapse = synapse_model(**body_dict)
+    return synapse
 
 def calculate_apy(util_rate: float, pool: Dict) -> float:
     interest_rate = (

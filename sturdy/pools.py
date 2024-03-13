@@ -41,8 +41,8 @@ from sturdy.constants import (
 def generate_assets_and_pools() -> typing.Dict:  # generate pools
     assets_and_pools = {}
     pools = {
-        x: {
-            "pool_id": x,
+        str(x): {
+            "pool_id": str(x),
             "base_rate": randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP),
             "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP),
             "kink_slope": randrange_float(

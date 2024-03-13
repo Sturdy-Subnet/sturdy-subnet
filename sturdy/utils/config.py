@@ -235,6 +235,27 @@ def add_validator_args(cls, parser):
         default="opentensor-dev",
     )
 
+    parser.add_argument(
+        "--api_port",
+        type=int,
+        help="The port you want the api to run on",
+        default=9000,
+    )
+
+    parser.add_argument(
+        "--synthetic",
+        help="If you want to run a synthetic validator",
+        type=lambda x: (str(x).lower() == 'true'),
+        default=True,
+    )
+
+    parser.add_argument(
+        "--organic",
+        help="If you want to run a organic validator",
+        type=lambda x: (str(x).lower() == 'true'),
+        default=False,
+    )
+
 
 def config(cls):
     """

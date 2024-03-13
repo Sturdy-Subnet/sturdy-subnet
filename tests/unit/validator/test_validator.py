@@ -15,7 +15,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         assets_and_pools = {
             "total_assets": 1.0,
             "pools": {
-                0: {
+                "0": {
                     "pool_id": 0,
                     "base_rate": 0.0,
                     "base_slope": 0.011,
@@ -23,7 +23,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.032,
                 },
-                1: {
+                "1": {
                     "pool_id": 1,
                     "base_rate": 0.01,
                     "base_slope": 0.012,
@@ -31,7 +31,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.02,
                 },
-                2: {
+                "2": {
                     "pool_id": 2,
                     "base_rate": 0.01,
                     "base_slope": 0.015,
@@ -39,7 +39,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.006,
                 },
-                3: {
+                "3": {
                     "pool_id": 3,
                     "base_rate": 0.0,
                     "base_slope": 0.048,
@@ -47,7 +47,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.08,
                 },
-                4: {
+                "4": {
                     "pool_id": 4,
                     "base_rate": 0.0,
                     "base_slope": 0.032,
@@ -55,7 +55,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.006,
                 },
-                5: {
+                "5": {
                     "pool_id": 5,
                     "base_rate": 0.01,
                     "base_slope": 0.020999999999999998,
@@ -63,7 +63,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.081,
                 },
-                6: {
+                "6": {
                     "pool_id": 6,
                     "base_rate": 0.0,
                     "base_slope": 0.032,
@@ -71,7 +71,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.068,
                 },
-                7: {
+                "7": {
                     "pool_id": 7,
                     "base_rate": 0.0,
                     "base_slope": 0.019000000000000003,
@@ -79,7 +79,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.007,
                 },
-                8: {
+                "8": {
                     "pool_id": 8,
                     "base_rate": 0.0,
                     "base_slope": 0.037,
@@ -87,7 +87,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "optimal_util_rate": 0.8,
                     "borrow_amount": 0.023,
                 },
-                9: {
+                "9": {
                     "pool_id": 9,
                     "base_rate": 0.01,
                     "base_slope": 0.011,
@@ -139,7 +139,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             )
 
         # TODO: better testing?
-        rewards = get_rewards(
+        rewards, _ = get_rewards(
             validator,
             validator.step,
             active_uids,

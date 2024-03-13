@@ -27,7 +27,7 @@ import sturdy
 # import base miner class which takes care of most of the boilerplate
 from sturdy.base.miner import BaseMinerNeuron
 from sturdy.constants import CHUNK_RATIO
-from sturdy.utils.misc import calculate_apy, greedy_allocation_algorithm
+from sturdy.utils.misc import greedy_allocation_algorithm
 
 
 class Miner(BaseMinerNeuron):
