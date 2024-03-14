@@ -78,6 +78,11 @@ setup(
     license="MIT",
     python_requires=">=3.9,<3.11",
     install_requires=requirements,
+    entry_points={
+        "console_scripts": [
+            "sturdy=sturdycli:cli",
+        ],
+    },
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
