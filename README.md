@@ -31,12 +31,12 @@ There are three core files.
 
 ### Subnet Overview
 - Validators are reponsible for distributing lists of pools (of which contain relevant parameters such as base interest rate, base interest rate slope, minimum borrow amount, etc), as well as a maximum token balance miners can allocate to pools. Below is the function present in the codebase used for generating a dummy `assets_and_pools` taken from [pools.py](./sturdy/pools.py):
-```python
-def generate_assets_and_pools() -> typing.Dict:  # generate pools
+    ```python
+    def generate_assets_and_pools() -> typing.Dict:  # generate pools
     assets_and_pools = {}
     pools = {
-        x: {
-            "pool_id": x,
+        str(x): {
+            "pool_id": str(x),
             "base_rate": randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP),
             "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP),
             "kink_slope": randrange_float(
@@ -56,7 +56,9 @@ def generate_assets_and_pools() -> typing.Dict:  # generate pools
     assets_and_pools["pools"] = pools
 
     return assets_and_pools
-```
+    ```
+    Validators can optionally run an API server and sell their bandwidth to outside users to send their own pools to the subnet. For more information on this process - please read [docs/validator.md](docs/validator.md)
+
 - The miners, after receiving these pools from validators, must then attempt to allocate the `TOTAL_ASSETS` into the given pools, with the ultimate goal of trying to maximize their yield. This repository comes with a default asset allocation algorithm in the form of `greedy_allocation_algorithm` (a greedy allocation algorithm) in [misc.py](./sturdy/utils/misc.py). The greedy allocation essentially works by breaking its assets into many chunks of small sizes, and allocating them into the pools by utilizing their current yields to determine its allocations to each pool (it is done this way because the yields of the pools are dynamic based on their various parameters - most notably it's `utilization rate = borrow amount / total available tokens`). A diagram is provided below for the more visually attuned: 
 
 ![allocations](./assets/allocations.png)
@@ -94,17 +96,8 @@ python -m pip install -e .
 ---
 
 ## Running
-
-### Validator
-```bash
-python3 neurons/validator.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT
-```
-
-### Miner
-```bash
-python3 neurons/miner.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT
-```
----
+### [Miner](docs/miner.md)
+### [Validator](docs/Validator.md)
 
 ## License
 This repository is licensed under the MIT License.
