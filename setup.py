@@ -76,7 +76,7 @@ setup(
     include_package_data=True,
     author_email="syeamtechdemon@gmail.com",  # TODO(developer): Change this value to your module subnet author email.
     license="MIT",
-    python_requires=">=3.9,<3.11",
+    python_requires=">=3.10,<3.11",
     install_requires=requirements,
     entry_points={
         "console_scripts": [

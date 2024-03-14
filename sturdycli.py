@@ -8,8 +8,13 @@ from db import sql
 
 cli = typer.Typer(name="Sturdy Subnet CLI")
 
+
 @cli.command()
-def create_key(balance: Optional[float] = None, rate_limit_per_minute: Optional[int] = None, name: Optional[str] = None):
+def create_key(
+    balance: Optional[float] = None,
+    rate_limit_per_minute: Optional[int] = None,
+    name: Optional[str] = None,
+):
     """
     Create a new API key.
 
@@ -22,7 +27,9 @@ def create_key(balance: Optional[float] = None, rate_limit_per_minute: Optional[
     """
 
     if balance is None:
-        balance = float(input("Please enter initial balance for the key (1 credit = 1 image): "))
+        balance = float(
+            input("Please enter initial balance for the key (1 credit = 1 image): ")
+        )
 
     if rate_limit_per_minute is None:
         rate_limit_per_minute = int(input("Please enter rate limit per minute: "))
@@ -51,9 +58,7 @@ def create_key(balance: Optional[float] = None, rate_limit_per_minute: Optional[
 
 
 @cli.command()
-def update_key(
-    key: str, balance: float, rate_limit_per_minute: int, name: str
-):
+def update_key(key: str, balance: float, rate_limit_per_minute: int, name: str):
     """
     Update an existing API Key.
 
@@ -149,7 +154,6 @@ def logs_for_key(key: str):
     with sql.get_db_connection() as conn:
         logs = sql.get_all_logs_for_key(conn, key)
 
-
     if logs:
         for column_name in logs[0].keys():
             table.add_column(column_name)
@@ -191,9 +195,7 @@ def logs_summary():
         for log in logs:
             log = dict(log)
             endpoint = log.get(sql.ENDPOINT, "unknown_endpoint")
-            global_endpoint_dict[endpoint] = (
-                global_endpoint_dict.get(endpoint, 0) + 1
-            )
+            global_endpoint_dict[endpoint] = global_endpoint_dict.get(endpoint, 0) + 1
 
         summary_table.add_row(key, str(total_requests), str(total_credits_used))
 

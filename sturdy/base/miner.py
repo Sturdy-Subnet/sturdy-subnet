@@ -34,7 +34,7 @@ class BaseMinerNeuron(BaseNeuron):
     """
 
     neuron_type: str = "MinerNeuron"
-    
+
     @classmethod
     def add_args(cls, parser: argparse.ArgumentParser):
         super().add_args(parser)

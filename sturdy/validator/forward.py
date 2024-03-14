@@ -69,7 +69,6 @@ async def query_multiple_miners(
     uids: typing.List[int],
     deserialize: bool = False,
 ):
-
     uid_to_query_task = {
         uid: asyncio.create_task(query_miner(self, synapse, uid, deserialize))
         for uid in uids
@@ -91,7 +90,9 @@ async def query_and_score_miners(
 
     bt.logging.debug(f"active_uids: {active_uids}")
 
-    responses = await query_multiple_miners(self, AllocateAssets(assets_and_pools=assets_and_pools), active_uids)
+    responses = await query_multiple_miners(
+        self, AllocateAssets(assets_and_pools=assets_and_pools), active_uids
+    )
     allocations = {
         uid: responses[idx].allocations for idx, uid in enumerate(active_uids)
     }

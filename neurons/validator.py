@@ -24,7 +24,11 @@ import asyncio
 import bittensor as bt
 from fastapi import FastAPI, Depends, Request
 from fastapi.responses import JSONResponse, Response
-from starlette.status import HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_429_TOO_MANY_REQUESTS
+from starlette.status import (
+    HTTP_400_BAD_REQUEST,
+    HTTP_401_UNAUTHORIZED,
+    HTTP_429_TOO_MANY_REQUESTS,
+)
 import threading
 import uvicorn
 
@@ -88,7 +92,6 @@ def _get_api_key(request: Request):
 
 @app.middleware("http")
 async def api_key_validator(request, call_next):
-
     if request.url.path in ["/docs", "/openapi.json", "/favicon.ico", "/redoc"]:
         return await call_next(request)
 
@@ -108,7 +111,7 @@ async def api_key_validator(request, call_next):
         )
     # endpoint = request.url.path.split("/")[-1]
     # credits_required = ENDPOINT_TO_CREDITS_USED.get(endpoint, 1)
-    credits_required = 1 # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
+    credits_required = 1  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
 
     # Now check credits
     if (

@@ -245,14 +245,14 @@ def add_validator_args(cls, parser):
     parser.add_argument(
         "--synthetic",
         help="If you want to run a synthetic validator",
-        type=lambda x: (str(x).lower() == 'true'),
+        type=lambda x: (str(x).lower() == "true"),
         default=True,
     )
 
     parser.add_argument(
         "--organic",
         help="If you want to run a organic validator",
-        type=lambda x: (str(x).lower() == 'true'),
+        type=lambda x: (str(x).lower() == "true"),
         default=False,
     )
 

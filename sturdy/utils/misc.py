@@ -30,9 +30,11 @@ from functools import lru_cache, update_wrapper
 
 # TODO: cleanup functions - lay them out better across files?
 
+
 # rand range but float
 def randrange_float(start, stop, step):
     return random.randint(0, int((stop - start) / step)) * step + start
+
 
 def get_synapse_from_body(
     body: BaseModel,
@@ -41,6 +43,7 @@ def get_synapse_from_body(
     body_dict = body.dict()
     synapse = synapse_model(**body_dict)
     return synapse
+
 
 def calculate_apy(util_rate: float, pool: Dict) -> float:
     interest_rate = (

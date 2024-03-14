@@ -44,10 +44,12 @@ from pydantic import BaseModel, Field
 #  2. AllocateAssetsUser  - TODO: is this really needed?
 #  3. SubmitAllocations
 
+
 # TODO: move AllocInfo elsewhere?
 class AllocInfo(typing.TypedDict):
     apy: str
     allocations: typing.Dict[str, float]
+
 
 class AllocateAssetsRequest(BaseModel):
     class Config:
@@ -59,6 +61,7 @@ class AllocateAssetsRequest(BaseModel):
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
 
+
 class AllocateAssetsResponse(BaseModel):
     class Config:
         use_enum_values = True
@@ -68,6 +71,7 @@ class AllocateAssetsResponse(BaseModel):
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
+
 
 class AllocateAssetsBase(BaseModel):
     """
