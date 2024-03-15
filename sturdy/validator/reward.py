@@ -146,7 +146,11 @@ def get_rewards(
         # punish if miner they're cheating
         # TODO: create a more forgiving penalty system?
         if cheating:
-            apys[uids[response_idx]] = sys.float_info.min
+            miner_uid = uids[response_idx]
+            bt.logging.warning(
+                f"CHEATER DETECTED  - MINER WITH UID {miner_uid} - PUNISHING 👊😠"
+            )
+            apys[miner_uid] = sys.float_info.min
             continue
 
         # append total apy of miner to yields
