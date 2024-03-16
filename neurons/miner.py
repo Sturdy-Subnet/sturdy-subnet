@@ -65,7 +65,10 @@ class Miner(BaseMinerNeuron):
         # TODO: check to see that validators don't send unacceptable responses to miners???
 
         # use default greedy alloaction algorithm to generate allocations
-        synapse.allocations = greedy_allocation_algorithm(synapse)
+        try:
+            synapse.allocations = greedy_allocation_algorithm(synapse)
+        except Exception as e:
+            bt.logging.error(f"Error: {e}")
 
         bt.logging.info(f"sending allocations: {synapse.allocations}")
         return synapse

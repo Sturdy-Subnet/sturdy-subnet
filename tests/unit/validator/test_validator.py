@@ -161,9 +161,6 @@ class TestValidator(IsolatedAsyncioTestCase):
 
     async def test_get_rewards_punish(self):
         print("----==== test_get_rewards_punish ====----")
-        # TODO: use config.mock? create a config json file for mock validator?
-        # config = {"mock": True}
-        # validator = Validator(config=config)
         validator = self.validator
         assets_and_pools = {
             "total_assets": 1.0,
@@ -308,4 +305,5 @@ class TestValidator(IsolatedAsyncioTestCase):
 
 
 if __name__ == "__main__":
+    print("hello")
     unittest.main()

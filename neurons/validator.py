@@ -89,7 +89,6 @@ def _get_api_key(request: Request):
     else:
         return auth_header
 
-
 @app.middleware("http")
 async def api_key_validator(request, call_next):
     if request.url.path in ["/docs", "/openapi.json", "/favicon.ico", "/redoc"]:
@@ -143,83 +142,56 @@ async def api_key_validator(request, call_next):
     return response
 
 
+# Initialize core_validator outside of the event loop
+core_validator = None
+
 @app.get("/test")
 async def test():
     return {"Hello": "World"}
 
-
 @app.get("/vali")
-async def vali(validator=Depends(lambda: core_validator)):
-    ret = {"step": validator.step, "config": validator.config}
+async def vali():
+    ret = {"step": core_validator.step, "config": core_validator.config}
     return ret
 
-
 @app.post("/allocate")
-async def allocate(
-    body: AllocateAssetsRequest, validator=Depends(lambda: core_validator)
-) -> AllocateAssetsResponse:
+async def allocate(body: AllocateAssetsRequest):
     synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
-    # TODO: surely we can make this cleaner right?
-
-    api_loop = asyncio.get_running_loop()
-    core_loop = core_validator.loop
-    assert api_loop != core_loop
-    # asyncio.set_event_loop(core_loop)
-    result = core_loop.run_until_complete(
-        query_and_score_miners(core_validator, synapse.assets_and_pools)
-    )
-    # asyncio.set_event_loop(api_loop)
+    result = await query_and_score_miners(core_validator, synapse.assets_and_pools)
     ret = AllocateAssetsResponse(allocations=result)
     return ret
 
-
 # Function to run the main loop
-def run_main_loop():
+async def run_main_loop():
     try:
-        with core_validator:
-            while True:
-                # if asyncio.get_running_loop()
-                time.sleep(10)
+        core_validator.run_in_background_thread()
     except KeyboardInterrupt:
         print("Keyboard interrupt received, exiting...")
 
-
 # Function to run the Uvicorn server
-def run_uvicorn_server():
-    if core_validator.config.api_port is not None:
-        uvicorn.run(
-            app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio"
-        )
+async def run_uvicorn_server():
+    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")
+    server = uvicorn.Server(config)
+    await server.serve()
 
-
-async def create_validator():
+async def main():
     global core_validator
     core_validator = Validator()
-
-
-# The main function parses the configuration and runs the validator.
-# if __name__ == "__main__":
-async def main():
-    await create_validator()
     if not (core_validator.config.synthetic or core_validator.config.organic):
         bt.logging.error(
             "You did not select a validator type to run! Ensure you select to run either a synthetic or organic validator. Shutting down..."
         )
-        exit()
+        return
+
     bt.logging.info(f"organic: {core_validator.config.organic}")
+
     if core_validator.config.organic:
-        # Run the Uvicorn server and the main loop in separate threads
-        uvicorn_thread = threading.Thread(target=run_uvicorn_server)
-        main_loop_thread = threading.Thread(target=run_main_loop)
-
-        uvicorn_thread.start()
-        main_loop_thread.start()
-
-        uvicorn_thread.join()
-        main_loop_thread.join()
+        await asyncio.gather(run_uvicorn_server(), run_main_loop())
     else:
-        run_main_loop()
+        await run_main_loop()
 
+def start():
+    asyncio.run(main())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    start()

@@ -70,8 +70,8 @@ setup(
     description="Decentralized allocation protocol for DeFi lending pools, enabling miner-driven asset distribution for optimal yield generation.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Shr1ftyy/sturdy-subnet",
-    author="Shr1ftyy",  # TODO(developer): Change this value to your module subnet author name.
+    url="https://github.com/Sturdy-Subnet/sturdy-subnet",
+    author="Syeam Bin Abdullah",  
     packages=find_packages(),
     include_package_data=True,
     author_email="syeamtechdemon@gmail.com",  # TODO(developer): Change this value to your module subnet author email.

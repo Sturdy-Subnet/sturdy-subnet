@@ -45,6 +45,12 @@ def get_synapse_from_body(
     return synapse
 
 
+def format_num_prec(
+    num: float, sig: int = GREEDY_SIG_FIGS, max_prec: int = GREEDY_SIG_FIGS
+) -> float:
+    return float(f"{{0:.{max_prec}f}}".format(float(format(num, f".{sig}f"))))
+
+
 def calculate_apy(util_rate: float, pool: Dict) -> float:
     interest_rate = (
         pool["base_rate"] + (util_rate / pool["optimal_util_rate"]) * pool["base_slope"]
@@ -73,20 +79,15 @@ def greedy_allocation_algorithm(synapse: sturdy.protocol.AllocateAssets) -> Dict
     while balance > 0:
         # TODO: use np.float32 instead of format()??
         current_apys = {
-            k: float(
-                format(
-                    calculate_apy(
-                        util_rate=v["borrow_amount"] / current_allocations[k], pool=v
-                    ),
-                    f".{GREEDY_SIG_FIGS}f",
+            k: format_num_prec(
+                calculate_apy(
+                    util_rate=v["borrow_amount"] / current_allocations[k], pool=v
                 )
             )
             for k, v in pools.items()
         }
 
-        default_chunk_size = float(
-            format(CHUNK_RATIO * max_balance, f".{GREEDY_SIG_FIGS}f")
-        )
+        default_chunk_size = format_num_prec(CHUNK_RATIO * max_balance)
         to_allocate = 0
 
         if balance < default_chunk_size:
@@ -94,7 +95,7 @@ def greedy_allocation_algorithm(synapse: sturdy.protocol.AllocateAssets) -> Dict
         else:
             to_allocate = default_chunk_size
 
-        balance = float(format(balance - to_allocate, f".{GREEDY_SIG_FIGS}f"))
+        balance = format_num_prec(balance - to_allocate)
         assert balance >= 0
         max_apy = max(current_apys.values())
         min_apy = min(current_apys.values())
@@ -102,16 +103,13 @@ def greedy_allocation_algorithm(synapse: sturdy.protocol.AllocateAssets) -> Dict
 
         alloc_it = current_allocations.items()
         for pool_id, _ in alloc_it:
-            delta = float(
-                format(
-                    to_allocate * ((current_apys[pool_id] - min_apy) / (apy_range)),
-                    f".{GREEDY_SIG_FIGS}f",
-                )
+            delta = format_num_prec(
+                to_allocate * ((current_apys[pool_id] - min_apy) / (apy_range)),
             )
-            current_allocations[pool_id] = float(
-                format(current_allocations[pool_id] + delta, f".{GREEDY_SIG_FIGS}f")
+            current_allocations[pool_id] = format_num_prec(
+                current_allocations[pool_id] + delta
             )
-            to_allocate = float(format(to_allocate - delta, f".{GREEDY_SIG_FIGS}f"))
+            to_allocate = format_num_prec(to_allocate - delta)
 
         assert to_allocate == 0  # should allocate everything from current chunk
 

@@ -69,9 +69,6 @@ There are three core files.
     <img src="./assets/latency_scaling.png" />
 </div> 
 
-### Succeeding as a miner
-As mentioned above, 80% of the miner's score comes from how much yield their allocation produces relative to other miners. While a default allocation generation script has been provided in [misc.py](./sturdy/utils/misc.py), there is lots of room for optimization. Miners who want to excel in the Sturdy Subnet should try to improve on this algorithm using the information shared above and by taking a close look at how pools (as well as their yields) are defined (e.g. in [pools.py](./sturdy/pools.py)).
-
 ---
 
 ## Installation
@@ -84,7 +81,7 @@ Before you proceed with the installation, note the following:
 
 ### Install
 ```bash
-git clone https://github.com/Shr1ftyy/sturdy-subnet/
+git clone https://github.com/Sturdy-subnet/sturdy-subnet/
 cd sturdy-subnet
 python -m pip install -e .
 ```
@@ -96,14 +93,18 @@ python -m pip install -e .
 ---
 
 ## Running
+### Acknowledgement for [Vision Subnet](https://github.com/namoray/vision/)!
+
+We extend our heartfelt appreciation to namoray et al. for their exceptional work on the Vision subnet. Our API, which enables third-party applications to integrate the subnet, draws significant inspiration from their work.
+
 ### [Miner](docs/miner.md)
-### [Validator](docs/Validator.md)
+### [Validator](docs/validator.md)
 
 ## License
 This repository is licensed under the MIT License.
 ```text
 # The MIT License (MIT)
-# Copyright © 2023 Shr1ftyy
+# Copyright © 2023 Syeam Bin Abdullah
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
