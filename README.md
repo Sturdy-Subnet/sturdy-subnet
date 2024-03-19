@@ -20,7 +20,9 @@
 
 ## Introduction
 
-The Sturdy Subnet is a Bittensor subnetwork that enables miners to propose where assets should be allocated to maximize yields. The best allocations are then used by third-party applications to move real assets on the Ethereum network. The first application using the Sturdy Subnet is the [Sturdy protocol](https://sturdy.finance/).
+The Sturdy Subnet is a Bittensor subnetwork that enables the creation decentralized, autonomous yield optimizers. A yield optimizer is a smart contract that seeks to provide users with the best possible yields by depositing assets to a variety of strategies. On the Sturdy Subnet, every yield optimizer has a fixed set of strategies (or 'pools') that it can deposit to. In turn, each pool has its own interest rate curve, described in more detail below. The goal for each miner is to create an algorithm that computes the allocation of assets among pools that results in the highest yield possible. Validators then evaluate miners based on how much yield their allocation produces. 
+
+The outputs of the subnet will be used by third-party applications to move real assets on the Ethereum network. The first application using the Sturdy Subnet is the [Sturdy protocol](https://sturdy.finance/), with more to come.
 
 ### Codebase
 
