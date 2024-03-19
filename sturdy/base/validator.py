@@ -144,7 +144,11 @@ class BaseValidatorNeuron(BaseNeuron):
                 current_block = self.subtensor.block
                 if current_block - last_query_block > 0:
                     bt.logging.info(f"step({self.step}) block({self.block})")
-                    self.loop.run_until_complete(self.concurrent_forward())
+                    # self.loop.run_until_complete(self.concurrent_forward())
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.concurrent_forward(), self.loop
+                    )
+                    future.result()  # Wait for the coroutine to complete
                     last_query_block = current_block
                     # Sync metagraph and potentially set weights.
                     self.sync()
@@ -165,6 +169,12 @@ class BaseValidatorNeuron(BaseNeuron):
         except Exception as err:
             bt.logging.error("Error during validation", str(err))
             bt.logging.debug(print_exception(type(err), err, err.__traceback__))
+
+    async def run_concurrent_forward(self):
+        try:
+            await self.concurrent_forward()
+        except Exception as e:
+            bt.logging.error(f"Error in concurrent_forward: {e}")
 
     def run_in_background_thread(self):
         """

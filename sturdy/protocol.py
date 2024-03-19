@@ -19,6 +19,7 @@
 
 import typing
 import bittensor as bt
+from pydantic import BaseModel, Field
 
 # TODO(developer): Rewrite with your protocol definition.
 
@@ -44,7 +45,35 @@ import bittensor as bt
 #  3. SubmitAllocations
 
 
-class AllocateAssets(bt.Synapse):
+# TODO: move AllocInfo elsewhere?
+class AllocInfo(typing.TypedDict):
+    apy: str
+    allocations: typing.Dict[str, float]
+
+
+class AllocateAssetsRequest(BaseModel):
+    class Config:
+        use_enum_values = True
+
+    assets_and_pools: typing.Dict[str, typing.Dict | float] = Field(
+        ...,
+        required=True,
+        description="pools for miners to produce allocation amounts for - uid -> pool_info",
+    )
+
+
+class AllocateAssetsResponse(BaseModel):
+    class Config:
+        use_enum_values = True
+
+    allocations: typing.Dict[str, AllocInfo] = Field(
+        ...,
+        required=True,
+        description="pools for miners to produce allocation amounts for - uid -> pool_info",
+    )
+
+
+class AllocateAssetsBase(BaseModel):
     """
     This protocol helps in handling the distribution of validator-generated pools from
     the validator to miners, and then gathering miner-generated allocations afterwards.
@@ -56,12 +85,17 @@ class AllocateAssets(bt.Synapse):
 
     # Required request input, filled by sending dendrite caller.
     # TODO: what type should this be?
-    assets_and_pools: typing.Dict[
-        int | str, typing.Dict | float
-    ]  # pools for miners to produce allocation amounts for - uid -> pool_info
+    assets_and_pools: typing.Dict[str, typing.Dict | float] = Field(
+        ...,
+        required=True,
+        description="pools for miners to produce allocation amounts for - uid -> pool_info",
+    )
 
     # Optional request output, filled by recieving axon.
-    allocations: typing.Optional[typing.Dict[int, float]] = None
+    allocations: typing.Optional[typing.Dict[str, float]] = Field(
+        None,
+        description="pools for miners to produce allocation amounts for - uid -> pool_info",
+    )
 
     # Saw this in https://github.com/ifrit98/storage-subnet/blob/HEAD/storage/protocol.py
     # TODO: can this just be removed lol? - (Probably)
@@ -72,6 +106,8 @@ class AllocateAssets(bt.Synapse):
     #     ...
     # )
 
+
+class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
         # TODO: figure out hwo to only show certain keys from pools and/or allocations
         return (

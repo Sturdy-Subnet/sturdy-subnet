@@ -18,13 +18,31 @@
 
 
 import time
+import asyncio
 
 # Bittensor
 import bittensor as bt
+from fastapi import FastAPI, Depends, Request
+from fastapi.responses import JSONResponse, Response
+from starlette.status import (
+    HTTP_400_BAD_REQUEST,
+    HTTP_401_UNAUTHORIZED,
+    HTTP_429_TOO_MANY_REQUESTS,
+)
+import threading
+import uvicorn
+
+# api key db
+from db import sql
 
 # Bittensor Validator Template:
-import sturdy
-from sturdy.validator import forward
+from sturdy.validator import forward, query_and_score_miners
+from sturdy.utils.misc import get_synapse_from_body
+from sturdy.protocol import (
+    AllocateAssets,
+    AllocateAssetsRequest,
+    AllocateAssetsResponse,
+)
 
 # import base validator class which takes care of most of the boilerplate
 from sturdy.base.validator import BaseValidatorNeuron
@@ -43,8 +61,7 @@ class Validator(BaseValidatorNeuron):
         super(Validator, self).__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
-
-        # TODO(developer): Anything specific to your use case you can do here
+        self.uid_to_response = {}
 
     async def forward(self):
         """
@@ -59,9 +76,122 @@ class Validator(BaseValidatorNeuron):
         return await forward(self)
 
 
-# The main function parses the configuration and runs the validator.
+# API
+app = FastAPI(debug=False)
+
+
+def _get_api_key(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return None
+    if auth_header.startswith("Bearer "):
+        return auth_header.split(" ")[1]
+    else:
+        return auth_header
+
+@app.middleware("http")
+async def api_key_validator(request, call_next):
+    if request.url.path in ["/docs", "/openapi.json", "/favicon.ico", "/redoc"]:
+        return await call_next(request)
+
+    api_key = _get_api_key(request)
+    if not api_key:
+        return JSONResponse(
+            status_code=HTTP_400_BAD_REQUEST,
+            content={"detail": "API key is missing"},
+        )
+
+    with sql.get_db_connection() as conn:
+        api_key_info = sql.get_api_key_info(conn, api_key)
+
+    if api_key_info is None:
+        return JSONResponse(
+            status_code=HTTP_401_UNAUTHORIZED, content={"detail": "Invalid API key"}
+        )
+    # endpoint = request.url.path.split("/")[-1]
+    # credits_required = ENDPOINT_TO_CREDITS_USED.get(endpoint, 1)
+    credits_required = 1  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
+
+    # Now check credits
+    if (
+        api_key_info[sql.BALANCE] is not None
+        and api_key_info[sql.BALANCE] <= credits_required
+    ):
+        return JSONResponse(
+            status_code=HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Insufficient credits - sorry!"},
+        )
+
+    # Now check rate limiting
+    with sql.get_db_connection() as conn:
+        rate_limit_exceeded = sql.rate_limit_exceeded(conn, api_key_info)
+        if rate_limit_exceeded:
+            return JSONResponse(
+                status_code=HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Rate limit exceeded - sorry!"},
+            )
+
+    response: Response = await call_next(request)
+
+    bt.logging.debug(f"response: {response}")
+    if response.status_code == 200:
+        with sql.get_db_connection() as conn:
+            sql.update_requests_and_credits(conn, api_key_info, credits_required)
+            sql.log_request(conn, api_key_info, request.url.path, credits_required)
+            conn.commit()
+    return response
+
+
+# Initialize core_validator outside of the event loop
+core_validator = None
+
+@app.get("/test")
+async def test():
+    return {"Hello": "World"}
+
+@app.get("/vali")
+async def vali():
+    ret = {"step": core_validator.step, "config": core_validator.config}
+    return ret
+
+@app.post("/allocate")
+async def allocate(body: AllocateAssetsRequest):
+    synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
+    result = await query_and_score_miners(core_validator, synapse.assets_and_pools)
+    ret = AllocateAssetsResponse(allocations=result)
+    return ret
+
+# Function to run the main loop
+async def run_main_loop():
+    try:
+        core_validator.run_in_background_thread()
+    except KeyboardInterrupt:
+        print("Keyboard interrupt received, exiting...")
+
+# Function to run the Uvicorn server
+async def run_uvicorn_server():
+    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+async def main():
+    global core_validator
+    core_validator = Validator()
+    if not (core_validator.config.synthetic or core_validator.config.organic):
+        bt.logging.error(
+            "You did not select a validator type to run! Ensure you select to run either a synthetic or organic validator. Shutting down..."
+        )
+        return
+
+    bt.logging.info(f"organic: {core_validator.config.organic}")
+
+    if core_validator.config.organic:
+        await asyncio.gather(run_uvicorn_server(), run_main_loop())
+    else:
+        await run_main_loop()
+
+def start():
+    asyncio.run(main())
+
 if __name__ == "__main__":
-    with Validator() as validator:
-        while True:
-            bt.logging.info("Validator running...", time.time())
-            time.sleep(5)
+    start()

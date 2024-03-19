@@ -1,5 +1,5 @@
 # The MIT License (MIT)
-# Copyright © 2023 Shr1ftyy
+# Copyright © 2023 Syeam Bin Abdullah
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -41,8 +41,8 @@ from sturdy.constants import (
 def generate_assets_and_pools() -> typing.Dict:  # generate pools
     assets_and_pools = {}
     pools = {
-        x: {
-            "pool_id": x,
+        str(x): {
+            "pool_id": str(x),
             "base_rate": randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP),
             "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP),
             "kink_slope": randrange_float(

@@ -20,7 +20,9 @@
 
 ## Introduction
 
-The Sturdy Subnet is a Bittensor subnetwork that enables miners to propose where assets should be allocated to maximize yields. The best allocations are then used by third-party applications to move real assets on the Ethereum network. The first application using the Sturdy Subnet is the [Sturdy protocol](https://sturdy.finance/).
+The Sturdy Subnet is a Bittensor subnetwork that enables the creation decentralized, autonomous yield optimizers. A yield optimizer is a smart contract that seeks to provide users with the best possible yields by depositing assets to a variety of strategies. On the Sturdy Subnet, every yield optimizer has a fixed set of strategies (or 'pools') that it can deposit to. In turn, each pool has its own interest rate curve, described in more detail below. The goal for each miner is to create an algorithm that computes the allocation of assets among pools that results in the highest yield possible. Validators then evaluate miners based on how much yield their allocation produces. 
+
+The outputs of the subnet will be used by third-party applications to move real assets on the Ethereum network. The first application using the Sturdy Subnet is the [Sturdy protocol](https://sturdy.finance/), with more to come.
 
 ### Codebase
 
@@ -31,12 +33,12 @@ There are three core files.
 
 ### Subnet Overview
 - Validators are reponsible for distributing lists of pools (of which contain relevant parameters such as base interest rate, base interest rate slope, minimum borrow amount, etc), as well as a maximum token balance miners can allocate to pools. Below is the function present in the codebase used for generating a dummy `assets_and_pools` taken from [pools.py](./sturdy/pools.py):
-```python
-def generate_assets_and_pools() -> typing.Dict:  # generate pools
+    ```python
+    def generate_assets_and_pools() -> typing.Dict:  # generate pools
     assets_and_pools = {}
     pools = {
-        x: {
-            "pool_id": x,
+        str(x): {
+            "pool_id": str(x),
             "base_rate": randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP),
             "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP),
             "kink_slope": randrange_float(
@@ -56,7 +58,9 @@ def generate_assets_and_pools() -> typing.Dict:  # generate pools
     assets_and_pools["pools"] = pools
 
     return assets_and_pools
-```
+    ```
+    Validators can optionally run an API server and sell their bandwidth to outside users to send their own pools to the subnet. For more information on this process - please read [docs/validator.md](docs/validator.md)
+
 - The miners, after receiving these pools from validators, must then attempt to allocate the `TOTAL_ASSETS` into the given pools, with the ultimate goal of trying to maximize their yield. This repository comes with a default asset allocation algorithm in the form of `greedy_allocation_algorithm` (a greedy allocation algorithm) in [misc.py](./sturdy/utils/misc.py). The greedy allocation essentially works by breaking its assets into many chunks of small sizes, and allocating them into the pools by utilizing their current yields to determine its allocations to each pool (it is done this way because the yields of the pools are dynamic based on their various parameters - most notably it's `utilization rate = borrow amount / total available tokens`). A diagram is provided below for the more visually attuned: 
 
 ![allocations](./assets/allocations.png)
@@ -66,9 +70,6 @@ def generate_assets_and_pools() -> typing.Dict:  # generate pools
 <div align="center"> 
     <img src="./assets/latency_scaling.png" />
 </div> 
-
-### Succeeding as a miner
-As mentioned above, 80% of the miner's score comes from how much yield their allocation produces relative to other miners. While a default allocation generation script has been provided in [misc.py](./sturdy/utils/misc.py), there is lots of room for optimization. Miners who want to excel in the Sturdy Subnet should try to improve on this algorithm using the information shared above and by taking a close look at how pools (as well as their yields) are defined (e.g. in [pools.py](./sturdy/pools.py)).
 
 ---
 
@@ -82,7 +83,7 @@ Before you proceed with the installation, note the following:
 
 ### Install
 ```bash
-git clone https://github.com/Shr1ftyy/sturdy-subnet/
+git clone https://github.com/Sturdy-subnet/sturdy-subnet/
 cd sturdy-subnet
 python -m pip install -e .
 ```
@@ -94,23 +95,18 @@ python -m pip install -e .
 ---
 
 ## Running
+### Acknowledgement for [Vision Subnet](https://github.com/namoray/vision/)!
 
-### Validator
-```bash
-python3 neurons/validator.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT
-```
+We extend our heartfelt appreciation to namoray et al. for their exceptional work on the Vision subnet. Our API, which enables third-party applications to integrate the subnet, draws significant inspiration from their work.
 
-### Miner
-```bash
-python3 neurons/miner.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT
-```
----
+### [Miner](docs/miner.md)
+### [Validator](docs/validator.md)
 
 ## License
 This repository is licensed under the MIT License.
 ```text
 # The MIT License (MIT)
-# Copyright © 2023 Shr1ftyy
+# Copyright © 2023 Syeam Bin Abdullah
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
