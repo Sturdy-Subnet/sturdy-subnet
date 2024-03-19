@@ -22,9 +22,11 @@ import math
 
 import bittensor as bt
 import torch
-from typing import List, Dict
+from typing import List, Dict, Tuple, TypedDict
 
 from sturdy.constants import QUERY_TIMEOUT, STEEPNESS, DIV_FACTOR, NUM_POOLS
+from sturdy.utils.misc import calculate_apy
+from sturdy.protocol import AllocInfo
 
 
 def get_response_times(uids: List[int], responses, timeout: float):
@@ -97,7 +99,7 @@ def get_rewards(
     uids: List,
     assets_and_pools: Dict[int, Dict],
     responses: List,
-) -> torch.FloatTensor:
+) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
 
@@ -111,8 +113,8 @@ def get_rewards(
 
     # maximum yield to scale all rewards by
     # TODO: what to set smallest yield value to?
-    max_apy = sys.float_info.min
     # total apys of allocations per miner
+    max_apy = sys.float_info.min
     apys = {}
 
     for response_idx, response in enumerate(responses):
@@ -137,27 +139,18 @@ def get_rewards(
                 break
 
             # calculate yield for given pool allocation
-
             util_rate = pool["borrow_amount"] / allocation
-            interest_rate = (
-                pool["base_rate"]
-                + (util_rate / pool["optimal_util_rate"]) * pool["base_slope"]
-                if util_rate < pool["optimal_util_rate"]
-                else pool["base_rate"]
-                + pool["base_slope"]
-                + (
-                    (util_rate - pool["optimal_util_rate"])
-                    / (1 - pool["optimal_util_rate"])
-                )
-                * pool["kink_slope"]
-            )
-
+            interest_rate = calculate_apy(util_rate, pool)
             alloc_yield += allocation * interest_rate
 
         # punish if miner they're cheating
         # TODO: create a more forgiving penalty system?
         if cheating:
-            apys[uids[response_idx]] = sys.float_info.min
+            miner_uid = uids[response_idx]
+            bt.logging.warning(
+                f"CHEATER DETECTED  - MINER WITH UID {miner_uid} - PUNISHING 👊😠"
+            )
+            apys[miner_uid] = sys.float_info.min
             continue
 
         # append total apy of miner to yields
@@ -169,10 +162,23 @@ def get_rewards(
         apys[uids[response_idx]] = apy
 
     apys_dict = {uid: apys[idx] for idx, uid in enumerate(uids)}
+
+    # TODO: having this here is sorta gross - should probably move some things around later down the road lmao
+    allocs = {}
+    for idx in range(len(responses)):
+        if responses[idx].allocations is None:
+            continue
+        if len(responses[idx].allocations) == len(assets_and_pools["pools"]):
+            allocs[uids[idx]] = {
+                "apy": apys_dict[uids[idx]],
+                "allocations": responses[idx].allocations,
+            }
+
     sorted_apys = {
         k: v
         for k, v in sorted(apys_dict.items(), key=lambda item: item[1], reverse=True)
     }
+
     axon_times = get_response_times(
         uids=uids, responses=responses, timeout=QUERY_TIMEOUT
     )
@@ -184,15 +190,18 @@ def get_rewards(
     bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
 
     # Get all the reward results by iteratively calling your reward() function.
-    return torch.FloatTensor(
-        [
-            reward(
-                query,
-                max_apy=max_apy,
-                miner_apy=apys_dict[uid],
-                axon_time=axon_times[uid],
-                num_pools=len(uids),
-            )
-            for uid in uids
-        ]
-    ).to(self.device)
+    return (
+        torch.FloatTensor(
+            [
+                reward(
+                    query,
+                    max_apy=max_apy,
+                    miner_apy=apys_dict[uid],
+                    axon_time=axon_times[uid],
+                    num_pools=len(uids),
+                )
+                for uid in uids
+            ]
+        ).to(self.device),
+        allocs,
+    )

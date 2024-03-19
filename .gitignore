@@ -1,3 +1,10 @@
+# databases
+db/schema.sql
+validator_database.db
+
+# backups
+*.bak
+
 # Annoying mac os stuff
 *.DS_Store
 
