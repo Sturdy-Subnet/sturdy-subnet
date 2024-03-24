@@ -1,7 +1,6 @@
 # The MIT License (MIT)
 # Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
+# Copyright © 2023 Syeam Bin Abdullah
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -25,9 +24,6 @@ from os import path
 from io import open
 from setuptools import setup, find_packages
 from pkg_resources import parse_requirements
-
-# TODO: take a look at https://github.com/ifrit98/storage-subnet/blob/da94f3309f05424f2b755055f041c11ce38f0a87/setup.py - and see what I might wanna add later
-
 
 def read_requirements(path):
     with open(path, "r") as f:
@@ -74,7 +70,7 @@ setup(
     author="Syeam Bin Abdullah",  
     packages=find_packages(),
     include_package_data=True,
-    author_email="syeamtechdemon@gmail.com",  # TODO(developer): Change this value to your module subnet author email.
+    author_email="syeamtechdemon@gmail.com",
     license="MIT",
     python_requires=">=3.10,<3.11",
     install_requires=requirements,

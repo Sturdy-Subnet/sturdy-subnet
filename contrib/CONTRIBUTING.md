@@ -15,11 +15,10 @@ The following is a set of guidelines for contributing to the Bittensor ecosystem
  1. [Suggesting Features](#suggesting-enhancements-and-features)
 
 
-## How Can I Contribute?
-TODO(developer): Define your desired contribution procedure.
+<!-- ## How Can I Contribute? -->
 
 ## Communication Channels
-TODO(developer): Place your communication channels here
+The Sturdy Subnet channel on the Bittensor Discord: https://discord.gg/bittensor
 
 > Please follow the Bittensor Subnet [style guide](./STYLE.md) regardless of your contribution type. 
 
@@ -99,7 +98,7 @@ After you submit a pull request, it will be reviewed by the maintainers. They ma
 > Note: Be sure to merge the latest from "upstream" before making a pull request:
 
 ```bash
-git remote add upstream https://github.com/opentensor/bittensor.git # TODO(developer): replace with your repo URL
+git remote add upstream https://github.com/Sturdy-Subnet/sturdy-subnet.git 
 git fetch upstream
 git merge upstream/<your-branch-name>
 git push origin <your-branch-name>
