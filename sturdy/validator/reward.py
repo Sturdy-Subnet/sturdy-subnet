@@ -160,7 +160,6 @@ def get_rewards(
 
         apys[uids[response_idx]] = apy
 
-    apys_dict = {uid: apys[idx] for idx, uid in enumerate(uids)}
 
     # TODO: should probably move some things around later down the road
     allocs = {}
@@ -169,13 +168,13 @@ def get_rewards(
             continue
         if len(responses[idx].allocations) == len(assets_and_pools["pools"]):
             allocs[uids[idx]] = {
-                "apy": apys_dict[uids[idx]],
+                "apys": apys[uids[idx]],
                 "allocations": responses[idx].allocations,
             }
 
     sorted_apys = {
         k: v
-        for k, v in sorted(apys_dict.items(), key=lambda item: item[1], reverse=True)
+        for k, v in sorted(apys.items(), key=lambda item: item[1], reverse=True)
     }
 
     axon_times = get_response_times(
@@ -195,7 +194,7 @@ def get_rewards(
                 reward(
                     query,
                     max_apy=max_apy,
-                    miner_apy=apys_dict[uid],
+                    miner_apy=apys[uid],
                     axon_time=axon_times[uid],
                     num_pools=len(uids),
                 )
