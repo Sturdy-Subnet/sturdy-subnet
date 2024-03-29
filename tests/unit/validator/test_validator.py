@@ -291,7 +291,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         for key, allocInfo in allocs.items():
-            self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
+            self.assertAlmostEqual(allocInfo["apys"], sys.float_info.min, places=18)
 
         rewards_dict = {k: v for k, v in enumerate(list(rewards))}
         sorted_rewards = {

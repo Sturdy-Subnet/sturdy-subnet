@@ -1,3 +1,6 @@
+# vim
+*.swp
+
 # databases
 db/schema.sql
 validator_database.db
