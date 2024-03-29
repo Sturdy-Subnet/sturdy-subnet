@@ -168,7 +168,7 @@ def get_rewards(
             continue
         if len(responses[idx].allocations) == len(assets_and_pools["pools"]):
             allocs[uids[idx]] = {
-                "apys": apys[uids[idx]],
+                "apy": apys[uids[idx]],
                 "allocations": responses[idx].allocations,
             }
 
