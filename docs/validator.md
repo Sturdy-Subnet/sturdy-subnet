@@ -127,3 +127,164 @@ For them to use your server, you will need to communicate:
 
 - Your server address (IP_ADDRESS:PORT)
 - Use /redoc or /docs for automatic documentation on how to use it!
+
+Just for reference - below is an example `curl` command which could be used to interact with an organic validator:
+
+```
+curl -X POST   http://<IP_ADDRESS>:<PORT>/allocate   -H 'Content-Type: application/json'   -H 'Authorization: Bearer <API_KEY>'   -d '{
+  "assets_and_pools": {
+    "total_assets": 1.0,
+    "pools": {
+      "0": {
+        "pool_id": 0,
+        "base_rate": 0.0,
+        "base_slope": 0.011,
+        "kink_slope": 2.014,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.032
+      },
+      "1": {
+        "pool_id": 1,
+        "base_rate": 0.01,
+        "base_slope": 0.012,
+        "kink_slope": 1.3,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.02
+      },
+      "2": {
+        "pool_id": 2,
+        "base_rate": 0.01,
+        "base_slope": 0.015,
+        "kink_slope": 0.502,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.006
+      },
+      "3": {
+        "pool_id": 3,
+        "base_rate": 0.0,
+        "base_slope": 0.048,
+        "kink_slope": 1.233,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.08
+      },
+      "4": {
+        "pool_id": 4,
+        "base_rate": 0.0,
+        "base_slope": 0.032,
+        "kink_slope": 2.506,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.006
+      },
+      "5": {
+        "pool_id": 5,
+        "base_rate": 0.01,
+        "base_slope": 0.021,
+        "kink_slope": 2.633,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.081
+      },
+      "6": {
+        "pool_id": 6,
+        "base_rate": 0.0,
+        "base_slope": 0.032,
+        "kink_slope": 2.716,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.068
+      },
+      "7": {
+        "pool_id": 7,
+        "base_rate": 0.0,
+        "base_slope": 0.019,
+        "kink_slope": 0.818,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.007
+      },
+      "8": {
+        "pool_id": 8,
+        "base_rate": 0.0,
+        "base_slope": 0.037,
+        "kink_slope": 2.934,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.023
+      },
+      "9": {
+        "pool_id": 9,
+        "base_rate": 0.01,
+        "base_slope": 0.011,
+        "kink_slope": 1.609,
+        "optimal_util_rate": 0.8,
+        "borrow_amount": 0.09
+      }
+    }
+  }
+}'
+
+```
+
+And the corresponding response from the subnet:
+```
+{
+    "allocations": {
+        "1": {
+            "apy": "0.0178836889",
+            "allocations": {
+                "0": 0.04004545,
+                "1": 0.10278418,
+                "2": 0.05335314,
+                "3": 0.29463011,
+                "4": 0.02173878,
+                "5": 0.19847374,
+                "6": 0.12387853,
+                "7": 0.01205671,
+                "8": 0.03990653,
+                "9": 0.11313283
+            }
+        },
+        "10": {
+            "apy": "0.0178836889",
+            "allocations": {
+                "0": 0.04004545,
+                "1": 0.10278418,
+                "2": 0.05335314,
+                "3": 0.29463011,
+                "4": 0.02173878,
+                "5": 0.19847374,
+                "6": 0.12387853,
+                "7": 0.01205671,
+                "8": 0.03990653,
+                "9": 0.11313283
+            }
+        },
+        "11": {
+            "apy": "0.0178836889",
+            "allocations": {
+                "0": 0.04004545,
+                "1": 0.10278418,
+                "2": 0.05335314,
+                "3": 0.29463011,
+                "4": 0.02173878,
+                "5": 0.19847374,
+                "6": 0.12387853,
+                "7": 0.01205671,
+                "8": 0.03990653,
+                "9": 0.11313283
+            }
+        },
+        "12": {
+            "apy": "0.0178836889",
+            "allocations": {
+                "0": 0.04004545,
+                "1": 0.10278418,
+                "2": 0.05335314,
+                "3": 0.29463011,
+                "4": 0.02173878,
+                "5": 0.19847374,
+                "6": 0.12387853,
+                "7": 0.01205671,
+                "8": 0.03990653,
+                "9": 0.11313283
+            }
+        }
+    }
+}
+```
