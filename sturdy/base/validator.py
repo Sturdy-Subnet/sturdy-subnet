@@ -20,6 +20,7 @@
 import copy
 import torch
 import asyncio
+import concurrent.futures
 import argparse
 import threading
 import bittensor as bt
@@ -143,11 +144,16 @@ class BaseValidatorNeuron(BaseNeuron):
                 current_block = self.subtensor.block
                 if current_block - last_query_block > 0:
                     bt.logging.info(f"step({self.step}) block({self.block})")
-                    # self.loop.run_until_complete(self.concurrent_forward())
-                    future = asyncio.run_coroutine_threadsafe(
-                        self.concurrent_forward(), self.loop
-                    )
-                    future.result()  # Wait for the coroutine to complete
+
+                    if self.config.organic:
+
+                        future = asyncio.run_coroutine_threadsafe(
+                            self.concurrent_forward(), self.loop
+                        )
+                        future.result()  # Wait for the coroutine to complete
+                    else:
+                        self.loop.run_until_complete(self.concurrent_forward())
+
                     last_query_block = current_block
                     # Sync metagraph and potentially set weights.
                     self.sync()
