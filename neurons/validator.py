@@ -188,7 +188,11 @@ async def main():
     if core_validator.config.organic:
         await asyncio.gather(run_uvicorn_server(), run_main_loop())
     else:
-        await run_main_loop()
+        # await run_main_loop()
+        with core_validator:
+            while True:
+                bt.logging.debug("Running synthetic vali...")
+                time.sleep(10)
 
 def start():
     asyncio.run(main())
