@@ -25,6 +25,7 @@ from io import open
 from setuptools import setup, find_packages
 from pkg_resources import parse_requirements
 
+
 def read_requirements(path):
     with open(path, "r") as f:
         requirements = f.read().splitlines()
@@ -67,7 +68,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Sturdy-Subnet/sturdy-subnet",
-    author="Syeam Bin Abdullah",  
+    author="Syeam Bin Abdullah",
     packages=find_packages(),
     include_package_data=True,
     author_email="syeamtechdemon@gmail.com",
