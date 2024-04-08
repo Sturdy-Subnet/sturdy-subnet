@@ -31,6 +31,7 @@ from traceback import print_exception
 from sturdy.base.neuron import BaseNeuron
 from sturdy.mock import MockDendrite
 from sturdy.utils.config import add_validator_args
+from sturdy.constants import QUERY_RATE
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -140,9 +141,9 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                # Run multiple forwards concurrently - runs every block
+                # Run multiple forwards concurrently - runs every 2 blocks
                 current_block = self.subtensor.block
-                if current_block - last_query_block > 0:
+                if current_block - last_query_block > QUERY_RATE:
                     bt.logging.info(f"step({self.step}) block({self.block})")
 
                     if self.config.organic:
