@@ -135,7 +135,7 @@ def get_rewards(
                 str(allocation)
             )  # This should fix precision issues with python floats
 
-            # reject allocations if miner is cheating somehow
+            # score response very low if miner is cheating somehow
             if total_allocated > initial_balance or allocation < pool["borrow_amount"]:
                 cheating = True
                 break

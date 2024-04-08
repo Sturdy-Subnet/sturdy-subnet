@@ -21,6 +21,7 @@ import torch
 import argparse
 import bittensor as bt
 from loguru import logger
+from sturdy.constants import QUERY_TIMEOUT
 
 
 def check_config(cls, config: "bt.Config"):
@@ -173,7 +174,7 @@ def add_validator_args(cls, parser):
         "--neuron.timeout",
         type=float,
         help="The timeout for each forward call in seconds.",
-        default=10,
+        default=QUERY_TIMEOUT,
     )
 
     parser.add_argument(
@@ -181,13 +182,6 @@ def add_validator_args(cls, parser):
         type=int,
         help="The number of concurrent forwards running at any time.",
         default=1,
-    )
-
-    parser.add_argument(
-        "--neuron.sample_size",
-        type=int,
-        help="The number of miners to query in a single step.",
-        default=10,
     )
 
     parser.add_argument(
@@ -212,13 +206,6 @@ def add_validator_args(cls, parser):
         #   be blacklisted by the firewall of serving peers on the network.
         help="Set this flag to not attempt to serve an Axon.",
         default=False,
-    )
-
-    parser.add_argument(
-        "--neuron.vpermit_tao_limit",
-        type=int,
-        help="The maximum number of TAO allowed to query a validator with a vpermit.",
-        default=4096,
     )
 
     parser.add_argument(
