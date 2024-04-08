@@ -146,7 +146,6 @@ class BaseValidatorNeuron(BaseNeuron):
                     bt.logging.info(f"step({self.step}) block({self.block})")
 
                     if self.config.organic:
-
                         future = asyncio.run_coroutine_threadsafe(
                             self.concurrent_forward(), self.loop
                         )

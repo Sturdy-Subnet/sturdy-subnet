@@ -20,6 +20,7 @@ import typing
 import bittensor as bt
 from pydantic import BaseModel, Field
 
+
 # TODO: move AllocInfo elsewhere?
 class AllocInfo(typing.TypedDict):
     apy: str
@@ -71,6 +72,7 @@ class AllocateAssetsBase(BaseModel):
         None,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
+
 
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
