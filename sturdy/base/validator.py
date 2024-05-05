@@ -31,6 +31,7 @@ from traceback import print_exception
 from sturdy.base.neuron import BaseNeuron
 from sturdy.mock import MockDendrite
 from sturdy.utils.config import add_validator_args
+from sturdy.utils.wandb import init_wandb_validator
 from sturdy.constants import QUERY_RATE
 
 
@@ -48,6 +49,11 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def __init__(self, config=None):
         super().__init__(config=config)
+
+        # init wandb
+        if not self.config.wandb.off:
+            bt.logging.debug("loading wandb")
+            init_wandb_validator(self=self)
 
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
@@ -228,6 +234,12 @@ class BaseValidatorNeuron(BaseNeuron):
             self.thread.join(5)
             self.is_running = False
             bt.logging.debug("Stopped")
+
+            if self.wandb is not None:
+                bt.logging.debug("closing wandb connection")
+                self.wandb.finish()
+                bt.logging.debug("closed wandb connection")
+            bt.logging.success("Validator killed")
 
     def set_weights(self):
         """
