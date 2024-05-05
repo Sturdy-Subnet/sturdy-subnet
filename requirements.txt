@@ -1,3 +1,4 @@
+loguru==0.7.0
 bittensor==6.11.0
 torch==2.0.1
 typer==0.9.0
