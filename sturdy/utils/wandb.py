@@ -2,8 +2,8 @@ import wandb
 import bittensor as bt
 import copy
 
-from sturdy import __version__  as THIS_VERSION
-from sturdy import __spec_version__  as THIS_SPEC_VERSION
+from sturdy import __version__ as THIS_VERSION
+from sturdy import __spec_version__ as THIS_SPEC_VERSION
 
 
 def init_wandb_miner(self, reinit=False):
@@ -44,6 +44,7 @@ def init_wandb_miner(self, reinit=False):
         sufix=f"<blue> {self.wandb.name} </blue>",
     )
 
+
 def init_wandb_validator(self, reinit=False):
     """Starts a new wandb run for a validator."""
     tags = [
@@ -80,4 +81,3 @@ def init_wandb_validator(self, reinit=False):
     bt.logging.success(
         prefix="Started a new wandb run for validator",
     )
-      
