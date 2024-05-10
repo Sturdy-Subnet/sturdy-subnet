@@ -26,6 +26,7 @@ import bittensor as bt
 
 from sturdy.base.neuron import BaseNeuron
 from sturdy.utils.config import add_miner_args
+from sturdy.utils.wandb import init_wandb_miner
 
 
 class BaseMinerNeuron(BaseNeuron):
@@ -42,6 +43,11 @@ class BaseMinerNeuron(BaseNeuron):
 
     def __init__(self, config=None):
         super().__init__(config=config)
+
+        # init wandb
+        if not self.config.wandb.off:
+            bt.logging.debug("loading wandb")
+            init_wandb_miner(self=self)
 
         # Warn if allowing incoming requests from anyone.
         if not self.config.blacklist.force_validator_permit:
@@ -130,7 +136,6 @@ class BaseMinerNeuron(BaseNeuron):
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
-            bt.logging.success("Miner killed by keyboard interrupt.")
             exit()
 
         # In case of unforeseen errors, the miner will log the error and continue operations.
@@ -183,6 +188,11 @@ class BaseMinerNeuron(BaseNeuron):
                        None if the context was exited without an exception.
         """
         self.stop_run_thread()
+        if self.wandb is not None:
+            bt.logging.debug("closing wandb connection")
+            self.wandb.finish()
+            bt.logging.debug("closed wandb connection")
+        bt.logging.success("Miner killed")
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
