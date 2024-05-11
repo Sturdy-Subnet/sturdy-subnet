@@ -21,3 +21,5 @@ QUERY_TIMEOUT = 10  # timeout (seconds)
 # latency reward curve scaling parameters
 STEEPNESS = 1.0
 DIV_FACTOR = 1.5  # a scaling factor
+
+QUERY_RATE = 2 # how often synthetic validator queries miners (blocks)

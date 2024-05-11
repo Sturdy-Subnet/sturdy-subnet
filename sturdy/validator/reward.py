@@ -22,6 +22,7 @@ import math
 import bittensor as bt
 import torch
 from typing import List, Dict, Tuple, TypedDict
+from decimal import Decimal
 
 from sturdy.constants import QUERY_TIMEOUT, STEEPNESS, DIV_FACTOR, NUM_POOLS
 from sturdy.utils.misc import calculate_apy
@@ -125,14 +126,16 @@ def get_rewards(
             continue
 
         initial_balance = assets_and_pools["total_assets"]
-        total_allocated = 0
+        total_allocated = Decimal(0)
         cheating = False
 
         for pool_id, allocation in allocations.items():
             pool = assets_and_pools["pools"][pool_id]
-            total_allocated += allocation
+            total_allocated += Decimal(
+                str(allocation)
+            )  # This should fix precision issues with python floats
 
-            # reject allocations if miner is cheating somehow
+            # score response very low if miner is cheating somehow
             if total_allocated > initial_balance or allocation < pool["borrow_amount"]:
                 cheating = True
                 break
@@ -153,13 +156,12 @@ def get_rewards(
             continue
 
         # append total apy of miner to yields
-        apy = alloc_yield / initial_balance
+        apy = float(alloc_yield / initial_balance)
 
         if apy > max_apy:
             max_apy = apy
 
         apys[uids[response_idx]] = apy
-
 
     # TODO: should probably move some things around later down the road
     allocs = {}
@@ -173,8 +175,7 @@ def get_rewards(
             }
 
     sorted_apys = {
-        k: v
-        for k, v in sorted(apys.items(), key=lambda item: item[1], reverse=True)
+        k: v for k, v in sorted(apys.items(), key=lambda item: item[1], reverse=True)
     }
 
     axon_times = get_response_times(

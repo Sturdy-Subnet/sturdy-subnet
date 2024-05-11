@@ -31,6 +31,8 @@ from traceback import print_exception
 from sturdy.base.neuron import BaseNeuron
 from sturdy.mock import MockDendrite
 from sturdy.utils.config import add_validator_args
+from sturdy.utils.wandb import init_wandb_validator
+from sturdy.constants import QUERY_RATE
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -47,6 +49,11 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def __init__(self, config=None):
         super().__init__(config=config)
+
+        # init wandb
+        if not self.config.wandb.off:
+            bt.logging.debug("loading wandb")
+            init_wandb_validator(self=self)
 
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
@@ -140,13 +147,12 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                # Run multiple forwards concurrently - runs every block
+                # Run multiple forwards concurrently - runs every 2 blocks
                 current_block = self.subtensor.block
-                if current_block - last_query_block > 0:
+                if current_block - last_query_block > QUERY_RATE:
                     bt.logging.info(f"step({self.step}) block({self.block})")
 
                     if self.config.organic:
-
                         future = asyncio.run_coroutine_threadsafe(
                             self.concurrent_forward(), self.loop
                         )
@@ -228,6 +234,12 @@ class BaseValidatorNeuron(BaseNeuron):
             self.thread.join(5)
             self.is_running = False
             bt.logging.debug("Stopped")
+
+            if self.wandb is not None:
+                bt.logging.debug("closing wandb connection")
+                self.wandb.finish()
+                bt.logging.debug("closed wandb connection")
+            bt.logging.success("Validator killed")
 
     def set_weights(self):
         """
