@@ -27,6 +27,7 @@ import hashlib as rpccheckhealth
 from math import floor
 from typing import Callable, Dict, Any, Type
 from functools import lru_cache, update_wrapper
+import numpy as np
 
 # TODO: cleanup functions - lay them out better across files?
 
@@ -37,6 +38,16 @@ def randrange_float(
 ):
     num = random.randint(0, int((stop - start) / step)) * step + start
     return format_num_prec(num, sig, max_prec)
+
+
+# generates normal distribution with min and max ranges:
+def generate_normal_distribution(mean, std_dev, num_samples, min_val, max_val):
+    samples = []
+    while len(samples) < num_samples:
+        sample = format_num_prec(np.random.normal(mean, std_dev))
+        if min_val <= sample <= max_val:
+            samples.append(sample)
+    return samples
 
 
 def get_synapse_from_body(

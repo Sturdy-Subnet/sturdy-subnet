@@ -1,22 +1,7 @@
 import unittest
 import random
 from sturdy.pools import generate_assets_and_pools
-from sturdy.constants import (
-    MIN_BASE_RATE,
-    MAX_BASE_RATE,
-    BASE_RATE_STEP,
-    MIN_SLOPE,
-    MAX_SLOPE,
-    MIN_KINK_SLOPE,
-    MAX_KINK_SLOPE,
-    SLOPE_STEP,
-    OPTIMAL_UTIL_RATE,
-    TOTAL_ASSETS,
-    MIN_BORROW_AMOUNT,
-    MAX_BORROW_AMOUNT,
-    BORROW_AMOUNT_STEP,
-    NUM_POOLS,
-)
+from sturdy.constants import *
 
 
 class TestGenerateAssetsAndPools(unittest.TestCase):
@@ -49,7 +34,10 @@ class TestGenerateAssetsAndPools(unittest.TestCase):
                     MIN_KINK_SLOPE <= pool_info["kink_slope"] <= MAX_KINK_SLOPE
                 )
 
-                self.assertEqual(pool_info["optimal_util_rate"], OPTIMAL_UTIL_RATE)
+                self.assertTrue("optimal_util_rate" in pool_info)
+                self.assertTrue(
+                    MIN_OPTIMAL_UTIL_RATE <= pool_info["optimal_util_rate"] <= MAX_OPTIMAL_UTIL_RATE
+                )
 
                 self.assertTrue("borrow_amount" in pool_info)
                 self.assertTrue(
