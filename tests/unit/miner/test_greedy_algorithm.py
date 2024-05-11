@@ -4,24 +4,7 @@ from unittest import TestCase
 from sturdy.protocol import AllocateAssets
 from sturdy.pools import generate_assets_and_pools
 from sturdy.utils.misc import greedy_allocation_algorithm
-from sturdy.constants import (
-    NUM_POOLS,
-    MIN_BASE_RATE,
-    MAX_BASE_RATE,
-    BASE_RATE_STEP,
-    MIN_SLOPE,
-    MAX_SLOPE,
-    MIN_KINK_SLOPE,
-    MAX_KINK_SLOPE,
-    SLOPE_STEP,
-    OPTIMAL_UTIL_RATE,
-    OPTIMAL_UTIL_STEP,
-    TOTAL_ASSETS,
-    MIN_BORROW_AMOUNT,
-    MAX_BORROW_AMOUNT,
-    BORROW_AMOUNT_STEP,
-)
-
+from sturdy.constants import TOTAL_ASSETS
 
 class TestGreedyAlgorithm(TestCase):
     def test_greedy_allocation_algorithm(self):
