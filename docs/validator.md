@@ -21,6 +21,13 @@ pip install --upgrade pip
 pip install -e .
 ```
 
+### Install node and pm2
+You will need `pm2` if you would like to utilize the auto update scripts that comes with this repository
+
+1. Install [node and npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
+2. Install [pm2](https://pm2.io)
+
+
 ## Running a Validator
 
 #### Local subtensor
@@ -35,15 +42,37 @@ You have the option of running two kinds of validators:
 
 ## Synthetic Validator 
 This is the most simple of the two. Synthetic validators generate dummy (fake) pools to send to miners to challenge them. To run a synthetic validator, run:
-#### Starting the validator
+#### Starting the validator - without PM2
 ```bash
-python3 neurons/validator.py --netuid NETUID --subtensor.network local --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --organic False
+python3 neurons/validator.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --organic False
 ```
 
-Replace, `NAME`, `HOTKEY`, `PORT`. with your desired values.
+#### Starting the validator - with PM2 (REQUIRED FOR AUTOUPDATES)
+```
+pm2 start --name PROC_NAME --interpreter=python3 neurons/validator.py -- --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --organic False
+```
+
+Replace, `PROC_NAME`, `NAME`, `NETWORK`, `HOTKEY`, `PORT` with your desired values. As mentioned in our [README](../README.md) we ***highly recommend*** that validators run a local subtensor and use `local` in place of the `NETWORK` parameter.
 
 **Note**: If you would like to participate in the testnet replace `NETUID` with `104`
 
+### Autoupdate script
+
+List pm2 processes:
+```
+pm2 ls
+```
+You should see a list of processes as show below: \
+![pm2ls](../assets/pm_list.png) \
+Take note of either the `id` or `name` of the process - you'll need it going forward. For our case (as seen in the picture above) our validator's id is `6` and it's name is `vali0` 
+
+Run the following command to run the auto updater script. This will periodically scan the upstream branch, pull when there are changes, reinstall the repo, and finall restart the validator automatically:
+
+```
+pm2 start --name run_validator_auto_update --interpreter=python3 run_validator_auto_update.py -- --proc ID_OR_PROCESS_NAME
+```
+
+Where `ID_OR_PROCESS_NAME` is the `name` OR `id` of the process as noted per the previous step. 
 
 ## Organic Validator 
 This is the less simple but more exciting of the two! Now you get to sell your bandwidth to whoever you want, with a very simple to use CLI!
@@ -63,15 +92,37 @@ Example output:
 
 This shows that ports 9091, 3001, .., 34579, 41133 etc, are currently in use, so pick address that don't include these.
 
-#### Starting the validator and API server
-
+#### Starting the validator and API server - without PM2
 ```bash
-python3 neurons/validator.py --netuid NETUID --subtensor.network local --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --organic True --api_port API_PORT
+python neurons/validator.py --netuid NETUID --subtensor.network local --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --organic True --api_port API_PORT
 ```
 
-Replace, `NAME`, `HOTKEY`, `PORT`, `API_PORT`. with your desired values.
+#### Starting the validator and API server - with PM2 (REQUIRED FOR AUTOUPDATES)
+```
+pm2 start --name PROC_NAME --interpreter=python3 neurons/validator.py -- --netuid NETUID --subtensor.network local --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --organic True --api_port API_PORT
+```
+
+Replace, `PROC_NAME`, `NAME`, `NETWORK`, `HOTKEY`, `PORT`, `API_PORT` with your desired values. As mentioned in our [README](../README.md) we ***highly recommend*** that validators run a local subtensor and use `local` in place of the `NETWORK` parameter.
 
 **Note**: If you would like to participate in the testnet replace `NETUID` with `104`
+
+### Autoupdate script
+
+List pm2 processes:
+```
+pm2 ls
+```
+You should see a list of processes as show below: \
+![pm2ls](../assets/pm_list.png) \
+Take note of either the `id` or `name` of the process - you'll need it going forward. For our case (as seen in the picture above) our validator's id is `6` and it's name is `vali0` 
+
+Run the following command to run the auto updater script. This will periodically scan the upstream branch, pull when there are changes, reinstall the repo, and finall restart the validator automatically:
+
+```
+pm2 start --name run_validator_auto_update --interpreter=python3 run_validator_auto_update.py -- --proc ID_OR_PROCESS_NAME
+```
+
+Where `ID_OR_PROCESS_NAME` is the `name` OR `id` of the process as noted per the previous step. 
 
 ## Selling your bandwidth
 
