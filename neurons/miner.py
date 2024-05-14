@@ -101,29 +101,28 @@ class Miner(BaseMinerNeuron):
 
         Otherwise, allow the request to be processed further.
         """
-        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        if (
-            not self.config.blacklist.allow_non_registered
-            and synapse.dendrite.hotkey not in self.metagraph.hotkeys
-        ):
-            # Ignore requests from un-registered entities.
-            bt.logging.trace(
-                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
-            )
-            return True, "Unrecognized hotkey"
 
-        if self.config.blacklist.force_validator_permit:
-            # If the config is set to force validator permit, then we should only allow requests from validators.
-            if not self.metagraph.validator_permit[uid]:
-                bt.logging.warning(
-                    f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
-                )
-                return True, "Non-validator hotkey"
+        bt.logging.info("Checking miner blacklist")
 
-        bt.logging.trace(
-            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
-        )
-        return False, "Hotkey recognized!"
+        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
+            return True, "Hotkey is not registered"
+
+        requesting_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        stake = self.metagraph.S[requesting_uid].item()
+
+        bt.logging.info(f"Requesting UID: {requesting_uid} | Stake at UID: {stake}")
+
+        if stake <= self.config.validator.min_stake:
+            bt.logging.info(f"Hotkey: {synapse.dendrite.hotkey}: stake below minimum threshold of {self.config.validator.min_stake}")
+            return True, "Stake below minimum threshold"
+
+        validator_permit = self.metagraph.validator_permit[requesting_uid].item()
+        if not validator_permit:
+            return True, "Requesting UID has no validator permit"
+
+        bt.logging.trace(f"Allowing request from UID: {requesting_uid}")
+        return False, "Allowed"
+
 
     async def priority(self, synapse: sturdy.protocol.AllocateAssets) -> float:
         """

@@ -34,7 +34,12 @@ python3 neurons/miner.py --netuid NETUID --subtensor.network NETWORK --wallet.na
 
 Replace, `NAME`, `HOTKEY`, `PORT`, `API_PORT`. with your desired values.
 
-**Note**: If you would like to participate in the testnet replace `NETUID` with `104`
+#### Participating in Testnet
+If you would like to participate in the testnet replace `NETUID` with `104` and add the `--validator.min_stake -1` parameter:
+
+```bash
+python3 neurons/miner.py --netuid NETUID --subtensor.network 104 --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --validator.min_stake -1
+```
 
 ## Succeeding as a miner
 As mentioned in [here](../README.md#subnet-overview), 80% of a miner's score comes from how much yield their allocation produces relative to other miners. While a default allocation generation script has been provided in [misc.py](../sturdy/utils/misc.py), there is lots of room for optimization. Miners who want to excel in the Sturdy Subnet should try to improve on this algorithm using the information shared above and by taking a close look at how pools (as well as their yields) are defined (e.g. in [pools.py](../sturdy/pools.py)).

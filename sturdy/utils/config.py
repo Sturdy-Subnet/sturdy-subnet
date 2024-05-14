@@ -159,6 +159,13 @@ def add_miner_args(cls, parser):
         help="Wandb entity to log to.",
     )
 
+    parser.add_argument(
+        "--validator.min_stake",
+        type=int,
+        default=1024,
+        help="Minimum validator stake to accept forward requests from as a miner",
+    )
+
 
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
