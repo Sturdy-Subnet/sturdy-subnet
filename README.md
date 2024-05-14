@@ -81,6 +81,7 @@ Before you proceed with the installation, note the following:
 - Python version `3.10.x` is required to run code in this repo. We highly recommend that you use some thing like `conda` to create virtual environments with its own python `3.10.x` interpreter. For more information on how to do this, please refer to conda's documentation regarding [installation](https://docs.anaconda.com/free/miniconda/#quick-command-line-install) and [environment creation](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-python.html#installing-a-different-version-of-python).
 - **IMPORTANT:** Make sure you are aware of the minimum compute requirements for your subnet. See the [Minimum compute YAML configuration](./min_compute.yml).
 - Note that installation instructions differ based on your situation: For example, installing for local development and testing will require a few additional steps compared to installing for testnet or mainnet. For running a local subtensor - please visit: [https://github.com/opentensor/subtensor](https://github.com/opentensor/subtensor).
+- **We also urge miners to set up a firewall as shown [here](https://github.com/ifrit98/bittensor-ufw) to mitigate naive DDOS attacks.**
 
 ### Install
 ```bash
