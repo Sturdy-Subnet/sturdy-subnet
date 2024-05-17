@@ -33,10 +33,10 @@ from functools import lru_cache, update_wrapper
 
 # rand range but float
 def randrange_float(
-    start, stop, step, sig: int = GREEDY_SIG_FIGS, max_prec: int = GREEDY_SIG_FIGS
+    start, stop, step, sig: int = GREEDY_SIG_FIGS, max_prec: int = GREEDY_SIG_FIGS, rng_gen=np.random
 ):
     num_steps = int((stop - start) / step)
-    random_step = np.random.randint(0, num_steps + 1)
+    random_step = rng_gen.randint(0, num_steps + 1)
     return start + random_step * step
 
 

@@ -89,7 +89,9 @@ class BaseNeuron(ABC):
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
             self.wallet = bt.MockWallet(config=self.config)
-            self.subtensor = MockSubtensor(self.config.netuid, wallet=self.wallet)
+            self.subtensor = MockSubtensor(
+                self.config.netuid, n=self.config.mock_n, wallet=self.wallet
+            )
             self.metagraph = MockMetagraph(self.config.netuid, subtensor=self.subtensor)
         else:
             self.wallet = bt.wallet(config=self.config)
@@ -111,12 +113,10 @@ class BaseNeuron(ABC):
         self.step = 0
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
-        ...
+    async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
     @abstractmethod
-    def run(self):
-        ...
+    def run(self): ...
 
     def sync(self):
         """

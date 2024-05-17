@@ -28,7 +28,6 @@ class TestSimulator(unittest.TestCase):
             self.assertGreaterEqual(pool["reserve_size"], pool["borrow_amount"])
             self.assertGreaterEqual(pool["borrow_rate"], 0)
 
-
     def test_initialization(self):
         self.simulator.initialize()
         self.assertIsNotNone(self.simulator.rng_state_container)
@@ -55,11 +54,15 @@ class TestSimulator(unittest.TestCase):
         init_state = init_state_container.get_state()
         new_state = new_state_container.get_state()
         are_states_equal = (
-            init_state[0] == new_state[0] and  # Compare the type of PRNG
-            np.array_equal(init_state[1], new_state[1]) and  # Compare the state of the PRNG
-            init_state[2] == new_state[2] and  # Compare the position in the PRNG's state
-            init_state[3] == new_state[3] and  # Compare the position in the PRNG's buffer
-            init_state[4] == new_state[4]      # Compare the state of the PRNG's buffer
+            init_state[0] == new_state[0]  # Compare the type of PRNG
+            and np.array_equal(
+                init_state[1], new_state[1]
+            )  # Compare the state of the PRNG
+            and init_state[2]
+            == new_state[2]  # Compare the position in the PRNG's state
+            and init_state[3]
+            == new_state[3]  # Compare the position in the PRNG's buffer
+            and init_state[4] == new_state[4]  # Compare the state of the PRNG's buffer
         )
 
         self.assertFalse(are_states_equal)
@@ -71,11 +74,15 @@ class TestSimulator(unittest.TestCase):
         init_state = init_state_container.get_state()
         new_state = new_state_container.get_state()
         are_states_equal = (
-            init_state[0] == new_state[0] and  # Compare the type of PRNG
-            np.array_equal(init_state[1], new_state[1]) and  # Compare the state of the PRNG
-            init_state[2] == new_state[2] and  # Compare the position in the PRNG's state
-            init_state[3] == new_state[3] and  # Compare the position in the PRNG's buffer
-            init_state[4] == new_state[4]      # Compare the state of the PRNG's buffer
+            init_state[0] == new_state[0]  # Compare the type of PRNG
+            and np.array_equal(
+                init_state[1], new_state[1]
+            )  # Compare the state of the PRNG
+            and init_state[2]
+            == new_state[2]  # Compare the position in the PRNG's state
+            and init_state[3]
+            == new_state[3]  # Compare the position in the PRNG's buffer
+            and init_state[4] == new_state[4]  # Compare the state of the PRNG's buffer
         )
 
         self.assertTrue(are_states_equal)

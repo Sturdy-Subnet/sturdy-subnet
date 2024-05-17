@@ -261,4 +261,6 @@ def config(cls):
     bt.logging.add_args(parser)
     bt.axon.add_args(parser)
     cls.add_args(parser)
-    return bt.config(parser)
+    conf = bt.config(parser)
+    conf.mock_n = 16 # default number of mock miners for testing
+    return conf

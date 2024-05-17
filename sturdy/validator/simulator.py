@@ -18,10 +18,12 @@ class Simulator(object):
         self.timesteps = timesteps
         self.reversion_speed = reversion_speed
         self.stochasticity = stochasticity
-        self.pool_history = None
+        self.assets_and_pools = {}
+        self.pool_history = []
+        self.rng_state_container = None
 
     def init_data(self):
-        self.assets_and_pools = generate_assets_and_pools()
+        self.assets_and_pools = generate_assets_and_pools(self.rng_state_container)
         # initial pool borrow amounts
         # TODO: use a dictionary instead? use timestep as keys in the dict?
         self.pool_history = [
@@ -46,14 +48,14 @@ class Simulator(object):
     # reset sim to initial params for rng
     def reset(self):
         if self.rng_state_container is None:
-            print(
+            bt.logging.error(
                 "You must have first initialize()-ed the simulation if you'd like to reset it"
             )
-        np.random.set_state(self.rng_state_container.get_state())
+        np.random.set_state(self.rng_state_container.get_state()) # type: ignore
         self.init_data()
 
     # initialize pools
-    # Function to update borrow amounts and other pool params based on mean reversion and reflexivity
+    # Function to update borrow amounts and other pool params based on reversion rate and stochasticity
     def generate_new_pool_data(self):
         latest_pool_data = self.pool_history[-1]
         curr_borrow_rates = np.array(
@@ -97,7 +99,12 @@ class Simulator(object):
 
     # run simulation
     def run(self):
-        for t in range(1, self.timesteps):
+        if len(self.pool_history) != 1:
+            bt.logging.error(
+                "You need to reset() the simulator"
+            )
+            return
+        for _ in range(1, self.timesteps):
             new_info = self.generate_new_pool_data()
             # TODO: do we need to copy?
             self.pool_history.append(new_info.copy())

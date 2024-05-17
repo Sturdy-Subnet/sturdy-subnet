@@ -45,7 +45,7 @@ class AllocateAssetsResponse(BaseModel):
     allocations: typing.Dict[str, AllocInfo] = Field(
         ...,
         required=True,
-        description="pools for miners to produce allocation amounts for - uid -> pool_info",
+        description="allocations produce by miners",
     )
 
 
@@ -70,7 +70,7 @@ class AllocateAssetsBase(BaseModel):
     # Optional request output, filled by recieving axon.
     allocations: typing.Optional[typing.Dict[str, float]] = Field(
         None,
-        description="pools for miners to produce allocation amounts for - uid -> pool_info",
+        description="allocations produce by miners",
     )
 
 
