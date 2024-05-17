@@ -16,25 +16,8 @@
 # DEALINGS IN THE SOFTWARE.
 
 import typing
-import random
-from sturdy.utils.misc import randrange_float
-from sturdy.constants import (
-    NUM_POOLS,
-    MIN_BASE_RATE,
-    MAX_BASE_RATE,
-    BASE_RATE_STEP,
-    MIN_SLOPE,
-    MAX_SLOPE,
-    MIN_KINK_SLOPE,
-    MAX_KINK_SLOPE,
-    SLOPE_STEP,
-    OPTIMAL_UTIL_RATE,
-    OPTIMAL_UTIL_STEP,
-    TOTAL_ASSETS,
-    MIN_BORROW_AMOUNT,
-    MAX_BORROW_AMOUNT,
-    BORROW_AMOUNT_STEP,
-)
+from sturdy.utils.misc import randrange_float, format_num_prec
+from sturdy.constants import *
 
 
 # TODO: add different interest rate models in the future - we use a single simple model for now
@@ -47,13 +30,19 @@ def generate_assets_and_pools() -> typing.Dict:  # generate pools
             "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP),
             "kink_slope": randrange_float(
                 MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP
-            ),  # kink rate - kicks in after pool hits
-            "optimal_util_rate": OPTIMAL_UTIL_RATE,  # optimal utility rate - after which the kink slope kicks in >:)
-            "borrow_amount": randrange_float(
-                MIN_BORROW_AMOUNT,
-                MAX_BORROW_AMOUNT,
-                BORROW_AMOUNT_STEP,
-            ),
+            ),  # kink rate - kicks in after pool hits optimal util rate
+            "optimal_util_rate": randrange_float(
+                MIN_OPTIMAL_RATE, MAX_OPTIMAL_RATE, OPTIMAL_UTIL_STEP
+            ),  # optimal util rate - after which the kink slope kicks in
+            "borrow_amount": format_num_prec(
+                POOL_RESERVE_SIZE
+                * randrange_float(
+                    MIN_UTIL_RATE,
+                    MAX_UTIL_RATE,
+                    UTIL_RATE_STEP,
+                )
+            ),  # initial borrowed amount from pool
+            "reserve_size": POOL_RESERVE_SIZE,  # TODO: what should we set reserve size to?
         }
         for x in range(NUM_POOLS)
     }

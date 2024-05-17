@@ -11,7 +11,8 @@ from sturdy.constants import QUERY_TIMEOUT
 class TestValidator(IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
-        config = {"mock": True}
+        # dont log this in wandb
+        config = {"mock": True, "wandb": {"off" : True}}
         cls.validator = Validator(config=config)
 
     async def test_get_rewards(self):
@@ -305,5 +306,4 @@ class TestValidator(IsolatedAsyncioTestCase):
 
 
 if __name__ == "__main__":
-    print("hello")
     unittest.main()

@@ -43,6 +43,7 @@ from sturdy.protocol import (
     AllocateAssetsRequest,
     AllocateAssetsResponse,
 )
+from sturdy.validator.simulator import Simulator
 
 # import base validator class which takes care of most of the boilerplate
 from sturdy.base.validator import BaseValidatorNeuron
@@ -62,6 +63,7 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info("load_state()")
         self.load_state()
         self.uid_to_response = {}
+        self.simulator = Simulator()
 
     async def forward(self):
         """

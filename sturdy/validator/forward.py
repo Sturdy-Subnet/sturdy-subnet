@@ -40,9 +40,9 @@ async def forward(self):
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
 
     """
-    # generates synthetic pools
-    assets_and_pools = generate_assets_and_pools()
-    await query_and_score_miners(self, assets_and_pools)
+    # initialize pools and assets
+    self.validator.initialize()
+    await query_and_score_miners(self)
 
 
 async def query_miner(
@@ -95,6 +95,9 @@ async def query_and_score_miners(
     allocations = {
         uid: responses[idx].allocations for idx, uid in enumerate(active_uids)
     }
+
+    # run simulation
+    self.validator.simulator.run()
 
     # Log the results for monitoring purposes.
     bt.logging.debug(f"Pools: {assets_and_pools['pools']}")

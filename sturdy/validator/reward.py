@@ -25,7 +25,7 @@ from typing import List, Dict, Tuple, TypedDict
 from decimal import Decimal
 
 from sturdy.constants import QUERY_TIMEOUT, STEEPNESS, DIV_FACTOR, NUM_POOLS
-from sturdy.utils.misc import calculate_apy
+from sturdy.utils.misc import supply_rate
 from sturdy.protocol import AllocInfo
 
 
@@ -142,8 +142,8 @@ def get_rewards(
 
             # calculate yield for given pool allocation
             util_rate = pool["borrow_amount"] / allocation
-            interest_rate = calculate_apy(util_rate, pool)
-            alloc_yield += allocation * interest_rate
+            pool_supply_rate = supply_rate(util_rate, pool)
+            alloc_yield += allocation * pool_supply_rate
 
         # punish if miner they're cheating
         # TODO: create a more forgiving penalty system?
