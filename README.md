@@ -34,30 +34,34 @@ There are three core files.
 ### Subnet Overview
 - Validators are responsible for distributing lists of pools (of which contain relevant parameters such as base interest rate, base interest rate slope, minimum borrow amount, etc), as well as a maximum token balance miners can allocate to pools. Below is the function present in the codebase used for generating a dummy `assets_and_pools` taken from [pools.py](./sturdy/pools.py):
     ```python
-    def generate_assets_and_pools() -> typing.Dict:  # generate pools
-    assets_and_pools = {}
-    pools = {
-        str(x): {
-            "pool_id": str(x),
-            "base_rate": randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP),
-            "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP),
-            "kink_slope": randrange_float(
-                MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP
-            ),  # kink rate - kicks in after pool hits
-            "optimal_util_rate": OPTIMAL_UTIL_RATE,  # optimal utility rate - after which the kink slope kicks in >:)
-            "borrow_amount": randrange_float(
-                MIN_BORROW_AMOUNT,
-                MAX_BORROW_AMOUNT,
-                BORROW_AMOUNT_STEP,
-            ),
+    def generate_assets_and_pools(rng_gen=np.random) -> typing.Dict:  # generate pools
+        assets_and_pools = {}
+        pools = {
+            str(x): {
+                "pool_id": str(x),
+                "base_rate": randrange_float(
+                    MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen
+                ),
+                "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen),
+                "kink_slope": randrange_float(
+                    MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen
+                ),  # kink rate - kicks in after pool hits optimal util rate
+                "optimal_util_rate": randrange_float(
+                    MIN_OPTIMAL_RATE, MAX_OPTIMAL_RATE, OPTIMAL_UTIL_STEP, rng_gen
+                ),  # optimal util rate - after which the kink slope kicks in
+                "borrow_amount": format_num_prec(
+                    POOL_RESERVE_SIZE
+                    * randrange_float(MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen)
+                ),  # initial borrowed amount from pool
+                "reserve_size": POOL_RESERVE_SIZE,
+            }
+            for x in range(NUM_POOLS)
         }
-        for x in range(NUM_POOLS)
-    }
 
-    assets_and_pools["total_assets"] = TOTAL_ASSETS
-    assets_and_pools["pools"] = pools
+        assets_and_pools["total_assets"] = TOTAL_ASSETS
+        assets_and_pools["pools"] = pools
 
-    return assets_and_pools
+        return assets_and_pools
     ```
     Validators can optionally run an API server and sell their bandwidth to outside users to send their own pools to the subnet. For more information on this process - please read [docs/validator.md](docs/validator.md)
 
@@ -65,7 +69,7 @@ There are three core files.
 
 ![allocations](./assets/allocations.png)
 
-- After generating allocations, miners then send their outputs to validators to be scored. The scores of miners are determined based on their relative yields their response latency. This means that the fastest, best allocating miner will receive the most emissions, with an `80%` weight placed on yield alone, and the other `20%` being dependent on miner latency. The resulting score is between a range of `0-1`. In math speak: $$s_{{k}} = 0.8y_k + 0.2r_k $$ where $s_k$, $y_k$, and $r_k$ are the score, yield, latency of miner $k$ respectively. The reward curve of $r_k$ is determined by a sigmoid curve with response time being the function (see below). Note: The timeout for a miner is 10 seconds, hence why the reward for >= 10s of response time is 0. For more information on how miners are rewarded - please see [reward.py](sturdy/validator/reward.py).
+- After generating allocations, miners then send their outputs to validators to be scored. In order to do this, validators run a simulation which simulates borrow behaviour over a predetermined amount of timesteps. The scores of miners are determined based on their relative aggregate yields over the simulated timesteps and their response latency. This means that the fastest, best allocating miner will receive the most emissions, with an `80%` weight placed on yield alone, and the other `20%` being dependent on miner latency. The resulting score is between a range of `0-1`. In math speak: $$s_{{k}} = 0.8y_k + 0.2r_k $$ where $s_k$, $y_k$, and $r_k$ are the score, yield, latency of miner $k$ respectively. The reward curve of $r_k$ is determined by a sigmoid curve with response time being the function (see below). Note: The timeout for a miner is 10 seconds, hence why the reward for >= 10s of response time is 0. For more information on how miners are rewarded and how the simulator works- please see [reward.py](sturdy/validator/reward.py) and [simulator.py](sturdy/validator/simulator.py) respectively.
 
 <div align="center"> 
     <img src="./assets/latency_scaling.png" />

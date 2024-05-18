@@ -112,7 +112,6 @@ def get_rewards(
     """
 
     # maximum yield to scale all rewards by
-    # TODO: what to set smallest yield value to?
     # total apys of allocations per miner
     max_apy = sys.float_info.min
     apys = {}

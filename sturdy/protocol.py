@@ -21,7 +21,6 @@ import bittensor as bt
 from pydantic import BaseModel, Field
 
 
-# TODO: move AllocInfo elsewhere?
 class AllocInfo(typing.TypedDict):
     apy: str
     allocations: typing.Dict[str, float]
@@ -76,7 +75,7 @@ class AllocateAssetsBase(BaseModel):
 
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
-        # TODO: figure out hwo to only show certain keys from pools and/or allocations
+        # TODO: figure out how to only show certain keys from pools and/or allocations
         return (
             f"AllocateAssets(assets_and_pools={self.assets_and_pools})"
             f"allocations={self.allocations}"

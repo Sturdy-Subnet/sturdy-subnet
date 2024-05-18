@@ -6,7 +6,6 @@ from sturdy.constants import *
 import bittensor as bt
 
 
-# TODO: only run certain subroutines if the simulator has been initialized
 class Simulator(object):
     def __init__(
         self,
@@ -51,7 +50,7 @@ class Simulator(object):
             bt.logging.error(
                 "You must have first initialize()-ed the simulation if you'd like to reset it"
             )
-        np.random.set_state(self.rng_state_container.get_state()) # type: ignore
+        np.random.set_state(self.rng_state_container.get_state())  # type: ignore
         self.init_data()
 
     # initialize pools
@@ -100,9 +99,7 @@ class Simulator(object):
     # run simulation
     def run(self):
         if len(self.pool_history) != 1:
-            bt.logging.error(
-                "You need to reset() the simulator"
-            )
+            bt.logging.error("You need to reset() the simulator")
             return
         for _ in range(1, self.timesteps):
             new_info = self.generate_new_pool_data()

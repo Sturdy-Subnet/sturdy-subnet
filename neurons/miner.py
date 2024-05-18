@@ -58,7 +58,6 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
         bt.logging.debug("forward()")
-        # TODO: check to see that validators don't send unacceptable responses to miners???
 
         # use default greedy alloaction algorithm to generate allocations
         try:
