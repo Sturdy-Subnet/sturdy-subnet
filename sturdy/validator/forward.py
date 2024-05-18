@@ -40,6 +40,7 @@ async def forward(self):
     """
     # initialize pools and assets
     self.simulator.initialize()
+    self.simulator.init_data()
     await query_and_score_miners(self)
 
 
@@ -74,9 +75,7 @@ async def query_multiple_miners(
     return responses
 
 
-async def query_and_score_miners(
-    self
-) -> typing.Dict[int, AllocInfo]:
+async def query_and_score_miners(self) -> typing.Dict[int, AllocInfo]:
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
     active_uids = [
@@ -88,7 +87,12 @@ async def query_and_score_miners(
     bt.logging.debug(f"active_uids: {active_uids}")
 
     responses = await query_multiple_miners(
-        self, AllocateAssets(assets_and_pools=self.simulator.assets_and_pools), active_uids
+        self,
+        AllocateAssets(
+            assets_and_pools=self.simulator.assets_and_pools,
+            allocations=self.simulator.allocations,
+        ),
+        active_uids,
     )
     allocations = {
         uid: responses[idx].allocations for idx, uid in enumerate(active_uids)

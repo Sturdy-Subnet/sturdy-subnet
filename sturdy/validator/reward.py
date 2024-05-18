@@ -135,6 +135,7 @@ def get_rewards(
             pool = updated_assets_pools["pools"][pool_id]
 
             # update the reserves in the pool
+            # TODO: would it be better to delegate this responsibility to the Simulator()?
             pool["reserve_size"] += allocation
 
             total_allocated += Decimal(
@@ -184,6 +185,7 @@ def get_rewards(
 
         # reset simulator for next run
         self.simulator.reset()
+        self.simulator.init_data()
 
     # TODO: should probably move some things around later down the road
     allocs = {}

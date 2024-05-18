@@ -1,9 +1,12 @@
 import numpy as np
 
 from sturdy.utils.misc import borrow_rate
-from sturdy.pools import generate_assets_and_pools
+from sturdy.pools import (
+    generate_assets_and_pools,
+    generate_initial_allocations_for_pools,
+)
 from sturdy.constants import *
-import bittensor as bt
+import copy
 
 
 class Simulator(object):
@@ -13,16 +16,29 @@ class Simulator(object):
         timesteps=TIMESTEPS,
         reversion_speed=REVERSION_SPEED,
         stochasticity=STOCHASTICITY,
+        seed=None,
     ):
         self.timesteps = timesteps
         self.reversion_speed = reversion_speed
         self.stochasticity = stochasticity
         self.assets_and_pools = {}
+        self.allocations = {}
         self.pool_history = []
+        self.init_rng = None
         self.rng_state_container = None
+        self.seed = seed
 
     def init_data(self):
-        self.assets_and_pools = generate_assets_and_pools(self.rng_state_container)
+        if self.rng_state_container is None or self.init_rng is None:
+            raise RuntimeError(
+                "You must have first initialize()-ed the simulation if you'd like to initialize some data"
+            )
+        self.assets_and_pools = generate_assets_and_pools(
+            rng_gen=self.rng_state_container
+        )
+        self.allocations = generate_initial_allocations_for_pools(
+            self.assets_and_pools, rng_gen=self.rng_state_container
+        )
         # initial pool borrow amounts
         # TODO: use a dictionary instead? use timestep as keys in the dict?
         self.pool_history = [
@@ -41,17 +57,16 @@ class Simulator(object):
     # initialize fresh simulation instance
     def initialize(self):
         # create fresh rng state
-        self.rng_state_container = np.random.RandomState()
-        self.init_data()
+        self.init_rng = np.random.RandomState(self.seed)
+        self.rng_state_container = copy.copy(self.init_rng)
 
     # reset sim to initial params for rng
     def reset(self):
-        if self.rng_state_container is None:
-            bt.logging.error(
+        if self.rng_state_container is None or self.init_rng is None:
+            raise RuntimeError(
                 "You must have first initialize()-ed the simulation if you'd like to reset it"
             )
-        np.random.set_state(self.rng_state_container.get_state())  # type: ignore
-        self.init_data()
+        self.rng_state_container = copy.copy(self.init_rng)
 
     # initialize pools
     # Function to update borrow amounts and other pool params based on reversion rate and stochasticity
@@ -68,7 +83,7 @@ class Simulator(object):
         )
 
         median_rate = np.median(curr_borrow_rates)  # Calculate the median borrow rate
-        noise = np.random.normal(
+        noise = self.rng_state_container.normal(
             0, self.stochasticity, len(curr_borrow_rates)
         )  # Add some random noise
         rate_changes = (
@@ -99,7 +114,7 @@ class Simulator(object):
     # run simulation
     def run(self):
         if len(self.pool_history) != 1:
-            bt.logging.error("You need to reset() the simulator")
+            raise RuntimeError("You must first initialize() and init_data() before running the simulation!!!")
             return
         for _ in range(1, self.timesteps):
             new_info = self.generate_new_pool_data()

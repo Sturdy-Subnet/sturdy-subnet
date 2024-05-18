@@ -1,10 +1,13 @@
 import unittest
 import random
-from sturdy.pools import generate_assets_and_pools
+from sturdy.pools import (
+    generate_assets_and_pools,
+    generate_initial_allocations_for_pools,
+)
 from sturdy.constants import *
 
 
-class TestGenerateAssetsAndPools(unittest.TestCase):
+class TestPoolAndAllocGeneration(unittest.TestCase):
     def test_generate_assets_and_pools(self):
         # same seed on every test run
         random.seed(69)
@@ -50,6 +53,24 @@ class TestGenerateAssetsAndPools(unittest.TestCase):
                     <= pool_info["borrow_amount"]
                     <= MAX_UTIL_RATE * POOL_RESERVE_SIZE
                 )
+
+    def test_generate_initial_allocations_for_pools(self):
+        # same seed on every test run
+        random.seed(69)
+        # run test multiple times to to ensure the number generated are
+        # within the correct ranges
+        for i in range(0, 100):
+            assets_and_pools = generate_assets_and_pools()
+            max_alloc = assets_and_pools["total_assets"]
+            pools = assets_and_pools["pools"]
+            result = generate_initial_allocations_for_pools(assets_and_pools)
+            result = {i: alloc for i, alloc in result.items()}
+
+            # Assert total assets
+            self.assertAlmostEqual(sum(result.values()) - max_alloc, 0, places=8)
+
+            # Assert number of allocations
+            self.assertEqual(len(result), len(pools))
 
 
 if __name__ == "__main__":

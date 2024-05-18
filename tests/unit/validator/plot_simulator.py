@@ -11,9 +11,6 @@ This is a script which can be used to play around with the simulator.
 It comes with a function to plot pool borrow rates, etc. over timestamps
 """
 
-# sets seed for rng
-np.random.seed(69)
-
 
 def plot_simulation_results(simulator):
     borrow_amount_history = []
@@ -117,8 +114,9 @@ def plot_simulation_results(simulator):
 
 
 # Usage
-sim = Simulator()
+sim = Simulator(seed=69)
 sim.initialize()
+sim.init_data()
 sim.run()
 
 plot_simulation_results(sim)
