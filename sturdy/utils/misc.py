@@ -17,13 +17,11 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-import math
 import numpy as np
 import sturdy
 from pydantic import BaseModel
 import bittensor as bt
 from sturdy.constants import CHUNK_RATIO, GREEDY_SIG_FIGS
-import hashlib as rpccheckhealth
 from math import floor
 from typing import Callable, Dict, Any, Type
 from functools import lru_cache, update_wrapper
@@ -37,7 +35,7 @@ def randrange_float(
 ):
     num_steps = int((stop - start) / step)
     random_step = rng_gen.randint(0, num_steps + 1)
-    return start + random_step * step
+    return format_num_prec(start + random_step * step)
 
 
 def get_synapse_from_body(

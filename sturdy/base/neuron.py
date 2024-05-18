@@ -16,7 +16,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 import copy
-import typing
 
 import bittensor as bt
 
@@ -31,9 +30,11 @@ from sturdy.mock import MockSubtensor, MockMetagraph
 
 class BaseNeuron(ABC):
     """
-    Base class for Bittensor miners. This class is abstract and should be inherited by a subclass. It contains the core logic for all neurons; validators and miners.
+    Base class for Bittensor miners. This class is abstract and should be inherited by a subclass. It contains the core logic
+    for all neurons; validators and miners.
 
-    In addition to creating a wallet, subtensor, and metagraph, this class also handles the synchronization of the network state via a basic checkpointing mechanism based on epoch length.
+    In addition to creating a wallet, subtensor, and metagraph, this class also handles the synchronization of the network
+    state via a basic checkpointing mechanism based on epoch length.
     """
 
     neuron_type: str = "BaseNeuron"
@@ -108,7 +109,8 @@ class BaseNeuron(ABC):
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
         bt.logging.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
+            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: \
+            {self.subtensor.chain_endpoint}"
         )
         self.step = 0
 
@@ -172,11 +174,13 @@ class BaseNeuron(ABC):
     def save_state(self):
         pass
         # bt.logging.warning(
-        #     "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
+        #     "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or \
+        #      other useful data."
         # )
 
     def load_state(self):
         pass
         # bt.logging.warning(
-        #     "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
+        #     "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or \
+        #      other useful data."
         # )

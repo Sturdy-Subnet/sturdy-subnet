@@ -1,6 +1,6 @@
 import numpy as np
 
-from sturdy.utils.misc import borrow_rate, supply_rate
+from sturdy.utils.misc import borrow_rate
 from sturdy.pools import generate_assets_and_pools
 from sturdy.constants import *
 import bittensor as bt

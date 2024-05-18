@@ -17,12 +17,12 @@ TOTAL_ASSETS = 1.0  # total assets to allocate ( set to 1 for simplicity :^) )
 CHUNK_RATIO = 0.01  # chunk size as a percentage of total assets allocated during each iteration of greedy allocation algorithm
 GREEDY_SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
-REVERSION_SPEED = 0.05 # reversion speed to median borrow rate of pools
-TIMESTEPS = 365 # simulation timesteps
-STOCHASTICITY = 0.01 # stochasticity - some randomness to sprinkle into the simulation
-POOL_RESERVE_SIZE = 1.0 # TODO: what should this be set to?
+REVERSION_SPEED = 0.05  # reversion speed to median borrow rate of pools
+TIMESTEPS = 365  # simulation timesteps
+STOCHASTICITY = 0.01  # stochasticity - some randomness to sprinkle into the simulation
+POOL_RESERVE_SIZE = 1.0  # TODO: what should this be set to?
 
-QUERY_RATE = 2 # how often synthetic validator queries miners (blocks)
+QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 10  # timeout (seconds)
 
 # latency reward curve scaling parameters

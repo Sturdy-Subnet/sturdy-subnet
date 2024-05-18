@@ -55,9 +55,6 @@ def plot_simulation_results(simulator):
         utilization_rate_history,
         columns=[f"Pool_{i}" for i in range(len(borrow_rates))],
     )
-    supply_rate_history_df = pd.DataFrame(
-        supply_rate_history, columns=[f"Pool_{i}" for i in range(len(borrow_rates))]
-    )
     median_borrow_rate_history_df = pd.Series(
         median_borrow_rate_history, name="Median Borrow Rate"
     )

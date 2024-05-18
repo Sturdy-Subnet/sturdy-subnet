@@ -22,14 +22,13 @@ import asyncio
 
 # Bittensor
 import bittensor as bt
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
     HTTP_429_TOO_MANY_REQUESTS,
 )
-import threading
 import uvicorn
 
 # api key db
@@ -51,11 +50,16 @@ from sturdy.base.validator import BaseValidatorNeuron
 
 class Validator(BaseValidatorNeuron):
     """
-    Your validator neuron class. You should use this class to define your validator's behavior. In particular, you should replace the forward function with your own logic.
+    Your validator neuron class. You should use this class to define your validator's behavior. In particular, you should
+    replace the forward function with your own logic.
 
-    This class inherits from the BaseValidatorNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.
+    This class inherits from the BaseValidatorNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes
+    care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can
+    override any of the methods in BaseNeuron if you need to customize the behavior.
 
-    This class provides reasonable default behavior for a validator such as keeping a moving average of the scores of the miners and using them to set weights at the end of each epoch. Additionally, the scores are reset for new hotkeys at the end of each epoch.
+    This class provides reasonable default behavior for a validator such as keeping a moving average of the scores of the
+    miners and using them to set weights at the end of each epoch. Additionally, the scores are reset for new hotkeys at the
+    end of each epoch.
     """
 
     def __init__(self, config=None):
@@ -90,6 +94,7 @@ def _get_api_key(request: Request):
         return auth_header.split(" ")[1]
     else:
         return auth_header
+
 
 @app.middleware("http")
 async def api_key_validator(request, call_next):
@@ -147,14 +152,17 @@ async def api_key_validator(request, call_next):
 # Initialize core_validator outside of the event loop
 core_validator = None
 
+
 @app.get("/test")
 async def test():
     return {"Hello": "World"}
+
 
 @app.get("/vali")
 async def vali():
     ret = {"step": core_validator.step, "config": core_validator.config}
     return ret
+
 
 @app.post("/allocate")
 async def allocate(body: AllocateAssetsRequest):
@@ -163,6 +171,7 @@ async def allocate(body: AllocateAssetsRequest):
     ret = AllocateAssetsResponse(allocations=result)
     return ret
 
+
 # Function to run the main loop
 async def run_main_loop():
     try:
@@ -170,18 +179,23 @@ async def run_main_loop():
     except KeyboardInterrupt:
         print("Keyboard interrupt received, exiting...")
 
+
 # Function to run the Uvicorn server
 async def run_uvicorn_server():
-    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")
+    config = uvicorn.Config(
+        app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio"
+    )
     server = uvicorn.Server(config)
     await server.serve()
+
 
 async def main():
     global core_validator
     core_validator = Validator()
     if not (core_validator.config.synthetic or core_validator.config.organic):
         bt.logging.error(
-            "You did not select a validator type to run! Ensure you select to run either a synthetic or organic validator. Shutting down..."
+            "You did not select a validator type to run! Ensure you select to run either a synthetic or organic validator. \
+             Shutting down..."
         )
         return
 
@@ -196,8 +210,10 @@ async def main():
                 bt.logging.debug("Running synthetic vali...")
                 time.sleep(10)
 
+
 def start():
     asyncio.run(main())
+
 
 if __name__ == "__main__":
     start()

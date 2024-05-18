@@ -21,7 +21,7 @@ import math
 
 import bittensor as bt
 import torch
-from typing import List, Dict, Tuple, TypedDict
+from typing import List, Dict, Tuple
 from decimal import Decimal
 import copy
 
@@ -118,10 +118,9 @@ def get_rewards(
     init_assets_and_pools = copy.deepcopy(self.simulator.assets_and_pools)
 
     for response_idx, response in enumerate(responses):
-        alloc_yield = 0
         allocations = response.allocations
 
-        if allocations == None:
+        if allocations is None:
             apys[uids[response_idx]] = sys.float_info.min
             continue
 
@@ -174,7 +173,9 @@ def get_rewards(
             pct_yield += curr_yield
 
         pct_yield /= initial_balance
-        aggregate_apy = (pct_yield / self.simulator.timesteps) * 365 # for simplicity each timestep is a day in the simulator
+        aggregate_apy = (
+            pct_yield / self.simulator.timesteps
+        ) * 365  # for simplicity each timestep is a day in the simulator
 
         if aggregate_apy > max_apy:
             max_apy = aggregate_apy

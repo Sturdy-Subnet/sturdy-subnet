@@ -16,7 +16,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-import torch
 import asyncio
 import threading
 import argparse
@@ -63,7 +62,7 @@ class BaseMinerNeuron(BaseNeuron):
         self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
         # Attach determiners which functions are called when servicing a request.
-        bt.logging.info(f"Attaching forward function to miner axon.")
+        bt.logging.info("Attaching forward function to miner axon.")
         self.axon.attach(
             forward_fn=self.forward,
             blacklist_fn=self.blacklist,
@@ -79,12 +78,14 @@ class BaseMinerNeuron(BaseNeuron):
 
     def run(self):
         """
-        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
+        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on
+        keyboard interrupts and logs unforeseen errors.
 
         This function performs the following primary tasks:
         1. Check for registration on the Bittensor network.
         2. Starts the miner's axon, making it active on the network.
-        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
+        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network
+        state and setting weights.
 
         The miner continues its operations until `should_exit` is set to True or an external interruption occurs.
         During each epoch of its operation, the miner waits for new blocks on the Bittensor network, updates its
@@ -106,7 +107,8 @@ class BaseMinerNeuron(BaseNeuron):
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
         bt.logging.info(
-            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid:\
+            {self.config.netuid}"
         )
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
 
@@ -139,7 +141,7 @@ class BaseMinerNeuron(BaseNeuron):
             exit()
 
         # In case of unforeseen errors, the miner will log the error and continue operations.
-        except Exception as e:
+        except Exception as e:  # noqa
             bt.logging.error(traceback.format_exc())
 
     def run_in_background_thread(self):

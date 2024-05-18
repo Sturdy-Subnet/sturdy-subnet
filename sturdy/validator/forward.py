@@ -22,8 +22,6 @@ import asyncio
 
 from sturdy.protocol import AllocateAssets
 from sturdy.validator.reward import get_rewards
-from sturdy.utils.uids import get_random_uids
-from sturdy.pools import generate_assets_and_pools
 from sturdy.protocol import AllocInfo
 from sturdy.constants import QUERY_TIMEOUT
 

@@ -36,7 +36,9 @@ class TestGenerateAssetsAndPools(unittest.TestCase):
 
                 self.assertTrue("optimal_util_rate" in pool_info)
                 self.assertTrue(
-                    MIN_OPTIMAL_RATE <= pool_info["optimal_util_rate"] <= MAX_OPTIMAL_RATE
+                    MIN_OPTIMAL_RATE
+                    <= pool_info["optimal_util_rate"]
+                    <= MAX_OPTIMAL_RATE
                 )
 
                 self.assertTrue("reserve_size" in pool_info)
@@ -44,7 +46,9 @@ class TestGenerateAssetsAndPools(unittest.TestCase):
 
                 self.assertTrue("borrow_amount" in pool_info)
                 self.assertTrue(
-                    MIN_UTIL_RATE*POOL_RESERVE_SIZE <= pool_info["borrow_amount"] <= MAX_UTIL_RATE*POOL_RESERVE_SIZE
+                    MIN_UTIL_RATE * POOL_RESERVE_SIZE
+                    <= pool_info["borrow_amount"]
+                    <= MAX_UTIL_RATE * POOL_RESERVE_SIZE
                 )
 
 
