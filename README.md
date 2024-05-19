@@ -120,7 +120,7 @@ There are three core files.
   provide a sample output of the script below:
 
 <div align="center"> 
-    <img src="./assets/simulation_plot.png" />
+    <img src="./assets/sim_plot.png" />
 </div> 
 
 ---
