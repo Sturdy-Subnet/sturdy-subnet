@@ -52,11 +52,14 @@ def plot_simulation_results(simulator):
         utilization_rate_history,
         columns=[f"Pool_{i}" for i in range(len(borrow_rates))],
     )
+    supply_rate_history_df = pd.DataFrame(
+        supply_rate_history, columns=[f"Pool_{i}" for i in range(len(borrow_amounts))]
+    )
     median_borrow_rate_history_df = pd.Series(
         median_borrow_rate_history, name="Median Borrow Rate"
     )
 
-    fig, axs = plt.subplots(4, 1, figsize=(12, 30))
+    fig, axs = plt.subplots(5, 1, figsize=(12, 35))
 
     def save_plot(event):
         if event.key == "s":
@@ -97,26 +100,37 @@ def plot_simulation_results(simulator):
     axs[2].set_ylabel("Utilization Rate")
     axs[2].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
 
+    supply_rate_history_df.plot(ax=axs[3])
+    axs[3].set_title("Simulated Supply Rates Over Time")
+    axs[3].set_xlabel("Time Step")
+    axs[3].set_ylabel("Supply Rate")
+    axs[3].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
+
     utilization_range = np.linspace(0, 1, 100)
     for i in range(NUM_POOLS):
         interest_rates = [
             borrow_rate(u, simulator.assets_and_pools["pools"][str(i)])
             for u in utilization_range
         ]
-        axs[3].plot(utilization_range, interest_rates, label=f"Pool_{i}")
-    axs[3].set_title("Interest Rate Curves for the Pools")
-    axs[3].set_xlabel("Utilization Rate")
-    axs[3].set_ylabel("Borrow Rate")
-    axs[3].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
+        axs[4].plot(utilization_range, interest_rates, label=f"Pool_{i}")
+    axs[4].set_title("Interest Rate Curves for the Pools")
+    axs[4].set_xlabel("Utilization Rate")
+    axs[4].set_ylabel("Borrow Rate")
+    axs[4].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
 
     plt.tight_layout()
     plt.show()
 
 
 # Usage
-sim = Simulator(seed=69)
-sim.initialize()
-sim.init_data()
-sim.run()
+np.random.seed(69)
+num_sims = 5
+for i in range(num_sims):
+    sim = Simulator(
+        seed=np.random.randint(0, 1000),
+    )
+    sim.initialize()
+    sim.init_data()
+    sim.run()
 
-plot_simulation_results(sim)
+    plot_simulation_results(sim)

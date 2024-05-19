@@ -61,6 +61,6 @@ def generate_initial_allocations_for_pools(
 ) -> typing.Dict:
     nums = np.ones(size)
     allocs = nums / np.sum(nums) * assets_and_pools["total_assets"]
-    allocations = {i: alloc for i, alloc in enumerate(allocs)}
+    allocations = {str(i): alloc for i, alloc in enumerate(allocs)}
 
     return allocations

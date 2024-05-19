@@ -118,12 +118,19 @@ def get_rewards(
     init_assets_and_pools = copy.deepcopy(self.simulator.assets_and_pools)
 
     for response_idx, response in enumerate(responses):
+        # reset simulator for next run
+        self.simulator.reset()
+        self.simulator.init_data()
+
         allocations = response.allocations
 
         if allocations is None:
             apys[uids[response_idx]] = sys.float_info.min
             continue
 
+        # update reserves given allocations
+        self.simulator.allocations = allocations
+        self.simulator.update_reserves_with_allocs()
         # TODO: use this or just run reset()?
         updated_assets_pools = copy.deepcopy(init_assets_and_pools)
 
@@ -131,13 +138,7 @@ def get_rewards(
         total_allocated = Decimal(0)
         cheating = False
 
-        for pool_id, allocation in allocations.items():
-            pool = updated_assets_pools["pools"][pool_id]
-
-            # update the reserves in the pool
-            # TODO: would it be better to delegate this responsibility to the Simulator()?
-            pool["reserve_size"] += allocation
-
+        for _, allocation in allocations.items():
             total_allocated += Decimal(
                 str(allocation)
             )  # This should fix precision issues with python floats
@@ -182,10 +183,6 @@ def get_rewards(
             max_apy = aggregate_apy
 
         apys[uids[response_idx]] = aggregate_apy
-
-        # reset simulator for next run
-        self.simulator.reset()
-        self.simulator.init_data()
 
     # TODO: should probably move some things around later down the road
     allocs = {}

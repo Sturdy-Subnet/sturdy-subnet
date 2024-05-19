@@ -68,6 +68,26 @@ class Simulator(object):
             )
         self.rng_state_container = copy.copy(self.init_rng)
 
+    # update the reserves in the pool with given allocations
+    def update_reserves_with_allocs(self, allocs=None):
+        if allocs is None:
+            allocations = self.allocations
+        else:
+            allocations = allocs
+
+        if len(allocations) != len(self.assets_and_pools["pools"]):
+            raise RuntimeError("Length of allocations must be equal to length of pools")
+        if len(self.pool_history) != 1:
+            raise RuntimeError(
+                "You must have first init data for the simulation if you'd like to update reserves"
+            )
+        for uid, pool in self.assets_and_pools["pools"].items():
+            pool["reserve_size"] += allocations[uid]
+        for uid, pool in self.pool_history[0].items():
+            pool["reserve_size"] += allocations[uid]
+            pool_params = self.assets_and_pools["pools"][uid]
+            pool["borrow_rate"] = borrow_rate(pool["borrow_amount"] / pool["reserve_size"], pool_params)
+
     # initialize pools
     # Function to update borrow amounts and other pool params based on reversion rate and stochasticity
     def generate_new_pool_data(self):
@@ -114,7 +134,9 @@ class Simulator(object):
     # run simulation
     def run(self):
         if len(self.pool_history) != 1:
-            raise RuntimeError("You must first initialize() and init_data() before running the simulation!!!")
+            raise RuntimeError(
+                "You must first initialize() and init_data() before running the simulation!!!"
+            )
             return
         for _ in range(1, self.timesteps):
             new_info = self.generate_new_pool_data()

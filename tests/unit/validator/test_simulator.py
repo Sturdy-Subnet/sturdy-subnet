@@ -1,6 +1,7 @@
 import unittest
 from sturdy.validator.simulator import Simulator
 from sturdy.constants import *
+from sturdy.utils.misc import borrow_rate
 import numpy as np
 import copy
 
@@ -48,6 +49,35 @@ class TestSimulator(unittest.TestCase):
 
         # should raise error
         self.assertRaises(RuntimeError, self.simulator.init_data)
+
+    def test_update_reserves_with_allocs(self):
+        self.simulator.rng_state_container = np.random.RandomState(69)
+        self.simulator.init_rng = np.random.RandomState(69)
+        self.simulator.init_data()
+
+        init_pools = copy.deepcopy(self.simulator.assets_and_pools["pools"])
+
+        allocations = {
+            str(i): self.simulator.assets_and_pools["total_assets"] / len(init_pools)
+            for i in range(len(init_pools))
+        }
+        self.simulator.allocations = allocations
+
+        self.simulator.update_reserves_with_allocs()
+
+        for uid, init_pool in init_pools.items():
+            # check pools
+            new_pool = self.simulator.assets_and_pools["pools"][uid]
+            reserve_should_be = allocations[uid] + init_pool["reserve_size"]
+            self.assertEqual(reserve_should_be, new_pool["reserve_size"])
+
+            # check init pool_history datapoint
+            new_pool_hist_init = self.simulator.pool_history[0][uid]
+            b_rate_should_be = borrow_rate(
+                new_pool_hist_init["borrow_amount"] / new_pool_hist_init["reserve_size"], new_pool
+            )
+            self.assertEqual(reserve_should_be, new_pool_hist_init["reserve_size"])
+            self.assertEqual(b_rate_should_be, new_pool_hist_init["borrow_rate"])
 
     def test_initialization(self):
         self.simulator.initialize()

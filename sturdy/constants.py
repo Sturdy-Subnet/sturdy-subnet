@@ -10,16 +10,16 @@ SLOPE_STEP = 0.001
 MIN_OPTIMAL_RATE = 0.65
 MAX_OPTIMAL_RATE = 0.95
 OPTIMAL_UTIL_STEP = 0.05
-MIN_UTIL_RATE = 0.65
+MIN_UTIL_RATE = 0.55
 MAX_UTIL_RATE = 0.95
 UTIL_RATE_STEP = 0.05
 TOTAL_ASSETS = 1.0  # total assets to allocate ( set to 1 for simplicity :^) )
 CHUNK_RATIO = 0.01  # chunk size as a percentage of total assets allocated during each iteration of greedy allocation algorithm
 GREEDY_SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
-REVERSION_SPEED = 0.05  # reversion speed to median borrow rate of pools
-TIMESTEPS = 365  # simulation timesteps
-STOCHASTICITY = 0.01  # stochasticity - some randomness to sprinkle into the simulation
+REVERSION_SPEED = 0.1  # reversion speed to median borrow rate of pools
+TIMESTEPS = 50  # simulation timesteps
+STOCHASTICITY = 0.025  # stochasticity - some randomness to sprinkle into the simulation
 POOL_RESERVE_SIZE = 1.0  # TODO: what should this be set to?
 
 QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
