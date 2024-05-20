@@ -11,6 +11,7 @@ This is a script which can be used to play around with the simulator.
 It comes with a function to plot pool borrow rates, etc. over timestamps
 """
 
+
 def plot_simulation_results(simulator):
     borrow_amount_history = []
     borrow_rate_history = []
@@ -58,7 +59,7 @@ def plot_simulation_results(simulator):
         median_borrow_rate_history, name="Median Borrow Rate"
     )
 
-    plt.style.use('dark_background')
+    plt.style.use("dark_background")
     fig, axs = plt.subplots(3, 2, figsize=(15, 15))
     axs[2, 1].remove()  # Remove the subplot in the bottom right corner
     axs[2, 0].remove()  # Remove the subplot in the bottom left corner
@@ -123,7 +124,7 @@ def plot_simulation_results(simulator):
             for u in utilization_range
         ]
         ax_interest_rates.plot(utilization_range, interest_rates, label=f"Pool_{i}")
-    
+
     ax_interest_rates.set_title("Interest Rate Curves for the Pools")
     ax_interest_rates.set_xlabel("Utilization Rate")
     ax_interest_rates.set_ylabel("Borrow Rate")
@@ -132,6 +133,7 @@ def plot_simulation_results(simulator):
     # Ensure labels don't overlap and improve layout
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
+
 
 # Usage
 np.random.seed(69)

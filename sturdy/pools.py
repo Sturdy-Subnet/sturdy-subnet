@@ -56,6 +56,7 @@ def generate_assets_and_pools(rng_gen=np.random) -> typing.Dict:  # generate poo
     return assets_and_pools
 
 
+# generate intial allocations for pools
 def generate_initial_allocations_for_pools(
     assets_and_pools: typing.Dict, size: int = NUM_POOLS, rng_gen=np.random
 ) -> typing.Dict:

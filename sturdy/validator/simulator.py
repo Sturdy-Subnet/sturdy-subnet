@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Dict, Union
 
 from sturdy.utils.misc import borrow_rate
 from sturdy.pools import (
@@ -28,17 +29,31 @@ class Simulator(object):
         self.rng_state_container = None
         self.seed = seed
 
-    def init_data(self):
+    # initializes data - by default these are randomly generated
+    def init_data(
+        self,
+        init_assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
+        init_allocations: Dict[str, float] = None,
+    ):
         if self.rng_state_container is None or self.init_rng is None:
             raise RuntimeError(
                 "You must have first initialize()-ed the simulation if you'd like to initialize some data"
             )
-        self.assets_and_pools = generate_assets_and_pools(
-            rng_gen=self.rng_state_container
-        )
-        self.allocations = generate_initial_allocations_for_pools(
-            self.assets_and_pools, rng_gen=self.rng_state_container
-        )
+
+        if init_assets_and_pools is None:
+            self.assets_and_pools = generate_assets_and_pools(
+                rng_gen=self.rng_state_container
+            )
+        else:
+            self.assets_and_pools = init_assets_and_pools
+
+        if init_allocations is None:
+            self.allocations = generate_initial_allocations_for_pools(
+                self.assets_and_pools, rng_gen=self.rng_state_container
+            )
+        else:
+            self.allocations = init_allocations
+
         # initial pool borrow amounts
         # TODO: use a dictionary instead? use timestep as keys in the dict?
         self.pool_history = [
@@ -70,6 +85,15 @@ class Simulator(object):
 
     # update the reserves in the pool with given allocations
     def update_reserves_with_allocs(self, allocs=None):
+        if (
+            len(self.pool_history) != 1
+            or len(self.assets_and_pools) <= 0
+            or len(self.allocations) <= 0
+        ):
+            raise RuntimeError(
+                "You must first initialize() and init_data() before running the simulation!!!"
+            )
+
         if allocs is None:
             allocations = self.allocations
         else:
@@ -86,7 +110,9 @@ class Simulator(object):
         for uid, pool in self.pool_history[0].items():
             pool["reserve_size"] += allocations[uid]
             pool_params = self.assets_and_pools["pools"][uid]
-            pool["borrow_rate"] = borrow_rate(pool["borrow_amount"] / pool["reserve_size"], pool_params)
+            pool["borrow_rate"] = borrow_rate(
+                pool["borrow_amount"] / pool["reserve_size"], pool_params
+            )
 
     # initialize pools
     # Function to update borrow amounts and other pool params based on reversion rate and stochasticity
@@ -137,7 +163,6 @@ class Simulator(object):
             raise RuntimeError(
                 "You must first initialize() and init_data() before running the simulation!!!"
             )
-            return
         for _ in range(1, self.timesteps):
             new_info = self.generate_new_pool_data()
             # TODO: do we need to copy?

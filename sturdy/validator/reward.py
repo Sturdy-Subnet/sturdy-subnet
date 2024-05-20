@@ -115,12 +115,12 @@ def get_rewards(
     # total apys of allocations per miner
     max_apy = sys.float_info.min
     apys = {}
+
     init_assets_and_pools = copy.deepcopy(self.simulator.assets_and_pools)
 
     for response_idx, response in enumerate(responses):
         # reset simulator for next run
         self.simulator.reset()
-        self.simulator.init_data()
 
         allocations = response.allocations
 
@@ -128,11 +128,13 @@ def get_rewards(
             apys[uids[response_idx]] = sys.float_info.min
             continue
 
+        self.simulator.init_data(copy.deepcopy(init_assets_and_pools), allocations)
+
         # update reserves given allocations
-        self.simulator.allocations = allocations
+        # self.simulator.allocations = allocations
         self.simulator.update_reserves_with_allocs()
         # TODO: use this or just run reset()?
-        updated_assets_pools = copy.deepcopy(init_assets_and_pools)
+        updated_assets_pools = copy.deepcopy(self.simulator.assets_and_pools)
 
         initial_balance = updated_assets_pools["total_assets"]
         total_allocated = Decimal(0)
@@ -158,8 +160,6 @@ def get_rewards(
             apys[miner_uid] = sys.float_info.min
             continue
 
-        # update pools given miner allocations
-        self.simulator.assets_and_pools = updated_assets_pools
         # run simulation
         self.simulator.run()
         # calculate aggregate yield
@@ -184,10 +184,21 @@ def get_rewards(
 
         apys[uids[response_idx]] = aggregate_apy
 
+    axon_times = get_response_times(
+        uids=uids, responses=responses, timeout=QUERY_TIMEOUT
+    )
+
+    # set apys for miners that took longer than the timeout to minimum
+    # TODO: cleaner way to do this?
+    for uid in uids:
+        if axon_times[uid] >= QUERY_TIMEOUT:
+            apys[uid] = sys.float_info.min
+
     # TODO: should probably move some things around later down the road
     allocs = {}
     for idx in range(len(responses)):
-        if responses[idx].allocations is None:
+        # TODO: cleaner way to do this?
+        if responses[idx].allocations is None or axon_times[uids[idx]] >= QUERY_TIMEOUT:
             continue
         if len(responses[idx].allocations) == len(updated_assets_pools["pools"]):
             allocs[uids[idx]] = {
@@ -199,9 +210,6 @@ def get_rewards(
         k: v for k, v in sorted(apys.items(), key=lambda item: item[1], reverse=True)
     }
 
-    axon_times = get_response_times(
-        uids=uids, responses=responses, timeout=QUERY_TIMEOUT
-    )
     sorted_axon_times = {
         k: v for k, v in sorted(axon_times.items(), key=lambda item: item[1])
     }

@@ -11,122 +11,135 @@ from sturdy.constants import QUERY_TIMEOUT
 class TestValidator(IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
-        config = {"mock": True, "wandb": {"off": True}, "mock_n": 16, "neuron": {"dont_save_events": True}}
+        config = {
+            "mock": True,
+            "wandb": {"off": True},
+            "mock_n": 16,
+            "neuron": {"dont_save_events": True},
+        }
         cls.validator = Validator(config=config)
+
+        cls.assets_and_pools = {
+            "pools": {
+                "0": {
+                    "base_rate": 0.03,
+                    "base_slope": 0.072,
+                    "borrow_amount": 0.85,
+                    "kink_slope": 0.347,
+                    "optimal_util_rate": 0.9,
+                    "pool_id": "0",
+                    "reserve_size": 1.0,
+                },
+                "1": {
+                    "base_rate": 0.01,
+                    "base_slope": 0.011,
+                    "borrow_amount": 0.55,
+                    "kink_slope": 0.187,
+                    "optimal_util_rate": 0.9,
+                    "pool_id": "1",
+                    "reserve_size": 1.0,
+                },
+                "2": {
+                    "base_rate": 0.02,
+                    "base_slope": 0.067,
+                    "borrow_amount": 0.7,
+                    "kink_slope": 0.662,
+                    "optimal_util_rate": 0.9,
+                    "pool_id": "2",
+                    "reserve_size": 1.0,
+                },
+                "3": {
+                    "base_rate": 0.01,
+                    "base_slope": 0.044,
+                    "borrow_amount": 0.7,
+                    "kink_slope": 0.386,
+                    "optimal_util_rate": 0.9,
+                    "pool_id": "3",
+                    "reserve_size": 1.0,
+                },
+                "4": {
+                    "base_rate": 0.03,
+                    "base_slope": 0.044,
+                    "borrow_amount": 0.75,
+                    "kink_slope": 0.163,
+                    "optimal_util_rate": 0.65,
+                    "pool_id": "4",
+                    "reserve_size": 1.0,
+                },
+                "5": {
+                    "base_rate": 0.05,
+                    "base_slope": 0.021,
+                    "borrow_amount": 0.85,
+                    "kink_slope": 0.232,
+                    "optimal_util_rate": 0.75,
+                    "pool_id": "5",
+                    "reserve_size": 1.0,
+                },
+                "6": {
+                    "base_rate": 0.01,
+                    "base_slope": 0.062,
+                    "borrow_amount": 0.7,
+                    "kink_slope": 0.997,
+                    "optimal_util_rate": 0.8,
+                    "pool_id": "6",
+                    "reserve_size": 1.0,
+                },
+                "7": {
+                    "base_rate": 0.02,
+                    "base_slope": 0.098,
+                    "borrow_amount": 0.9,
+                    "kink_slope": 0.543,
+                    "optimal_util_rate": 0.75,
+                    "pool_id": "7",
+                    "reserve_size": 1.0,
+                },
+                "8": {
+                    "base_rate": 0.01,
+                    "base_slope": 0.028,
+                    "borrow_amount": 0.55,
+                    "kink_slope": 0.352,
+                    "optimal_util_rate": 0.8,
+                    "pool_id": "8",
+                    "reserve_size": 1.0,
+                },
+                "9": {
+                    "base_rate": 0.04,
+                    "base_slope": 0.066,
+                    "borrow_amount": 0.7,
+                    "kink_slope": 0.617,
+                    "optimal_util_rate": 0.8,
+                    "pool_id": "9",
+                    "reserve_size": 1.0,
+                },
+            },
+            "total_assets": 1.0,
+        }
+
+        cls.allocations = {
+            "0": 0.04,
+            "1": 0.1025,
+            "2": 0.0533,
+            "3": 0.2948,
+            "4": 0.0216,
+            "5": 0.1989,
+            "6": 0.1237,
+            "7": 0.0119,
+            "8": 0.0401,
+            "9": 0.1132,
+        }
+
         cls.validator.simulator.initialize()
-        cls.validator.simulator.init_data()
+        cls.validator.simulator.init_data(
+            init_assets_and_pools=cls.assets_and_pools.copy(),
+            init_allocations=cls.allocations.copy(),
+        )
 
     async def test_get_rewards(self):
         print("----==== test_get_rewards ====----")
-        # TODO: use config.mock? create a config json file for mock validator?
+        assets_and_pools = self.assets_and_pools.copy()
+        allocations = self.allocations.copy()
+
         validator = self.validator
-        assets_and_pools = {
-            "total_assets": 1.0,
-            "pools": {
-                "0": {
-                    "pool_id": 0,
-                    "base_rate": 0.0,
-                    "base_slope": 0.011,
-                    "kink_slope": 2.0140000000000002,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.032,
-                    "reserve_amount": 1.0,
-                },
-                "1": {
-                    "pool_id": 1,
-                    "base_rate": 0.01,
-                    "base_slope": 0.012,
-                    "kink_slope": 1.3,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.02,
-                    "reserve_amount": 1.0,
-                },
-                "2": {
-                    "pool_id": 2,
-                    "base_rate": 0.01,
-                    "base_slope": 0.015,
-                    "kink_slope": 0.502,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.006,
-                    "reserve_amount": 1.0,
-                },
-                "3": {
-                    "pool_id": 3,
-                    "base_rate": 0.0,
-                    "base_slope": 0.048,
-                    "kink_slope": 1.233,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.08,
-                    "reserve_amount": 1.0,
-                },
-                "4": {
-                    "pool_id": 4,
-                    "base_rate": 0.0,
-                    "base_slope": 0.032,
-                    "kink_slope": 2.5060000000000002,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.006,
-                    "reserve_amount": 1.0,
-                },
-                "5": {
-                    "pool_id": 5,
-                    "base_rate": 0.01,
-                    "base_slope": 0.020999999999999998,
-                    "kink_slope": 2.633,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.081,
-                    "reserve_amount": 1.0,
-                },
-                "6": {
-                    "pool_id": 6,
-                    "base_rate": 0.0,
-                    "base_slope": 0.032,
-                    "kink_slope": 2.716,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.068,
-                    "reserve_amount": 1.0,
-                },
-                "7": {
-                    "pool_id": 7,
-                    "base_rate": 0.0,
-                    "base_slope": 0.019000000000000003,
-                    "kink_slope": 0.8180000000000001,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.007,
-                    "reserve_amount": 1.0,
-                },
-                "8": {
-                    "pool_id": 8,
-                    "base_rate": 0.0,
-                    "base_slope": 0.037,
-                    "kink_slope": 2.934,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.023,
-                    "reserve_amount": 1.0,
-                },
-                "9": {
-                    "pool_id": 9,
-                    "base_rate": 0.01,
-                    "base_slope": 0.011,
-                    "kink_slope": 1.609,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.09,
-                    "reserve_amount": 1.0,
-                },
-            },
-        }
-        allocations = {
-            0: 0.04,
-            1: 0.1025,
-            2: 0.0533,
-            3: 0.2948,
-            4: 0.0216,
-            5: 0.1989,
-            6: 0.1237,
-            7: 0.0119,
-            8: 0.0401,
-            9: 0.1132,
-        }
 
         active_uids = [
             uid
@@ -149,13 +162,19 @@ class TestValidator(IsolatedAsyncioTestCase):
             timeout=QUERY_TIMEOUT,
         )
 
+        #         for response in responses:
+        #             self.assertEqual(response.assets_and_pools, assets_and_pools)
+        #             self.assertEqual(response.allocations, allocations)
+
         # TODO: better testing?
-        rewards, _ = get_rewards(
+        rewards, allocs = get_rewards(
             validator,
             validator.step,
             active_uids,
             responses=responses,
         )
+
+        print(f"allocs: {allocs}")
 
         # rewards should all be non-zero
         self.assertEqual(any(rewards > 0), True)
@@ -173,102 +192,18 @@ class TestValidator(IsolatedAsyncioTestCase):
     async def test_get_rewards_punish(self):
         print("----==== test_get_rewards_punish ====----")
         validator = self.validator
-        assets_and_pools = {
-            "total_assets": 1.0,
-            "pools": {
-                "0": {
-                    "pool_id": 0,
-                    "base_rate": 0.0,
-                    "base_slope": 0.011,
-                    "kink_slope": 2.0140000000000002,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.032,
-                },
-                "1": {
-                    "pool_id": 1,
-                    "base_rate": 0.01,
-                    "base_slope": 0.012,
-                    "kink_slope": 1.3,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.02,
-                },
-                "2": {
-                    "pool_id": 2,
-                    "base_rate": 0.01,
-                    "base_slope": 0.015,
-                    "kink_slope": 0.502,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.006,
-                },
-                "3": {
-                    "pool_id": 3,
-                    "base_rate": 0.0,
-                    "base_slope": 0.048,
-                    "kink_slope": 1.233,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.08,
-                },
-                "4": {
-                    "pool_id": 4,
-                    "base_rate": 0.0,
-                    "base_slope": 0.032,
-                    "kink_slope": 2.5060000000000002,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.006,
-                },
-                "5": {
-                    "pool_id": 5,
-                    "base_rate": 0.01,
-                    "base_slope": 0.020999999999999998,
-                    "kink_slope": 2.633,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.081,
-                },
-                "6": {
-                    "pool_id": 6,
-                    "base_rate": 0.0,
-                    "base_slope": 0.032,
-                    "kink_slope": 2.716,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.068,
-                },
-                "7": {
-                    "pool_id": 7,
-                    "base_rate": 0.0,
-                    "base_slope": 0.019000000000000003,
-                    "kink_slope": 0.8180000000000001,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.007,
-                },
-                "8": {
-                    "pool_id": 8,
-                    "base_rate": 0.0,
-                    "base_slope": 0.037,
-                    "kink_slope": 2.934,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.023,
-                },
-                "9": {
-                    "pool_id": 9,
-                    "base_rate": 0.01,
-                    "base_slope": 0.011,
-                    "kink_slope": 1.609,
-                    "optimal_util_rate": 0.8,
-                    "borrow_amount": 0.09,
-                },
-            },
-        }
+        assets_and_pools = self.assets_and_pools
         allocations = {
-            0: 0.04,
-            1: 0.1025,
-            2: 0.0533,
-            3: 0.2948,
-            4: 0.0216,
-            5: 0.1989,
-            6: 0.1237,
-            7: 0.0119,
-            8: 1.0401,  # 0.0401 + 1 - miner(s) is clearly cheating!!!
-            9: 0.1132,
+            "0": 0.04,
+            "1": 0.1025,
+            "2": 0.0533,
+            "3": 0.2948,
+            "4": 0.0216,
+            "5": 0.1989,
+            "6": 0.1237,
+            "7": 0.0119,
+            "8": 1.0401,  # 0.0401 + 1 - miner(s) is clearly cheating!!!
+            "9": 0.1132,
         }
 
         active_uids = [
@@ -292,6 +227,10 @@ class TestValidator(IsolatedAsyncioTestCase):
             timeout=QUERY_TIMEOUT,
         )
 
+        for response in responses:
+            self.assertEqual(response.assets_and_pools, assets_and_pools)
+            self.assertEqual(response.allocations, allocations)
+
         # TODO: better testing?
         rewards, allocs = get_rewards(
             validator,
@@ -300,7 +239,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             responses=responses,
         )
 
-        for key, allocInfo in allocs.items():
+        for _, allocInfo in allocs.items():
             self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
 
         rewards_dict = {k: v for k, v in enumerate(list(rewards))}

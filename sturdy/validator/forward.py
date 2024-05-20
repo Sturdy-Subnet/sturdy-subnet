@@ -17,7 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import bittensor as bt
-import typing
+from typing import List, Dict, Union
 import asyncio
 
 from sturdy.protocol import AllocateAssets
@@ -39,15 +39,13 @@ async def forward(self):
 
     """
     # initialize pools and assets
-    self.simulator.initialize()
-    self.simulator.init_data()
     await query_and_score_miners(self)
 
 
 async def query_miner(
     self,
     synapse: bt.Synapse,
-    uid: typing.List[int],
+    uid: List[int],
     deserialize: bool = False,
 ):
     response = await self.dendrite.forward(
@@ -64,7 +62,7 @@ async def query_miner(
 async def query_multiple_miners(
     self,
     synapse: bt.Synapse,
-    uids: typing.List[int],
+    uids: List[int],
     deserialize: bool = False,
 ):
     uid_to_query_task = {
@@ -75,7 +73,19 @@ async def query_multiple_miners(
     return responses
 
 
-async def query_and_score_miners(self) -> typing.Dict[int, AllocInfo]:
+async def query_and_score_miners(
+    self,
+    assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
+) -> Dict[int, AllocInfo]:
+    # intialize simulator
+    self.simulator.initialize()
+    # initialize simulator data
+    # if there is organic info then generate synthetic info
+    if assets_and_pools is not None:
+        self.simulator.init_data(init_assets_and_pools=assets_and_pools)
+    else:
+        self.simulator.init_data()
+
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
     active_uids = [
