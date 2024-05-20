@@ -184,95 +184,105 @@ Just for reference - below is an example `curl` command which could be used to i
 ```
 curl -X POST   http://<IP_ADDRESS>:<PORT>/allocate   -H 'Content-Type: application/json'   -H 'Authorization: Bearer <API_KEY>'   -d '{
   "assets_and_pools": {
-    "total_assets": 1.0,
     "pools": {
       "0": {
-        "pool_id": 0,
-        "base_rate": 0.0,
-        "base_slope": 0.011,
-        "kink_slope": 2.014,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.032
+        "base_rate": 0.03,
+        "base_slope": 0.072,
+        "borrow_amount": 0.85,
+        "kink_slope": 0.347,
+        "optimal_util_rate": 0.9,
+        "pool_id": "0",
+        "reserve_size": 1
       },
       "1": {
-        "pool_id": 1,
-        "base_rate": 0.01,
-        "base_slope": 0.012,
-        "kink_slope": 1.3,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.02
-      },
-      "2": {
-        "pool_id": 2,
-        "base_rate": 0.01,
-        "base_slope": 0.015,
-        "kink_slope": 0.502,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.006
-      },
-      "3": {
-        "pool_id": 3,
-        "base_rate": 0.0,
-        "base_slope": 0.048,
-        "kink_slope": 1.233,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.08
-      },
-      "4": {
-        "pool_id": 4,
-        "base_rate": 0.0,
-        "base_slope": 0.032,
-        "kink_slope": 2.506,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.006
-      },
-      "5": {
-        "pool_id": 5,
-        "base_rate": 0.01,
-        "base_slope": 0.021,
-        "kink_slope": 2.633,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.081
-      },
-      "6": {
-        "pool_id": 6,
-        "base_rate": 0.0,
-        "base_slope": 0.032,
-        "kink_slope": 2.716,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.068
-      },
-      "7": {
-        "pool_id": 7,
-        "base_rate": 0.0,
-        "base_slope": 0.019,
-        "kink_slope": 0.818,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.007
-      },
-      "8": {
-        "pool_id": 8,
-        "base_rate": 0.0,
-        "base_slope": 0.037,
-        "kink_slope": 2.934,
-        "optimal_util_rate": 0.8,
-        "borrow_amount": 0.023
-      },
-      "9": {
-        "pool_id": 9,
         "base_rate": 0.01,
         "base_slope": 0.011,
-        "kink_slope": 1.609,
+        "borrow_amount": 0.55,
+        "kink_slope": 0.187,
+        "optimal_util_rate": 0.9,
+        "pool_id": "1",
+        "reserve_size": 1
+      },
+      "2": {
+        "base_rate": 0.02,
+        "base_slope": 0.067,
+        "borrow_amount": 0.7,
+        "kink_slope": 0.662,
+        "optimal_util_rate": 0.9,
+        "pool_id": "2",
+        "reserve_size": 1
+      },
+      "3": {
+        "base_rate": 0.01,
+        "base_slope": 0.044,
+        "borrow_amount": 0.7,
+        "kink_slope": 0.386,
+        "optimal_util_rate": 0.9,
+        "pool_id": "3",
+        "reserve_size": 1
+      },
+      "4": {
+        "base_rate": 0.03,
+        "base_slope": 0.044,
+        "borrow_amount": 0.75,
+        "kink_slope": 0.163,
+        "optimal_util_rate": 0.65,
+        "pool_id": "4",
+        "reserve_size": 1
+      },
+      "5": {
+        "base_rate": 0.05,
+        "base_slope": 0.021,
+        "borrow_amount": 0.85,
+        "kink_slope": 0.232,
+        "optimal_util_rate": 0.75,
+        "pool_id": "5",
+        "reserve_size": 1
+      },
+      "6": {
+        "base_rate": 0.01,
+        "base_slope": 0.062,
+        "borrow_amount": 0.7,
+        "kink_slope": 0.997,
         "optimal_util_rate": 0.8,
-        "borrow_amount": 0.09
+        "pool_id": "6",
+        "reserve_size": 1
+      },
+      "7": {
+        "base_rate": 0.02,
+        "base_slope": 0.098,
+        "borrow_amount": 0.9,
+        "kink_slope": 0.543,
+        "optimal_util_rate": 0.75,
+        "pool_id": "7",
+        "reserve_size": 1
+      },
+      "8": {
+        "base_rate": 0.01,
+        "base_slope": 0.028,
+        "borrow_amount": 0.55,
+        "kink_slope": 0.352,
+        "optimal_util_rate": 0.8,
+        "pool_id": "8",
+        "reserve_size": 1
+      },
+      "9": {
+        "base_rate": 0.04,
+        "base_slope": 0.066,
+        "borrow_amount": 0.7,
+        "kink_slope": 0.617,
+        "optimal_util_rate": 0.8,
+        "pool_id": "9",
+        "reserve_size": 1
       }
-    }
+    },
+    "total_assets": 1
   }
 }'
 
 ```
 
-And the corresponding response from the subnet:
+And the corresponding response(example) format from the subnet:
 ```
 {
     "allocations": {
