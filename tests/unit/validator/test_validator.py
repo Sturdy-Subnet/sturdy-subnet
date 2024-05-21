@@ -19,6 +19,8 @@ class TestValidator(IsolatedAsyncioTestCase):
             "neuron": {"dont_save_events": True},
         }
         cls.validator = Validator(config=config)
+        # TODO: this doesn't work?
+        # cls.validator.simulator = Simulator(69)
 
         cls.assets_and_pools = {
             "pools": {
