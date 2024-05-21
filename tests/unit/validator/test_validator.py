@@ -166,9 +166,9 @@ class TestValidator(IsolatedAsyncioTestCase):
             timeout=QUERY_TIMEOUT,
         )
 
-        #         for response in responses:
-        #             self.assertEqual(response.assets_and_pools, assets_and_pools)
-        #             self.assertEqual(response.allocations, allocations)
+        for response in responses:
+            self.assertEqual(response.assets_and_pools, assets_and_pools)
+            self.assertEqual(response.allocations, allocations)
 
         # TODO: better testing?
         rewards, allocs = get_rewards(
@@ -180,8 +180,8 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         print(f"allocs: {allocs}")
 
-        # rewards should all be non-zero
-        self.assertEqual(any(rewards > 0), True)
+        # rewards should all be the same (1)
+        self.assertEqual(any(rewards), 1)
 
         rewards_dict = {active_uids[k]: v for k, v in enumerate(list(rewards))}
         sorted_rewards = {
@@ -253,6 +253,9 @@ class TestValidator(IsolatedAsyncioTestCase):
         for _, allocInfo in allocs.items():
             self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
 
+        # rewards should all be the same (1)
+        self.assertEqual(any(rewards), 1)
+
         rewards_dict = {k: v for k, v in enumerate(list(rewards))}
         sorted_rewards = {
             k: v
@@ -319,6 +322,9 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         for _, allocInfo in allocs.items():
             self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
+
+        # rewards should all be the same (1)
+        self.assertEqual(any(rewards), 1)
 
         rewards_dict = {k: v for k, v in enumerate(list(rewards))}
         sorted_rewards = {

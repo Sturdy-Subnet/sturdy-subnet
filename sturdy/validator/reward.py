@@ -22,11 +22,10 @@ import math
 import bittensor as bt
 import torch
 from typing import List, Dict, Tuple
-from decimal import Decimal
 import copy
 
 from sturdy.constants import QUERY_TIMEOUT, STEEPNESS, DIV_FACTOR, NUM_POOLS
-from sturdy.utils.misc import supply_rate
+from sturdy.utils.misc import supply_rate, check_allocations
 from sturdy.protocol import AllocInfo
 
 
@@ -109,6 +108,7 @@ def get_rewards(
 
     Returns:
     - torch.FloatTensor: A tensor of rewards for the given query and responses.
+    - allocs: miner allocations along with their respective yields
     """
 
     # maximum yield to scale all rewards by
@@ -124,29 +124,15 @@ def get_rewards(
 
         allocations = response.allocations
 
-        if allocations is None:
-            apys[uids[response_idx]] = sys.float_info.min
-            continue
+        # validator miner allocations before running simulation
+        # is the miner cheating w.r.t allocations?
+        cheating = True
+        try:
+            cheating = not check_allocations(init_assets_and_pools, allocations)
+        except Exception as e:
+            bt.logging.error(e)
 
-        self.simulator.init_data(copy.deepcopy(init_assets_and_pools), allocations)
-
-        initial_balance = init_assets_and_pools["total_assets"]
-        total_allocated = Decimal(0)
-        cheating = False
-
-        # check allocations
-        for _, allocation in allocations.items():
-            total_allocated += Decimal(
-                str(allocation)
-            )  # This should fix precision issues with python floats
-
-            # score response very low if miner is cheating somehow
-            if total_allocated > initial_balance or allocation < 0:
-                cheating = True
-                break
-
-        # punish if miner they're cheating
-        # TODO: create a more forgiving penalty system?
+        # score response very low if miner is cheating somehow or returns allocations with incorrect format
         if cheating:
             miner_uid = uids[response_idx]
             bt.logging.warning(
@@ -154,6 +140,11 @@ def get_rewards(
             )
             apys[miner_uid] = sys.float_info.min
             continue
+
+        # miner does not appear to be cheating - so we init simulator data
+        self.simulator.init_data(copy.deepcopy(init_assets_and_pools), allocations)
+
+        initial_balance = init_assets_and_pools["total_assets"]
 
         # update reserves given allocations
         self.simulator.update_reserves_with_allocs()

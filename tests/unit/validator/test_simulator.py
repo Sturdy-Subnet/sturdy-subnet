@@ -61,9 +61,8 @@ class TestSimulator(unittest.TestCase):
             str(i): self.simulator.assets_and_pools["total_assets"] / len(init_pools)
             for i in range(len(init_pools))
         }
-        self.simulator.allocations = allocations
 
-        self.simulator.update_reserves_with_allocs()
+        self.simulator.update_reserves_with_allocs(allocations)
 
         for uid, init_pool in init_pools.items():
             # check pools
@@ -74,7 +73,39 @@ class TestSimulator(unittest.TestCase):
             # check init pool_history datapoint
             new_pool_hist_init = self.simulator.pool_history[0][uid]
             b_rate_should_be = borrow_rate(
-                new_pool_hist_init["borrow_amount"] / new_pool_hist_init["reserve_size"], new_pool
+                new_pool_hist_init["borrow_amount"]
+                / new_pool_hist_init["reserve_size"],
+                new_pool,
+            )
+            self.assertEqual(reserve_should_be, new_pool_hist_init["reserve_size"])
+            self.assertEqual(b_rate_should_be, new_pool_hist_init["borrow_rate"])
+
+    # we shouldn't need to list out all the pools we are allocating to - the ones that are not lists will not be allocated to at all
+    def test_update_reserves_with_allocs_partial(self):
+        self.simulator.rng_state_container = np.random.RandomState(69)
+        self.simulator.init_rng = np.random.RandomState(69)
+        self.simulator.init_data()
+
+        init_pools = copy.deepcopy(self.simulator.assets_and_pools["pools"])
+
+        allocs = {"0": TOTAL_ASSETS / 10}  # should be 0.1 if total assets is 1
+
+        self.simulator.update_reserves_with_allocs(allocs)
+
+        for uid, alloc in allocs.items():
+            # for uid, init_pool in init_pools.items():
+            # check pools
+            init_pool = init_pools[uid]
+            new_pool = self.simulator.assets_and_pools["pools"][uid]
+            reserve_should_be = alloc + init_pool["reserve_size"]
+            self.assertEqual(reserve_should_be, new_pool["reserve_size"])
+
+            # check init pool_history datapoint
+            new_pool_hist_init = self.simulator.pool_history[0][uid]
+            b_rate_should_be = borrow_rate(
+                new_pool_hist_init["borrow_amount"]
+                / new_pool_hist_init["reserve_size"],
+                new_pool,
             )
             self.assertEqual(reserve_should_be, new_pool_hist_init["reserve_size"])
             self.assertEqual(b_rate_should_be, new_pool_hist_init["borrow_rate"])

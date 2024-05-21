@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict, Union
 
-from sturdy.utils.misc import borrow_rate
+from sturdy.utils.misc import borrow_rate, check_allocations
 from sturdy.pools import (
     generate_assets_and_pools,
     generate_initial_allocations_for_pools,
@@ -99,19 +99,21 @@ class Simulator(object):
         else:
             allocations = allocs
 
-        if len(allocations) != len(self.assets_and_pools["pools"]):
-            raise RuntimeError("Length of allocations must be equal to length of pools")
+        check_allocations(self.assets_and_pools, allocations)
+
         if len(self.pool_history) != 1:
             raise RuntimeError(
                 "You must have first init data for the simulation if you'd like to update reserves"
             )
-        for uid, pool in self.assets_and_pools["pools"].items():
-            pool["reserve_size"] += allocations[uid]
-        for uid, pool in self.pool_history[0].items():
-            pool["reserve_size"] += allocations[uid]
-            pool_params = self.assets_and_pools["pools"][uid]
-            pool["borrow_rate"] = borrow_rate(
-                pool["borrow_amount"] / pool["reserve_size"], pool_params
+
+        for uid, alloc in allocations.items():
+            pool = self.assets_and_pools["pools"][uid]
+            pool_history_start = self.pool_history[0]
+            pool["reserve_size"] += alloc
+            pool_from_history = pool_history_start[uid]
+            pool_from_history["reserve_size"] += allocations[uid]
+            pool_from_history["borrow_rate"] = borrow_rate(
+                pool["borrow_amount"] / pool["reserve_size"], pool
             )
 
     # initialize pools

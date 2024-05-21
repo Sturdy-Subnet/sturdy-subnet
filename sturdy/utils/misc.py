@@ -25,17 +25,23 @@ from sturdy.constants import CHUNK_RATIO, GREEDY_SIG_FIGS
 from math import floor
 from typing import Callable, Dict, Any, Type
 from functools import lru_cache, update_wrapper
+from decimal import Decimal
 
 # TODO: cleanup functions - lay them out better across files?
 
 
 # rand range but float
 def randrange_float(
-    start, stop, step, sig: int = GREEDY_SIG_FIGS, max_prec: int = GREEDY_SIG_FIGS, rng_gen=np.random
+    start,
+    stop,
+    step,
+    sig: int = GREEDY_SIG_FIGS,
+    max_prec: int = GREEDY_SIG_FIGS,
+    rng_gen=np.random,
 ):
     num_steps = int((stop - start) / step)
     random_step = rng_gen.randint(0, num_steps + 1)
-    return format_num_prec(start + random_step * step)
+    return format_num_prec(start + random_step * step, sig=sig, max_prec=max_prec)
 
 
 def get_synapse_from_body(
@@ -68,6 +74,40 @@ def borrow_rate(util_rate: float, pool: Dict) -> float:
 
 def supply_rate(util_rate: float, pool: Dict) -> float:
     return util_rate * borrow_rate(util_rate, pool)
+
+
+def check_allocations(
+    assets_and_pools: Dict[str, Dict[str, float] | float],
+    allocations: Dict[str, float],
+):
+    """
+    Checks allocations from miner.
+
+    Args:
+    - assets_and_pools (Dict[str, Dict[str, float] | float]): The assets and pools which the allocations are for
+    - allocations: Dict[str, float]: The allocations to validate
+
+    Returns:
+    - bool: Represents if allocations are valid
+    """
+
+    # the miner must return allocations
+    if allocations is None:
+        return False
+
+    to_allocate = assets_and_pools["total_assets"]
+    total_allocated = Decimal(0)
+
+    # check allocations
+    for _, allocation in allocations.items():
+        total_allocated += Decimal(
+            str(allocation)
+        )  # This should fix precision issues with python floats
+
+        if total_allocated > to_allocate or allocation < 0:
+            return False
+
+    return True
 
 
 def greedy_allocation_algorithm(synapse: sturdy.protocol.AllocateAssets) -> Dict:
