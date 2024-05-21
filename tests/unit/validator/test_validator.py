@@ -6,6 +6,7 @@ from sturdy.protocol import AllocateAssets
 from neurons.validator import Validator
 from sturdy.validator.reward import get_rewards
 from sturdy.constants import QUERY_TIMEOUT
+import copy
 
 
 class TestValidator(IsolatedAsyncioTestCase):
@@ -129,17 +130,19 @@ class TestValidator(IsolatedAsyncioTestCase):
         }
 
         cls.validator.simulator.initialize()
-        cls.validator.simulator.init_data(
-            init_assets_and_pools=cls.assets_and_pools.copy(),
-            init_allocations=cls.allocations.copy(),
-        )
 
     async def test_get_rewards(self):
         print("----==== test_get_rewards ====----")
-        assets_and_pools = self.assets_and_pools.copy()
-        allocations = self.allocations.copy()
+
+        assets_and_pools = copy.deepcopy(self.assets_and_pools)
+        allocations = copy.deepcopy(self.allocations)
 
         validator = self.validator
+
+        validator.simulator.init_data(
+            init_assets_and_pools=copy.deepcopy(assets_and_pools),
+            init_allocations=copy.deepcopy(allocations),
+        )
 
         active_uids = [
             uid
@@ -150,7 +153,8 @@ class TestValidator(IsolatedAsyncioTestCase):
         active_axons = [validator.metagraph.axons[uid] for uid in active_uids]
 
         synapse = AllocateAssets(
-            assets_and_pools=assets_and_pools, allocations=allocations
+            assets_and_pools=copy.deepcopy(assets_and_pools),
+            allocations=copy.deepcopy(allocations),
         )
 
         responses = await validator.dendrite(
@@ -192,7 +196,7 @@ class TestValidator(IsolatedAsyncioTestCase):
     async def test_get_rewards_punish(self):
         print("----==== test_get_rewards_punish ====----")
         validator = self.validator
-        assets_and_pools = self.assets_and_pools
+        assets_and_pools = copy.deepcopy(self.assets_and_pools)
         allocations = {
             "0": 0.04,
             "1": 0.1025,
@@ -206,6 +210,12 @@ class TestValidator(IsolatedAsyncioTestCase):
             "9": 0.1132,
         }
 
+        validator.simulator.reset()
+        validator.simulator.init_data(
+            init_assets_and_pools=copy.deepcopy(assets_and_pools),
+            init_allocations=copy.deepcopy(allocations),
+        )
+
         active_uids = [
             uid
             for uid in range(validator.metagraph.n.item())
@@ -215,7 +225,75 @@ class TestValidator(IsolatedAsyncioTestCase):
         active_axons = [validator.metagraph.axons[uid] for uid in active_uids]
 
         synapse = AllocateAssets(
-            assets_and_pools=assets_and_pools, allocations=allocations
+            assets_and_pools=copy.deepcopy(assets_and_pools),
+            allocations=copy.deepcopy(allocations),
+        )
+
+        responses = await validator.dendrite(
+            # Send the query to selected miner axons in the network.
+            axons=active_axons,
+            # Construct a dummy query. This simply contains a single integer.
+            synapse=synapse,
+            deserialize=False,
+            timeout=QUERY_TIMEOUT,
+        )
+
+        for response in responses:
+            self.assertEqual(response.assets_and_pools, assets_and_pools)
+            self.assertEqual(response.allocations, allocations)
+
+        # TODO: better testing?
+        rewards, allocs = get_rewards(
+            validator,
+            validator.step,
+            active_uids,
+            responses=responses,
+        )
+
+        for _, allocInfo in allocs.items():
+            self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
+
+        rewards_dict = {k: v for k, v in enumerate(list(rewards))}
+        sorted_rewards = {
+            k: v
+            for k, v in sorted(
+                rewards_dict.items(), key=lambda item: item[1], reverse=True
+            )
+        }
+
+        print(f"sorted rewards: {sorted_rewards}")
+
+        assets_and_pools = copy.deepcopy(self.assets_and_pools)
+        allocations = {
+            "0": 0.04,
+            "1": 0.1025,
+            "2": 0.0533,
+            "3": 0.2948,
+            "4": 0.0216,
+            "5": 0.1989,
+            "6": 0.1237,
+            "7": 0.0119,
+            "8": -1.0,  # allocation of -1 !!! - invalid allocation!!!
+            "9": 0.1132,
+        }
+
+        validator.simulator.reset()
+        validator.simulator.init_data(
+            init_assets_and_pools=copy.deepcopy(assets_and_pools),
+            init_allocations=copy.deepcopy(allocations),
+        )
+
+        active_uids = [
+            uid
+            for uid in range(validator.metagraph.n.item())
+            if validator.metagraph.axons[uid].is_serving
+        ]
+
+        active_axons = [validator.metagraph.axons[uid] for uid in active_uids]
+
+        synapse = AllocateAssets(
+            assets_and_pools=copy.deepcopy(assets_and_pools),
+            allocations=copy.deepcopy(allocations),
         )
 
         responses = await validator.dendrite(

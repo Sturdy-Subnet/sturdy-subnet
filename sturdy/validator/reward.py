@@ -130,23 +130,18 @@ def get_rewards(
 
         self.simulator.init_data(copy.deepcopy(init_assets_and_pools), allocations)
 
-        # update reserves given allocations
-        # self.simulator.allocations = allocations
-        self.simulator.update_reserves_with_allocs()
-        # TODO: use this or just run reset()?
-        updated_assets_pools = copy.deepcopy(self.simulator.assets_and_pools)
-
-        initial_balance = updated_assets_pools["total_assets"]
+        initial_balance = init_assets_and_pools["total_assets"]
         total_allocated = Decimal(0)
         cheating = False
 
+        # check allocations
         for _, allocation in allocations.items():
             total_allocated += Decimal(
                 str(allocation)
             )  # This should fix precision issues with python floats
 
             # score response very low if miner is cheating somehow
-            if total_allocated > initial_balance:
+            if total_allocated > initial_balance or allocation < 0:
                 cheating = True
                 break
 
@@ -159,6 +154,9 @@ def get_rewards(
             )
             apys[miner_uid] = sys.float_info.min
             continue
+
+        # update reserves given allocations
+        self.simulator.update_reserves_with_allocs()
 
         # run simulation
         self.simulator.run()
@@ -200,7 +198,7 @@ def get_rewards(
         # TODO: cleaner way to do this?
         if responses[idx].allocations is None or axon_times[uids[idx]] >= QUERY_TIMEOUT:
             continue
-        if len(responses[idx].allocations) == len(updated_assets_pools["pools"]):
+        if len(responses[idx].allocations) == len(init_assets_and_pools["pools"]):
             allocs[uids[idx]] = {
                 "apy": apys[uids[idx]],
                 "allocations": responses[idx].allocations,
