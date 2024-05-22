@@ -1,13 +1,16 @@
 import unittest
 from unittest import IsolatedAsyncioTestCase
+import copy
 
 from neurons.validator import Validator
 from sturdy.validator.simulator import Simulator
 
-# from sturdy.validator.forward import query_and_score_miners
+from sturdy.validator.forward import query_and_score_miners
 
 
 class TestValidator(IsolatedAsyncioTestCase):
+    maxDiff = 4000
+
     @classmethod
     def setUpClass(cls):
         # dont log this in wandb
@@ -131,18 +134,27 @@ class TestValidator(IsolatedAsyncioTestCase):
             "9": 0.1132,
         }
 
-        # init data and set that as the default allocations
+    async def test_query_and_score_miners(self):
+        # use simulator generated assets and pools
+        await query_and_score_miners(self.validator)
+        self.assertIsNotNone(self.validator.simulator.assets_and_pools)
+        self.assertIsNotNone(self.validator.simulator.allocations)
 
-    # TODO: more tests
-    # async def test_query_and_score_miners(self):
-    #     self.validator.simulator.initialize()
-    #     self.validator.simulator.init_data()
-    #     assets_pools = self.validator.simulator.assets_and_pools
-    #     allocs = self.validator.simulator.allocations
-    #     # use simulator generated assets and pools
-    #     query_and_score_miners(self.validator)
-    #     self.validator.simulator.initialize()
-    #     self.validator.simulator.init_data(init_assets_and_pools=cls.assets_and_pools, init_allocations=cls.allocations)
+        # use user-defined generated assets and pools
+        simulator_copy = copy.deepcopy(self.validator.simulator)
+        await query_and_score_miners(
+            self.validator, assets_and_pools=self.assets_and_pools
+        )
+        simulator_copy.initialize()
+        simulator_copy.init_data(
+            init_assets_and_pools=copy.deepcopy(self.assets_and_pools),
+        )
+        simulator_copy.update_reserves_with_allocs()
+        assets_pools_should_be = simulator_copy.assets_and_pools
+
+        assets_pools2 = self.validator.simulator.assets_and_pools
+        self.assertEqual(assets_pools2, assets_pools_should_be)
+        self.assertIsNotNone(self.validator.simulator.allocations)
 
     async def test_forward(self):
         await self.validator.forward()

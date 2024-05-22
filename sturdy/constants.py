@@ -20,7 +20,7 @@ GREEDY_SIG_FIGS = 8  # significant figures to round to for greedy algorithm allo
 REVERSION_SPEED = 0.1  # reversion speed to median borrow rate of pools
 TIMESTEPS = 50  # simulation timesteps
 STOCHASTICITY = 0.025  # stochasticity - some randomness to sprinkle into the simulation
-POOL_RESERVE_SIZE = 1.0  # TODO: what should this be set to?
+POOL_RESERVE_SIZE = 1.0
 
 QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 10  # timeout (seconds)

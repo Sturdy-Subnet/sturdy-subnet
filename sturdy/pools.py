@@ -45,7 +45,7 @@ def generate_assets_and_pools(rng_gen=np.random) -> typing.Dict:  # generate poo
                     MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen=rng_gen
                 )
             ),  # initial borrowed amount from pool
-            "reserve_size": POOL_RESERVE_SIZE,  # TODO: what should we set reserve size to?
+            "reserve_size": POOL_RESERVE_SIZE,
         }
         for x in range(NUM_POOLS)
     }

@@ -80,7 +80,8 @@ class TestSimulator(unittest.TestCase):
             self.assertEqual(reserve_should_be, new_pool_hist_init["reserve_size"])
             self.assertEqual(b_rate_should_be, new_pool_hist_init["borrow_rate"])
 
-    # we shouldn't need to list out all the pools we are allocating to - the ones that are not lists will not be allocated to at all
+    # we shouldn't need to list out all the pools we are allocating to
+    # the ones that are not lists will not be allocated to at all
     def test_update_reserves_with_allocs_partial(self):
         self.simulator.rng_state_container = np.random.RandomState(69)
         self.simulator.init_rng = np.random.RandomState(69)

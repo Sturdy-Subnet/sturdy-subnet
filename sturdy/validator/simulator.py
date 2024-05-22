@@ -54,8 +54,7 @@ class Simulator(object):
         else:
             self.allocations = init_allocations
 
-        # initial pool borrow amounts
-        # TODO: use a dictionary instead? use timestep as keys in the dict?
+        # initialize pool history
         self.pool_history = [
             {
                 uid: {
