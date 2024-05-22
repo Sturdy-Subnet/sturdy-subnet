@@ -23,7 +23,7 @@ from pydantic import BaseModel
 import bittensor as bt
 from sturdy.constants import CHUNK_RATIO, GREEDY_SIG_FIGS
 from math import floor
-from typing import Callable, Dict, Any, Type
+from typing import Callable, Dict, Any, Type, Union
 from functools import lru_cache, update_wrapper
 from decimal import Decimal
 
@@ -77,35 +77,50 @@ def supply_rate(util_rate: float, pool: Dict) -> float:
 
 
 def check_allocations(
-    assets_and_pools: Dict[str, Dict[str, float] | float],
+    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
     allocations: Dict[str, float],
-):
+) -> bool:
     """
     Checks allocations from miner.
 
     Args:
-    - assets_and_pools (Dict[str, Dict[str, float] | float]): The assets and pools which the allocations are for
-    - allocations: Dict[str, float]: The allocations to validate
+    - assets_and_pools (Dict[str, Union[Dict[str, float], float]]): The assets and pools which the allocations are for.
+    - allocations (Dict[str, float]): The allocations to validate.
 
     Returns:
-    - bool: Represents if allocations are valid
+    - bool: Represents if allocations are valid.
     """
 
-    # the miner must return allocations
-    if allocations is None:
+    # Ensure the allocations are provided and valid
+    if not allocations or not isinstance(allocations, Dict):
         return False
 
-    to_allocate = assets_and_pools["total_assets"]
+    # Ensure the 'total_assets' key exists in assets_and_pools and is a valid number
+    to_allocate = assets_and_pools.get("total_assets")
+    if to_allocate is None or not isinstance(to_allocate, (int, float)):
+        return False
+
+    to_allocate = Decimal(str(to_allocate))
     total_allocated = Decimal(0)
 
-    # check allocations
+    # Check allocations
     for _, allocation in allocations.items():
-        total_allocated += Decimal(
-            str(allocation)
-        )  # This should fix precision issues with python floats
-
-        if total_allocated > to_allocate or allocation < 0:
+        try:
+            allocation_value = Decimal(str(allocation))
+        except (ValueError, TypeError):
             return False
+
+        if allocation_value < 0:
+            return False
+
+        total_allocated += allocation_value
+
+        if total_allocated > to_allocate:
+            return False
+
+    # Ensure total allocated does not exceed the total assets
+    if total_allocated > to_allocate:
+        return False
 
     return True
 

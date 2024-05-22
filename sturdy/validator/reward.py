@@ -21,7 +21,7 @@ import math
 
 import bittensor as bt
 import torch
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple, Any, Union
 import copy
 
 from sturdy.constants import QUERY_TIMEOUT, STEEPNESS, DIV_FACTOR, NUM_POOLS
@@ -95,7 +95,7 @@ def reward(
 
 def calculate_aggregate_apy(
     allocations: Dict[str, float],
-    assets_and_pools: Dict[str, Dict[str, float] | float],
+    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
     timesteps: int,
     pool_history: Dict[str, Dict[str, Any]],
 ):
@@ -175,7 +175,16 @@ def get_rewards(
         self.simulator.init_data(copy.deepcopy(init_assets_and_pools), allocations)
 
         # update reserves given allocations
-        self.simulator.update_reserves_with_allocs()
+        try:
+            self.simulator.update_reserves_with_allocs()
+        except Exception as e:
+            bt.logging.error(e)
+            bt.logging.error(
+                "Failed to update reserves with miner allocations - PENALIZING MINER"
+            )
+            miner_uid = uids[response_idx]
+            apys[miner_uid] = sys.float_info.min
+            continue
 
         self.simulator.run()
 
