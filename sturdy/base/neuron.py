@@ -128,10 +128,19 @@ class BaseNeuron(ABC):
         self.check_registered()
 
         if self.should_sync_metagraph():
-            self.resync_metagraph()
+            # TODO: sometimes this throws "ssl.SSLEOFError: EOF occurred in violation of protocol" on some valis - investigate
+            try:
+                self.resync_metagraph()
+            except Exception as e:
+                bt.logging.error("There was an issue with trying to sync with the metagraph! See Error:")
+                bt.logging.error(e)
 
         if self.should_set_weights():
-            self.set_weights()
+            try:
+                self.set_weights()
+            except Exception as e:
+                bt.logging.error("Failed to set weights! See Error:")
+                bt.logging.error(e)
 
         # Always save state.
         self.save_state()
