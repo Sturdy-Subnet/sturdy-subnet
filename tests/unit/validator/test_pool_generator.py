@@ -1,25 +1,13 @@
 import unittest
 import random
-from sturdy.pools import generate_assets_and_pools
-from sturdy.constants import (
-    MIN_BASE_RATE,
-    MAX_BASE_RATE,
-    BASE_RATE_STEP,
-    MIN_SLOPE,
-    MAX_SLOPE,
-    MIN_KINK_SLOPE,
-    MAX_KINK_SLOPE,
-    SLOPE_STEP,
-    OPTIMAL_UTIL_RATE,
-    TOTAL_ASSETS,
-    MIN_BORROW_AMOUNT,
-    MAX_BORROW_AMOUNT,
-    BORROW_AMOUNT_STEP,
-    NUM_POOLS,
+from sturdy.pools import (
+    generate_assets_and_pools,
+    generate_initial_allocations_for_pools,
 )
+from sturdy.constants import *
 
 
-class TestGenerateAssetsAndPools(unittest.TestCase):
+class TestPoolAndAllocGeneration(unittest.TestCase):
     def test_generate_assets_and_pools(self):
         # same seed on every test run
         random.seed(69)
@@ -49,12 +37,40 @@ class TestGenerateAssetsAndPools(unittest.TestCase):
                     MIN_KINK_SLOPE <= pool_info["kink_slope"] <= MAX_KINK_SLOPE
                 )
 
-                self.assertEqual(pool_info["optimal_util_rate"], OPTIMAL_UTIL_RATE)
+                self.assertTrue("optimal_util_rate" in pool_info)
+                self.assertTrue(
+                    MIN_OPTIMAL_RATE
+                    <= pool_info["optimal_util_rate"]
+                    <= MAX_OPTIMAL_RATE
+                )
+
+                self.assertTrue("reserve_size" in pool_info)
+                self.assertEqual(pool_info["reserve_size"], POOL_RESERVE_SIZE)
 
                 self.assertTrue("borrow_amount" in pool_info)
                 self.assertTrue(
-                    MIN_BORROW_AMOUNT <= pool_info["borrow_amount"] <= MAX_BORROW_AMOUNT
+                    MIN_UTIL_RATE * POOL_RESERVE_SIZE
+                    <= pool_info["borrow_amount"]
+                    <= MAX_UTIL_RATE * POOL_RESERVE_SIZE
                 )
+
+    def test_generate_initial_allocations_for_pools(self):
+        # same seed on every test run
+        random.seed(69)
+        # run test multiple times to to ensure the number generated are
+        # within the correct ranges
+        for i in range(0, 100):
+            assets_and_pools = generate_assets_and_pools()
+            max_alloc = assets_and_pools["total_assets"]
+            pools = assets_and_pools["pools"]
+            result = generate_initial_allocations_for_pools(assets_and_pools)
+            result = {i: alloc for i, alloc in result.items()}
+
+            # Assert total assets
+            self.assertAlmostEqual(sum(result.values()) - max_alloc, 0, places=8)
+
+            # Assert number of allocations
+            self.assertEqual(len(result), len(pools))
 
 
 if __name__ == "__main__":

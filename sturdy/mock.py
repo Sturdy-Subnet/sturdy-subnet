@@ -54,7 +54,8 @@ class MockMetagraph(bt.metagraph):
 
 class MockDendrite(bt.dendrite):
     """
-    Replaces a real bittensor network request with a mock request that just returns some static response for all axons that are passed and adds some random delay.
+    Replaces a real bittensor network request with a mock request that just returns some static response for all axons that
+    are passed and adds some random delay.
     """
 
     def __init__(self, wallet):
@@ -103,6 +104,8 @@ class MockDendrite(bt.dendrite):
                 else:
                     return s
 
+            if isinstance(axons, bt.AxonInfo):
+                return await single_axon_response(0, axons)
             return await asyncio.gather(
                 *(
                     single_axon_response(i, target_axon)

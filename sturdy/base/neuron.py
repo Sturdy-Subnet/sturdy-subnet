@@ -16,7 +16,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 import copy
-import typing
 
 import bittensor as bt
 
@@ -31,9 +30,11 @@ from sturdy.mock import MockSubtensor, MockMetagraph
 
 class BaseNeuron(ABC):
     """
-    Base class for Bittensor miners. This class is abstract and should be inherited by a subclass. It contains the core logic for all neurons; validators and miners.
+    Base class for Bittensor miners. This class is abstract and should be inherited by a subclass. It contains the core logic
+    for all neurons; validators and miners.
 
-    In addition to creating a wallet, subtensor, and metagraph, this class also handles the synchronization of the network state via a basic checkpointing mechanism based on epoch length.
+    In addition to creating a wallet, subtensor, and metagraph, this class also handles the synchronization of the network
+    state via a basic checkpointing mechanism based on epoch length.
     """
 
     neuron_type: str = "BaseNeuron"
@@ -89,7 +90,9 @@ class BaseNeuron(ABC):
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
             self.wallet = bt.MockWallet(config=self.config)
-            self.subtensor = MockSubtensor(self.config.netuid, wallet=self.wallet)
+            self.subtensor = MockSubtensor(
+                self.config.netuid, n=self.config.mock_n, wallet=self.wallet
+            )
             self.metagraph = MockMetagraph(self.config.netuid, subtensor=self.subtensor)
         else:
             self.wallet = bt.wallet(config=self.config)
@@ -106,17 +109,16 @@ class BaseNeuron(ABC):
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
         bt.logging.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
+            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: \
+            {self.subtensor.chain_endpoint}"
         )
         self.step = 0
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
-        ...
+    async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
     @abstractmethod
-    def run(self):
-        ...
+    def run(self): ...
 
     def sync(self):
         """
@@ -126,10 +128,19 @@ class BaseNeuron(ABC):
         self.check_registered()
 
         if self.should_sync_metagraph():
-            self.resync_metagraph()
+            # TODO: sometimes this throws "ssl.SSLEOFError: EOF occurred in violation of protocol" on some valis - investigate
+            try:
+                self.resync_metagraph()
+            except Exception as e:
+                bt.logging.error("There was an issue with trying to sync with the metagraph! See Error:")
+                bt.logging.error(e)
 
         if self.should_set_weights():
-            self.set_weights()
+            try:
+                self.set_weights()
+            except Exception as e:
+                bt.logging.error("Failed to set weights! See Error:")
+                bt.logging.error(e)
 
         # Always save state.
         self.save_state()
@@ -172,11 +183,13 @@ class BaseNeuron(ABC):
     def save_state(self):
         pass
         # bt.logging.warning(
-        #     "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
+        #     "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or \
+        #      other useful data."
         # )
 
     def load_state(self):
         pass
         # bt.logging.warning(
-        #     "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
+        #     "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or \
+        #      other useful data."
         # )

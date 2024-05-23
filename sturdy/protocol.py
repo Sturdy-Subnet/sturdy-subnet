@@ -21,7 +21,6 @@ import bittensor as bt
 from pydantic import BaseModel, Field
 
 
-# TODO: move AllocInfo elsewhere?
 class AllocInfo(typing.TypedDict):
     apy: str
     allocations: typing.Dict[str, float]
@@ -45,7 +44,7 @@ class AllocateAssetsResponse(BaseModel):
     allocations: typing.Dict[str, AllocInfo] = Field(
         ...,
         required=True,
-        description="pools for miners to produce allocation amounts for - uid -> pool_info",
+        description="allocations produce by miners",
     )
 
 
@@ -70,13 +69,13 @@ class AllocateAssetsBase(BaseModel):
     # Optional request output, filled by recieving axon.
     allocations: typing.Optional[typing.Dict[str, float]] = Field(
         None,
-        description="pools for miners to produce allocation amounts for - uid -> pool_info",
+        description="allocations produce by miners",
     )
 
 
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
-        # TODO: figure out hwo to only show certain keys from pools and/or allocations
+        # TODO: figure out how to only show certain keys from pools and/or allocations
         return (
             f"AllocateAssets(assets_and_pools={self.assets_and_pools})"
             f"allocations={self.allocations}"

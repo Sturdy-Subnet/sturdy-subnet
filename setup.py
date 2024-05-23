@@ -19,11 +19,13 @@
 import re
 import os
 import codecs
-import pathlib
+
+# import pathlib
 from os import path
 from io import open
 from setuptools import setup, find_packages
-from pkg_resources import parse_requirements
+
+# from pkg_resources import parse_requirements
 
 
 def read_requirements(path):
@@ -64,7 +66,8 @@ with codecs.open(
 setup(
     name="sturdy_subnet",
     version=version_string,
-    description="Decentralized allocation protocol for DeFi lending pools, enabling miner-driven asset distribution for optimal yield generation.",
+    description="Decentralized allocation protocol for DeFi lending pools, enabling miner-driven asset distribution for \
+                 optimal yield generation.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Sturdy-Subnet/sturdy-subnet",

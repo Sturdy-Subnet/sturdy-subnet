@@ -41,11 +41,12 @@ def run_auto_updater(args):
         else:
             print("Repo is up-to-date.")
 
-        time.sleep(60) 
+        time.sleep(60)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--proc", type=str, required=True, help="Name or id of validator's pm2 process (run pm2 ls to check it)")
+    parser.add_argument("--proc", type=str, required=True, help="Name or id of validator's pm2 process \
+                        (run pm2 ls to check it)")
     args = parser.parse_args()
     run_auto_updater(args)

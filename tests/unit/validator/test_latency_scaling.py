@@ -1,11 +1,7 @@
-import random
 import unittest
 from unittest import TestCase
 
-from sturdy.protocol import AllocateAssets
-from sturdy.pools import generate_assets_and_pools
-from sturdy.utils.misc import greedy_allocation_algorithm
-from sturdy.validator.reward import sigmoid_scale, get_response_times
+from sturdy.validator.reward import sigmoid_scale
 from parameterized import parameterized
 
 
