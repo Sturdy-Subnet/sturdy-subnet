@@ -1,4 +1,4 @@
-wandb==0.16.0
+wandb==0.17.0
 loguru==0.7.0
 bittensor==6.11.0
 torch==2.0.1
