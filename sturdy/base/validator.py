@@ -168,6 +168,23 @@ class BaseValidatorNeuron(BaseNeuron):
                     # Sync metagraph and potentially set weights.
                     self.sync()
 
+                    if not self.config.wandb.off:
+                        bt.logging.debug("Logging info to wandb")
+                        try:
+                            metrics_to_log = {
+                                f"miner_scores/score_uid_{uid}": float(score)
+                                for uid, score in enumerate(self.scores)
+                            }
+                            other_metrics = {
+                                "block": self.block,
+                                "validator_run_step": self.step,
+                            }
+                            metrics_to_log.update(other_metrics)
+                            self.wandb.log(metrics_to_log, step=self.block)
+                        except Exception as e:
+                            bt.logging.error("Failed to log info into wandb!")
+                            bt.logging.error(e)
+
                 # Check if we should exit.
                 if self.should_exit:
                     break
