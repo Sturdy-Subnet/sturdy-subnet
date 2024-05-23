@@ -115,20 +115,20 @@ class TestValidator(IsolatedAsyncioTestCase):
                     "reserve_size": 1.0,
                 },
             },
-            "total_assets": 1.0,
+            "total_assets": 2.0,
         }
 
         cls.allocations = {
-            "0": 0.04,
-            "1": 0.1025,
-            "2": 0.0533,
-            "3": 0.2948,
-            "4": 0.0216,
-            "5": 0.1989,
-            "6": 0.1237,
-            "7": 0.0119,
-            "8": 0.0401,
-            "9": 0.1132,
+            "0": 0.71358786,
+            "1": 0.0,
+            "2": 0.32651705,
+            "3": 0.14316355,
+            "4": 0.28526227,
+            "5": 0.22716462,
+            "6": 0.07140061,
+            "7": 0.23290404,
+            "8": 0.0,
+            "9": 0.0,
         }
 
         cls.validator.simulator.initialize()
@@ -199,18 +199,10 @@ class TestValidator(IsolatedAsyncioTestCase):
         print("----==== test_get_rewards_punish ====----")
         validator = self.validator
         assets_and_pools = copy.deepcopy(self.assets_and_pools)
-        allocations = {
-            "0": 0.04,
-            "1": 0.1025,
-            "2": 0.0533,
-            "3": 0.2948,
-            "4": 0.0216,
-            "5": 0.1989,
-            "6": 0.1237,
-            "7": 0.0119,
-            "8": 1.0401,  # 0.0401 + 1 - miner(s) is clearly cheating!!!
-            "9": 0.1132,
-        }
+
+        allocations = copy.deepcopy(self.allocations)
+        # increase one of the allocations by +1  -> clearly this means the miner is cheating!!!
+        allocations["0"] += 1.0
 
         validator.simulator.reset()
         validator.simulator.init_data(
@@ -269,18 +261,10 @@ class TestValidator(IsolatedAsyncioTestCase):
         print(f"sorted rewards: {sorted_rewards}")
 
         assets_and_pools = copy.deepcopy(self.assets_and_pools)
-        allocations = {
-            "0": 0.04,
-            "1": 0.1025,
-            "2": 0.0533,
-            "3": 0.2948,
-            "4": 0.0216,
-            "5": 0.1989,
-            "6": 0.1237,
-            "7": 0.0119,
-            "8": -1.0,  # allocation of -1 !!! - invalid allocation!!!
-            "9": 0.1132,
-        }
+
+        allocations = copy.deepcopy(self.allocations)
+        # set one of the allocations to be negative! This should not be allowed!
+        allocations["0"] = -1.0
 
         validator.simulator.reset()
         validator.simulator.init_data(
