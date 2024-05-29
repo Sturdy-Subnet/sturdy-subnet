@@ -33,9 +33,11 @@ def init_wandb_miner(self, reinit=False):
         entity=self.config.wandb.entity,
         config=wandb_config,
         mode="offline" if self.config.wandb.offline else "online",
-        dir=self.config.neuron.full_path
-        if self.config.neuron is not None
-        else "wandb_logs",
+        dir=(
+            self.config.neuron.full_path
+            if self.config.neuron is not None
+            else "wandb_logs"
+        ),
         tags=tags,
         notes=self.config.wandb.notes,
     )
@@ -81,3 +83,17 @@ def init_wandb_validator(self, reinit=False):
     bt.logging.success(
         prefix="Started a new wandb run for validator",
     )
+
+
+def reinit_wandb(self):
+    if hasattr(self, "wandb"):
+        if self.wandb is not None:
+            bt.logging.info("Reinitializing wandb")
+            init_wandb_validator(self, reinit=True)
+            bt.logging.info("Reinitialized wandb")
+
+
+def should_reinit_wandb(self):
+    if self.wandb_run_log_count >= self.config.wandb.run_log_limit:
+        return True
+    return False

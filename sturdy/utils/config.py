@@ -230,6 +230,13 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--wandb.run_log_limit",
+        type=int,
+        help="Number of wandb.log() calls after which we should init a new wandb run",
+        default=280,
+    )
+
+    parser.add_argument(
         "--api_port",
         type=int,
         help="The port you want the api to run on",

@@ -30,7 +30,7 @@ from traceback import print_exception
 from sturdy.base.neuron import BaseNeuron
 from sturdy.mock import MockDendrite
 from sturdy.utils.config import add_validator_args
-from sturdy.utils.wandb import init_wandb_validator
+from sturdy.utils.wandb import init_wandb_validator, should_reinit_wandb, reinit_wandb
 from sturdy.constants import QUERY_RATE
 
 
@@ -50,6 +50,7 @@ class BaseValidatorNeuron(BaseNeuron):
         super().__init__(config=config)
 
         # init wandb
+        self.wandb_run_log_count = 0
         if not self.config.wandb.off:
             bt.logging.debug("loading wandb")
             init_wandb_validator(self=self)
@@ -181,9 +182,23 @@ class BaseValidatorNeuron(BaseNeuron):
                             }
                             metrics_to_log.update(other_metrics)
                             self.wandb.log(metrics_to_log, step=self.block)
+                            self.wandb_run_log_count += 1
+                            bt.logging.info(
+                                f"wandb log count: {self.wandb_run_log_count} | \
+                                until reinit: {self.config.wandb.run_log_limit - self.wandb_run_log_count}"
+                            )
                         except Exception as e:
                             bt.logging.error("Failed to log info into wandb!")
                             bt.logging.error(e)
+
+                        # rollover to new wandb run if needed:
+                        if should_reinit_wandb(self):
+                            try:
+                                reinit_wandb(self)
+                                self.wandb_run_log_count = 0
+                            except Exception as e:
+                                bt.logging.error("Failed reinit wandb run!")
+                                bt.logging.error(e)
 
                 # Check if we should exit.
                 if self.should_exit:
