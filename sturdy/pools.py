@@ -15,14 +15,75 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import typing
+from typing import Dict
 from sturdy.utils.misc import randrange_float, format_num_prec
 from sturdy.constants import *
 import numpy as np
 
 
+# what does a base pool do?
+# allows users to lend assets to it
+# allows borrowers to borrow from it
+# has borrow rate
+# has supply rate
+
+
+class BasePool(object):
+    """This class defines the base pool type
+
+    Args:
+        pool_id: (str),
+        base_rate: (float),
+        base_slope: (float),
+        kink_slope: (float),
+        optimal_util_rate: (float),
+        borrow_amount: (float),
+        reserve_size: (float),
+    """
+
+    def __init__(
+        self,
+        pool_id: str,
+        base_rate: float,
+        base_slope: float,
+        kink_slope: float,
+        optimal_util_rate: float,
+        borrow_amount: float,
+        reserve_size: float,
+    ):
+        self.pool_id = pool_id
+        self.base_rate = base_rate
+        self.base_slope = base_slope
+        self.kink_slope = kink_slope
+        self.optimal_util_rate = optimal_util_rate
+        self.borrow_amount = borrow_amount
+        self.reserve_size = reserve_size
+
+    @property
+    def util_rate(self) -> float:
+        return self.borrow_amount / self.reserve_size
+
+    @property
+    def borrow_rate(self) -> float:
+        util_rate = self.util_rate
+        interest_rate = (
+            self.base_rate + (util_rate / self.optimal_util_rate) * self.base_slope
+            if util_rate < self.optimal_util_rate
+            else self.base_rate
+            + self.base_slope
+            + ((util_rate - self.optimal_util_rate) / (1 - self.optimal_util_rate))
+            * self.kink_slope
+        )
+
+        return interest_rate
+
+    @property
+    def supply_rate(self):
+        return self.util_rate * self.borrow_rate
+
+
 # TODO: add different interest rate models in the future - we use a single simple model for now
-def generate_assets_and_pools(rng_gen=np.random) -> typing.Dict:  # generate pools
+def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
     assets_and_pools = {}
     pools = {
         str(x): {
@@ -58,8 +119,8 @@ def generate_assets_and_pools(rng_gen=np.random) -> typing.Dict:  # generate poo
 
 # generate intial allocations for pools
 def generate_initial_allocations_for_pools(
-    assets_and_pools: typing.Dict, size: int = NUM_POOLS, rng_gen=np.random
-) -> typing.Dict:
+    assets_and_pools: Dict, size: int = NUM_POOLS, rng_gen=np.random
+) -> Dict:
     nums = np.ones(size)
     allocs = nums / np.sum(nums) * assets_and_pools["total_assets"]
     allocations = {str(i): alloc for i, alloc in enumerate(allocs)}
