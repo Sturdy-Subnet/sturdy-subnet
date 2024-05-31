@@ -16,21 +16,23 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import typing
+from typing import Dict, TypedDict, Optional, Union
 import bittensor as bt
 from pydantic import BaseModel, Field
 
+from sturdy.pools import BasePoolModel
 
-class AllocInfo(typing.TypedDict):
+
+class AllocInfo(TypedDict):
     apy: str
-    allocations: typing.Dict[str, float]
+    allocations: Dict[str, float]
 
 
 class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
 
-    assets_and_pools: typing.Dict[str, typing.Dict | float] = Field(
+    assets_and_pools: Dict[str, Union[Dict[str, BasePoolModel], float]] = Field(
         ...,
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
@@ -41,7 +43,7 @@ class AllocateAssetsResponse(BaseModel):
     class Config:
         use_enum_values = True
 
-    allocations: typing.Dict[str, AllocInfo] = Field(
+    allocations: Dict[str, AllocInfo] = Field(
         ...,
         required=True,
         description="allocations produce by miners",
@@ -60,14 +62,14 @@ class AllocateAssetsBase(BaseModel):
 
     # Required request input, filled by sending dendrite caller.
     # TODO: what type should this be?
-    assets_and_pools: typing.Dict[str, typing.Dict | float] = Field(
+    assets_and_pools: Dict[str, Union[Dict[str, BasePoolModel], float]] = Field(
         ...,
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
 
     # Optional request output, filled by recieving axon.
-    allocations: typing.Optional[typing.Dict[str, float]] = Field(
+    allocations: Optional[Dict[str, float]] = Field(
         None,
         description="allocations produce by miners",
     )

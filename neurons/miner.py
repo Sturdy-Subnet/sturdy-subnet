@@ -25,7 +25,7 @@ import sturdy
 
 # import base miner class which takes care of most of the boilerplate
 from sturdy.base.miner import BaseMinerNeuron
-from sturdy.utils.misc import greedy_allocation_algorithm
+from sturdy.algo import greedy_allocation_algorithm
 
 
 class Miner(BaseMinerNeuron):

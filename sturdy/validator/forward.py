@@ -20,6 +20,7 @@ import bittensor as bt
 from typing import List, Dict, Union
 import asyncio
 
+from sturdy.pools import BasePoolModel
 from sturdy.protocol import AllocateAssets
 from sturdy.validator.reward import get_rewards
 from sturdy.protocol import AllocInfo
@@ -75,16 +76,19 @@ async def query_multiple_miners(
 
 async def query_and_score_miners(
     self,
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
+    assets_and_pools: Dict[str, Union[BasePoolModel, float]] = None,
+    organic: bool = False,
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
-    self.simulator.initialize()
+    if not organic:
+        self.simulator.initialize()
     # initialize simulator data
     # if there is organic info then generate synthetic info
-    if assets_and_pools is not None:
-        self.simulator.init_data(init_assets_and_pools=assets_and_pools)
-    else:
-        self.simulator.init_data()
+    if not organic:
+        if assets_and_pools is not None:
+            self.simulator.init_data(init_assets_and_pools=assets_and_pools)
+        else:
+            self.simulator.init_data()
 
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
@@ -123,5 +127,4 @@ async def query_and_score_miners(
     bt.logging.info(f"Scored responses: {rewards}")
 
     self.update_scores(rewards, active_uids)
-    bt.logging.debug(f"allocs:\n{allocs}")
     return allocs

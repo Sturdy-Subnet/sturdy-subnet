@@ -3,7 +3,7 @@ from unittest import TestCase
 
 from sturdy.protocol import AllocateAssets
 from sturdy.pools import generate_assets_and_pools
-from sturdy.utils.misc import greedy_allocation_algorithm
+from sturdy.algo import greedy_allocation_algorithm
 from sturdy.constants import TOTAL_ASSETS
 
 
