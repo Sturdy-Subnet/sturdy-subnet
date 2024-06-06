@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict, Union
 
-from sturdy.utils.misc import borrow_rate, check_allocations
+from sturdy.utils.misc import check_allocations
 from sturdy.pools import (
     BasePool,
     generate_assets_and_pools,

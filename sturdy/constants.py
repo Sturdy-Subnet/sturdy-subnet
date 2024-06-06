@@ -28,3 +28,8 @@ QUERY_TIMEOUT = 10  # timeout (seconds)
 # latency reward curve scaling parameters
 STEEPNESS = 1.0
 DIV_FACTOR = 1.5  # a scaling factor
+
+# The following constants are for different pool models
+# Aave
+RESERVE_FACTOR_START_BIT_POSITION = 64
+RESERVE_FACTOR_MASK = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFF

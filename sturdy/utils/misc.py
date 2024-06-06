@@ -20,7 +20,7 @@ import time
 import numpy as np
 from pydantic import BaseModel
 import bittensor as bt
-from sturdy.constants import GREEDY_SIG_FIGS
+from sturdy.constants import GREEDY_SIG_FIGS, RESERVE_FACTOR_MASK, RESERVE_FACTOR_START_BIT_POSITION
 from math import floor
 from typing import Callable, Dict, Any, Type, Union
 from functools import lru_cache, update_wrapper
@@ -41,6 +41,50 @@ def randrange_float(
     num_steps = int((stop - start) / step)
     random_step = rng_gen.randint(0, num_steps + 1)
     return format_num_prec(start + random_step * step, sig=sig, max_prec=max_prec)
+
+
+def retry_with_backoff(func, *args, **kwargs):
+    """
+    Retry a function with exponential backoff and jitter when rate limited.
+    """
+    max_retries = 10  # Maximum number of retries
+    base_delay = 0.1  # Initial delay in seconds
+    max_delay = 60  # Maximum delay in seconds
+
+    retries = 0
+    while retries < max_retries:
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if "Rate limited" in str(e):
+                delay = min(base_delay * 2**retries, max_delay)
+                jitter = np.random.uniform(delay / 2, delay * 1.5)
+                time.sleep(jitter)
+                retries += 1
+            else:
+                raise e
+    raise Exception(f"Maximum retries ({max_retries}) exceeded for {func.__name__}")
+
+
+def rayMul(a: int, b: int):
+    """Multiplies two ray, rounding half up to the nearest ray
+    See:
+    https://github.com/aave/aave-v3-core/blob/724a9ef43adf139437ba87dcbab63462394d4601/contracts/protocol/libraries/math/WadRayMath.sol#L65
+    """
+    HALF_RAY = 10**27 // 2
+    RAY = 10**27
+
+    # Check for overflow
+    if b == 0 or a <= (2**256 - 1 - HALF_RAY) // b:
+        return (a * b + HALF_RAY) // RAY
+    else:
+        raise ValueError("Multiplication overflow")
+
+
+def getReserveFactor(reserve_configuration):
+    return (
+        reserve_configuration.data & ~RESERVE_FACTOR_MASK
+    ) >> RESERVE_FACTOR_START_BIT_POSITION
 
 
 def get_synapse_from_body(

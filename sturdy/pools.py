@@ -17,15 +17,27 @@
 
 from typing import Dict
 
-from pydantic import BaseModel, Field, root_validator
+import json
+from pydantic import BaseModel, Field, PrivateAttr, validator, root_validator
 from web3 import Web3
+from web3.contract import Contract
 import numpy as np
+import bittensor as bt
+from pathlib import Path
 
-from sturdy.utils.misc import randrange_float, format_num_prec
+from sturdy.utils.misc import (
+    randrange_float,
+    format_num_prec,
+    retry_with_backoff,
+    rayMul,
+    getReserveFactor,
+)
 from sturdy.constants import *
 
 
 class BasePoolModel(BaseModel):
+    """This model will primarily be used for synthetic requests"""
+
     pool_id: str = Field(..., required=True, description="uid of pool")
     base_rate: float = Field(..., required=True, description="base interest rate")
     base_slope: float = Field(
@@ -54,42 +66,6 @@ class BasePoolModel(BaseModel):
             raise ValueError("borrow amount is negative")
         if values.get("reserve_size") < 0:
             raise ValueError("reserve size is negative")
-        return values
-
-
-class BasePoolWithAddressModel(BasePoolModel):
-    pool_address: str = Field(
-        ..., required=True, description="address of aave pool contract"
-    )
-
-    @root_validator
-    def check_pool_address(cls, values):
-        if not Web3.is_address(values.get("pool_address")):
-            raise ValueError("pool address is invalid!")
-
-
-class AaveDefaultInterestRatePoolModel(BaseModel):
-    pool_address: str = Field(
-        ..., required=True, description="address of aave pool contract"
-    )
-    variable_base_rate: float = Field(
-        ..., required=True, description="variable base interest rate"
-    )
-    variable_base_slope: float = Field(
-        ..., required=True, description="variable base interest rate slope"
-    )
-    variable_kink_slope: float = Field(
-        ..., required=True, description="variable kink slope"
-    )
-
-    @root_validator
-    def check_aave_params(cls, values):
-        if values.get("variable_base_rate") < 0:
-            raise ValueError("variable base rate is negative")
-        if values.get("variable_base_slope") < 0:
-            raise ValueError("variable base slope is negative")
-        if values.get("variable_kink_slope") < 0:
-            raise ValueError("variable kink slope is negative")
         return values
 
 
@@ -129,25 +105,222 @@ class BasePool(BasePoolModel):
         return self.util_rate * self.borrow_rate
 
 
-class BasePoolWithAddress(BasePoolWithAddressModel, BasePool):
-    """This class extends the base pool type with a pool address
+class ChainBasedPoolModel(BaseModel):
+    """This serves as the base model of pools which need to pull data from on-chain
 
     Args:
         pool_id: (str),
-        base_rate: (float),
-        base_slope: (float),
-        kink_slope: (float),
-        optimal_util_rate: (float),
-        borrow_amount: (float),
-        reserve_size: (float),
-        pool_address: (str),
+        contract_address: (str),
     """
 
-    pass
+    pool_id: str = Field(..., required=True, description="uid of pool")
+    contract_address: str = Field(
+        ..., required=True, description="address of contract to call"
+    )
+
+    @root_validator
+    def check_params(cls, values):
+        if len(values.get("pool_id")) <= 0:
+            raise ValueError("pool id is empty")
+        if not Web3.is_address(values.get("contract_address")):
+            raise ValueError("pool address is invalid!")
+
+        return values
 
 
-class AaveDefaultInterestRatePool(AaveDefaultInterestRatePoolModel):
-    pass
+class ChainBasedPoolFactory:
+    @staticmethod
+    def create_product(product_type: str, **kwargs) -> ChainBasedPoolModel:
+        if product_type == "default":
+            return ChainBasedPoolModel(**kwargs)
+        if product_type == "aave_v3":
+            return AaveV3DefaultInterestRatePool(**kwargs)
+        else:
+            raise ValueError(f"Unknown product type: {product_type}")
+
+
+class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
+    """This class defines the default pool type for Aave"""
+
+    web3_provider: Web3 = Field(
+        ..., required=True, description="web3 provider used to query data"
+    )
+
+    _atoken_contract: Contract = PrivateAttr()
+    _pool_contract: Contract = PrivateAttr()
+    _underlying_asset_address: str = PrivateAttr()
+    _reserve_data = PrivateAttr()
+    _strategy_contract = PrivateAttr()
+    _nextTotalStableDebt = PrivateAttr()
+    _nextAvgStableBorrowRate = PrivateAttr()
+    _variable_debt_token_contract = PrivateAttr()
+    _totalVariableDebt = PrivateAttr()
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    @validator("web3_provider", pre=False)
+    def check_w3_provider(cls, value: Web3, values) -> Web3:
+        try:
+            assert value.is_connected()
+        except Exception as err:
+            bt.logging.error("Failed to connect to Web3 instance!")
+            bt.logging.error(err)
+
+        try:
+            atoken_abi_file_path = Path(__file__).parent / "../abi/AToken.json"
+            atoken_abi_file = atoken_abi_file_path.open()
+            atoken_abi = json.load(atoken_abi_file)
+            atoken_abi_file.close()
+            atoken_contract = value.eth.contract(abi=atoken_abi, decode_tuples=True)
+            cls._atoken_contract = retry_with_backoff(
+                atoken_contract,
+                address=values.get("contract_address"),
+            )
+
+            pool_abi_file_path = Path(__file__).parent / "../abi/Pool.json"
+            pool_abi_file = pool_abi_file_path.open()
+            pool_abi = json.load(pool_abi_file)
+            pool_abi_file.close()
+
+            atoken_contract = cls._atoken_contract
+            pool_address = retry_with_backoff(atoken_contract.functions.POOL().call)
+
+            pool_contract = value.eth.contract(abi=pool_abi, decode_tuples=True)
+            cls._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
+
+            cls._underlying_asset_address = retry_with_backoff(
+                cls._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call
+            )
+
+        except Exception as err:
+            bt.logging.error("Failed to load contract!")
+            bt.logging.error(err)
+
+        return value
+
+    def sync(self):
+        """Syncs with chain"""
+        try:
+            pool_abi_file_path = Path(__file__).parent / "../abi/Pool.json"
+            pool_abi_file = pool_abi_file_path.open()
+            pool_abi = json.load(pool_abi_file)
+            pool_abi_file.close()
+
+            atoken_contract_onchain = self._atoken_contract
+            pool_address = retry_with_backoff(
+                atoken_contract_onchain.functions.POOL().call
+            )
+
+            pool_contract = self.web3_provider.eth.contract(
+                abi=pool_abi, decode_tuples=True
+            )
+            self._pool_contract = retry_with_backoff(
+                pool_contract, address=pool_address
+            )
+
+            self._underlying_asset_address = retry_with_backoff(
+                self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call
+            )
+
+            self._reserve_data = retry_with_backoff(
+                self._pool_contract.functions.getReserveData(
+                    self._underlying_asset_address
+                ).call
+            )
+
+            reserve_strat_abi_file_path = (
+                Path(__file__).parent / "../abi/IReserveInterestRateStrategy.json"
+            )
+            reserve_strat_abi_file = reserve_strat_abi_file_path.open()
+            reserve_strat_abi = json.load(reserve_strat_abi_file)
+            reserve_strat_abi_file.close()
+
+            strategy_contract = self.web3_provider.eth.contract(abi=reserve_strat_abi)
+            self._strategy_contract = retry_with_backoff(
+                strategy_contract, address=self._reserve_data.interestRateStrategyAddress
+            )
+
+            stable_debt_token_abi_file_path = (
+                Path(__file__).parent / "../abi/IStableDebtToken.json"
+            )
+            stable_debt_token_abi_file = stable_debt_token_abi_file_path.open()
+            stable_debt_token_abi = json.load(stable_debt_token_abi_file)
+            stable_debt_token_abi_file.close()
+
+            stable_debt_token_contract = self.web3_provider.eth.contract(
+                abi=stable_debt_token_abi
+            )
+            stable_debt_token_contract = retry_with_backoff(
+                stable_debt_token_contract,
+                address=self._reserve_data.stableDebtTokenAddress,
+            )
+
+            (
+                _,
+                self._nextTotalStableDebt,
+                self._nextAvgStableBorrowRate,
+                _,
+            ) = retry_with_backoff(
+                stable_debt_token_contract.functions.getSupplyData().call
+            )
+
+            variable_debt_token_abi_file_path = (
+                Path(__file__).parent / "../abi/IVariableDebtToken.json"
+            )
+            variable_debt_token_abi_file = variable_debt_token_abi_file_path.open()
+            variable_debt_token_abi = json.load(variable_debt_token_abi_file)
+            variable_debt_token_abi_file.close()
+
+            variable_debt_token_contract = self.web3_provider.eth.contract(
+                abi=variable_debt_token_abi
+            )
+            self._variable_debt_token_contract = retry_with_backoff(
+                variable_debt_token_contract,
+                address=self._reserve_data.variableDebtTokenAddress,
+            )
+
+            nextVariableBorrowIndex = self._reserve_data.variableBorrowIndex
+
+            nextScaledVariableDebt = retry_with_backoff(
+                self._variable_debt_token_contract.functions.scaledTotalSupply().call
+            )
+            self._totalVariableDebt = rayMul(nextScaledVariableDebt, nextVariableBorrowIndex)
+
+        except Exception as err:
+            bt.logging.error("Failed to sync to chain!")
+            bt.logging.error(err)
+
+    def supply_apy(self, amount: int) -> float:
+        """Returns supply rate given new deposit amount"""
+        try:
+            reserveConfiguration = self._reserve_data.configuration
+            reserveFactor = getReserveFactor(reserveConfiguration)
+
+            (nextLiquidityRate, _, _) = retry_with_backoff(
+                self._strategy_contract.functions.calculateInterestRates(
+                    (
+                        self._reserve_data.unbacked,
+                        amount,
+                        0,
+                        self._nextTotalStableDebt,
+                        self._totalVariableDebt,
+                        self._nextAvgStableBorrowRate,
+                        reserveFactor,
+                        self._underlying_asset_address,
+                        self._atoken_contract.address,
+                    )
+                ).call
+            )
+
+            # return liquidity_rate / 1e27
+            return nextLiquidityRate / 1e27
+
+        except Exception as e:
+            bt.logging.error("Failed to retrieve supply apy!")
+            bt.logging.error(e)
+
+        return 0.0
 
 
 # TODO: add different interest rate models in the future - we use a single simple model for now
