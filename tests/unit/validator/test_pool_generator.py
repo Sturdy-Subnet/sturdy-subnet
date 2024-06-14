@@ -17,7 +17,9 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             result = generate_assets_and_pools()
 
             # Assert total assets
-            self.assertEqual(result["total_assets"], TOTAL_ASSETS)
+            self.assertTrue(
+                MIN_TOTAL_ASSETS <= result["total_assets"] <= MAX_TOTAL_ASSETS
+            )
 
             # Assert number of pools
             self.assertEqual(len(result["pools"]), NUM_POOLS)

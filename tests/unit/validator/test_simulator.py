@@ -88,8 +88,9 @@ class TestSimulator(unittest.TestCase):
         self.simulator.init_data()
 
         init_pools = copy.deepcopy(self.simulator.assets_and_pools["pools"])
+        total_assets = self.simulator.assets_and_pools["total_assets"]
 
-        allocs = {"0": TOTAL_ASSETS / 10}  # should be 0.1 if total assets is 1
+        allocs = {"0": total_assets / 10}  # should be 0.1 if total assets is 1
 
         self.simulator.update_reserves_with_allocs(allocs)
 

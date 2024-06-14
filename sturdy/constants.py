@@ -13,7 +13,9 @@ OPTIMAL_UTIL_STEP = 0.05
 MIN_UTIL_RATE = 0.55
 MAX_UTIL_RATE = 0.95
 UTIL_RATE_STEP = 0.05
-TOTAL_ASSETS = 2.0  # total assets to allocate ( set to 1 for simplicity :^) )
+MIN_TOTAL_ASSETS = 0.5
+MAX_TOTAL_ASSETS = 3.0
+TOTAL_ASSETS_STEP = 0.1
 CHUNK_RATIO = 0.01  # chunk size as a percentage of total assets allocated during each iteration of greedy allocation algorithm
 GREEDY_SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
