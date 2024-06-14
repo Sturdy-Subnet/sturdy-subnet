@@ -13,9 +13,8 @@ from sturdy.utils.misc import retry_with_backoff
 class TestAavePool(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.url = os.environ.get("WEB3_PROVIDER_URL")
-        # network.connect("development")
-        cls.w3 = Web3(Web3.HTTPProvider(cls.url))
+        # runs tests on local mainnet fork at block: 20018411
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
 
     def test_pool_contract(self):
