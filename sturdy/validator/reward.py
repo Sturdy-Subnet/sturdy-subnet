@@ -116,6 +116,8 @@ def calculate_aggregate_apy(
         pct_yield += curr_yield
 
     pct_yield /= initial_balance
+    if timesteps == 0:
+        return pct_yield * 365
     aggregate_apy = (
         pct_yield / timesteps
     ) * 365  # for simplicity each timestep is a day in the simulator
@@ -232,6 +234,7 @@ def get_rewards(
 
     bt.logging.debug(f"sorted apys: {sorted_apys}")
     bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
+    bt.logging.debug(f"simulator timesteps: {self.simulator.timesteps}")
 
     # Get all the reward results by iteratively calling your reward() function.
     return (
