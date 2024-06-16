@@ -29,7 +29,7 @@ from sturdy.utils.misc import supply_rate, check_allocations
 from sturdy.protocol import AllocInfo
 
 
-def get_response_times(uids: List[int], responses, timeout: float):
+def get_response_times(uids: List, responses, timeout: float):
     """
     Returns a list of axons based on their response times.
 
@@ -103,11 +103,9 @@ def calculate_penalties(
 
     for miner_a, similarities in similarity_matrix.items():
         for miner_b, similarity in similarities.items():
-            if similarity < similarity_threshold:
-                if axon_times[miner_a] < axon_times[miner_b]:
+            if similarity <= similarity_threshold:
+                if axon_times[miner_a] <= axon_times[miner_b]:
                     penalties[miner_b] += 1
-                elif axon_times[miner_a] > axon_times[miner_b]:
-                    penalties[miner_a] += 1
 
     return penalties
 
@@ -128,11 +126,10 @@ def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties):
 
 
 def adjust_rewards_for_plagiarism(
-    self,
     rewards_apy: torch.FloatTensor,
     apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
     assets_and_pools: Dict[str, Union[Dict[str, float], float]],
-    uids: List[int],
+    uids: List,
     axon_times: Dict[str, float],
 ) -> torch.FloatTensor:
     """
@@ -151,7 +148,7 @@ def adjust_rewards_for_plagiarism(
             and the values are dictionaries that include their allocations and APYs.
         assets_and_pools (Dict[str, Union[Dict[str, float], float]]):
             A dictionary representing the available assets and their corresponding pools.
-        uids (List[int]): A list of unique identifiers for the miners.
+        uids (List): A list of unique identifiers for the miners.
         axon_times (Dict[str, float]): A dictionary that tracks the arrival times of each miner, with the keys being
             miner identifiers and the values being their arrival times. Earlier times are lower values.
 
@@ -195,7 +192,7 @@ def _get_rewards(
     max_apy: float,
     apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
     assets_and_pools: Dict[str, Union[Dict[str, float], float]],
-    uids: List[int],
+    uids: List,
     axon_times: List[float],
 ) -> float:
     """
@@ -218,7 +215,7 @@ def _get_rewards(
     ).to(self.device)
 
     adjusted_rewards = adjust_rewards_for_plagiarism(
-        self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
+        rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
     )
 
     return adjusted_rewards

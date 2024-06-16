@@ -1,5 +1,6 @@
 import unittest
 from unittest import IsolatedAsyncioTestCase
+import torch
 import sys
 
 from sturdy.protocol import AllocateAssets
@@ -182,8 +183,10 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         print(f"allocs: {allocs}")
 
-        # rewards should all be the same (1)
-        self.assertEqual(any(rewards), 1)
+        # rewards should not all be the same
+        to_compare = torch.empty(rewards.shape)
+        torch.fill(to_compare, rewards[0])
+        self.assertFalse(torch.equal(rewards, to_compare))
 
         rewards_dict = {active_uids[k]: v for k, v in enumerate(list(rewards))}
         sorted_rewards = {
@@ -247,8 +250,8 @@ class TestValidator(IsolatedAsyncioTestCase):
         for _, allocInfo in allocs.items():
             self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
 
-        # rewards should all be the same (1)
-        self.assertEqual(any(rewards), 1)
+        # rewards should not all be the same (0)
+        self.assertEqual(all(rewards), 0)
 
         rewards_dict = {k: v for k, v in enumerate(list(rewards))}
         sorted_rewards = {
@@ -309,8 +312,8 @@ class TestValidator(IsolatedAsyncioTestCase):
         for _, allocInfo in allocs.items():
             self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
 
-        # rewards should all be the same (1)
-        self.assertEqual(any(rewards), 1)
+        # rewards should not all be the same (0)
+        self.assertEqual(all(rewards), 0)
 
         rewards_dict = {k: v for k, v in enumerate(list(rewards))}
         sorted_rewards = {
