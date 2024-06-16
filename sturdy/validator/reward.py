@@ -29,7 +29,7 @@ from sturdy.utils.misc import supply_rate, check_allocations
 from sturdy.protocol import AllocInfo
 
 
-def get_response_times(uids: List, responses, timeout: float):
+def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, float]:
     """
     Returns a list of axons based on their response times.
 
@@ -48,7 +48,7 @@ def get_response_times(uids: List, responses, timeout: float):
         [(2, 0.1), (1, 0.2), (3, 0.3)]
     """
     axon_times = {
-        uids[idx]: (
+        str(uids[idx]): (
             response.dendrite.process_time
             if response.dendrite.process_time is not None
             else timeout
@@ -63,6 +63,9 @@ def format_allocations(
     allocations: Dict[str, float],
     assets_and_pools: Dict[str, Union[Dict[str, float], float]],
 ):
+    # TODO: better way to do this?
+    if allocations is None:
+        allocations = {}
     allocs = allocations.copy()
     pools = assets_and_pools["pools"]
 
@@ -192,7 +195,7 @@ def _get_rewards(
     max_apy: float,
     apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
     assets_and_pools: Dict[str, Union[Dict[str, float], float]],
-    uids: List,
+    uids: List[int],
     axon_times: List[float],
 ) -> float:
     """
@@ -254,7 +257,7 @@ def calculate_aggregate_apy(
 def get_rewards(
     self,
     query: int,
-    uids: List,
+    uids: List[str],
     responses: List,
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
@@ -343,12 +346,15 @@ def get_rewards(
     for idx in range(len(responses)):
         # TODO: cleaner way to do this?
         if responses[idx].allocations is None or axon_times[uids[idx]] >= QUERY_TIMEOUT:
-            continue
-
-        allocs[uids[idx]] = {
-            "apy": apys[uids[idx]],
-            "allocations": responses[idx].allocations,
-        }
+            allocs[uids[idx]] = {
+                "apy": sys.float_info.min,
+                "allocations": None,
+            }
+        else:
+            allocs[uids[idx]] = {
+                "apy": apys[uids[idx]],
+                "allocations": responses[idx].allocations,
+            }
 
     sorted_apys = {
         k: v for k, v in sorted(apys.items(), key=lambda item: item[1], reverse=True)
@@ -360,6 +366,7 @@ def get_rewards(
 
     bt.logging.debug(f"sorted apys: {sorted_apys}")
     bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
+    bt.logging.debug(f"allocs:\n{allocs}")
 
     # Get all the reward results by iteratively calling your reward() function.
     return (

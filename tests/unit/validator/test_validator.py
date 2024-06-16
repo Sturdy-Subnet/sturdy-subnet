@@ -148,12 +148,12 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         active_uids = [
-            uid
+            str(uid)
             for uid in range(validator.metagraph.n.item())
             if validator.metagraph.axons[uid].is_serving
         ]
 
-        active_axons = [validator.metagraph.axons[uid] for uid in active_uids]
+        active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
         synapse = AllocateAssets(
             assets_and_pools=copy.deepcopy(assets_and_pools),
@@ -214,12 +214,12 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         active_uids = [
-            uid
+            str(uid)
             for uid in range(validator.metagraph.n.item())
             if validator.metagraph.axons[uid].is_serving
         ]
 
-        active_axons = [validator.metagraph.axons[uid] for uid in active_uids]
+        active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
         synapse = AllocateAssets(
             assets_and_pools=copy.deepcopy(assets_and_pools),
@@ -276,12 +276,12 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         active_uids = [
-            uid
+            str(uid)
             for uid in range(validator.metagraph.n.item())
             if validator.metagraph.axons[uid].is_serving
         ]
 
-        active_axons = [validator.metagraph.axons[uid] for uid in active_uids]
+        active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
         synapse = AllocateAssets(
             assets_and_pools=copy.deepcopy(assets_and_pools),
