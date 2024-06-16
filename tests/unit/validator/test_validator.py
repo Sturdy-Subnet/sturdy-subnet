@@ -250,7 +250,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         for _, allocInfo in allocs.items():
             self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
 
-        # rewards should not all be the same (0)
+        # rewards should all be the same (0)
         self.assertEqual(all(rewards), 0)
 
         rewards_dict = {k: v for k, v in enumerate(list(rewards))}
@@ -312,7 +312,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         for _, allocInfo in allocs.items():
             self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
 
-        # rewards should not all be the same (0)
+        # rewards should all be the same (0)
         self.assertEqual(all(rewards), 0)
 
         rewards_dict = {k: v for k, v in enumerate(list(rewards))}
