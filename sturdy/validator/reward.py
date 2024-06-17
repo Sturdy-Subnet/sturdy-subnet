@@ -247,6 +247,8 @@ def calculate_aggregate_apy(
         pct_yield += curr_yield
 
     pct_yield /= initial_balance
+    if timesteps == 0:
+        return pct_yield * 365
     aggregate_apy = (
         pct_yield / timesteps
     ) * 365  # for simplicity each timestep is a day in the simulator
@@ -303,7 +305,10 @@ def get_rewards(
             continue
 
         # miner does not appear to be cheating - so we init simulator data
-        self.simulator.init_data(copy.deepcopy(init_assets_and_pools), allocations)
+        self.simulator.init_data(
+            init_assets_and_pools=copy.deepcopy(init_assets_and_pools),
+            init_allocations=allocations,
+        )
 
         # update reserves given allocations
         try:

@@ -76,11 +76,14 @@ async def query_multiple_miners(
 async def query_and_score_miners(
     self,
     assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
+    organic: bool = False,
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
     self.simulator.initialize()
+    if organic:
+        self.simulator.timesteps = 0
     # initialize simulator data
-    # if there is organic info then generate synthetic info
+    # if there is no "organic" info then generate synthetic info
     if assets_and_pools is not None:
         self.simulator.init_data(init_assets_and_pools=assets_and_pools)
     else:

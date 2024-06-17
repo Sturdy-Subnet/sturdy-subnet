@@ -132,7 +132,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             "9": 0.0,
         }
 
-        cls.validator.simulator.initialize()
+        cls.validator.simulator.initialize(timesteps=50)
 
     async def test_get_rewards(self):
         print("----==== test_get_rewards ====----")
