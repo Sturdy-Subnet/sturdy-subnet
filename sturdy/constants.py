@@ -23,7 +23,10 @@ REVERSION_SPEED = 0.1  # reversion speed to median borrow rate of pools
 MIN_TIMESTEPS = 50
 MAX_TIMESTEPS = 200
 TIMESTEPS_STEP = 5
-STOCHASTICITY = 0.025  # stochasticity - some randomness to sprinkle into the simulation
+# some randomness to sprinkle into the simulation
+MIN_STOCHASTICITY = 0.02  # min stochasticity
+MAX_STOCHASTICITY = 0.05  # max stochasticity
+STOCHASTICITY_STEP = 0.005
 POOL_RESERVE_SIZE = 1.0
 
 QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)

@@ -20,7 +20,7 @@ class TestSimulator(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.simulator = Simulator(
-            reversion_speed=0.05, stochasticity=0.01
+            reversion_speed=0.05
         )
 
     def test_init_data(self):
@@ -44,7 +44,7 @@ class TestSimulator(unittest.TestCase):
             self.assertGreaterEqual(pool["borrow_rate"], 0)
 
         self.simulator = Simulator(
-            reversion_speed=0.05, stochasticity=0.01
+            reversion_speed=0.05,
         )
 
         # should raise error
@@ -168,7 +168,7 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(init_assets_pools, new_assets_pools)
 
         self.simulator = Simulator(
-            reversion_speed=0.05, stochasticity=0.01
+            reversion_speed=0.05,
         )
 
         # should raise error
@@ -215,7 +215,7 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(pool_history0, pool_history1)
 
         self.simulator = Simulator(
-            reversion_speed=0.05, stochasticity=0.01
+            reversion_speed=0.05,
         )
 
         # should raise error
