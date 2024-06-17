@@ -17,19 +17,19 @@
 # DEALINGS IN THE SOFTWARE.
 
 import sys
-import math
 
 import bittensor as bt
+import numpy as np
 import torch
 from typing import List, Dict, Tuple, Any, Union
 import copy
 
-from sturdy.constants import QUERY_TIMEOUT, STEEPNESS, DIV_FACTOR, NUM_POOLS
+from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.utils.misc import supply_rate, check_allocations
 from sturdy.protocol import AllocInfo
 
 
-def get_response_times(uids: List[int], responses, timeout: float):
+def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, float]:
     """
     Returns a list of axons based on their response times.
 
@@ -48,7 +48,7 @@ def get_response_times(uids: List[int], responses, timeout: float):
         [(2, 0.1), (1, 0.2), (3, 0.3)]
     """
     axon_times = {
-        uids[idx]: (
+        str(uids[idx]): (
             response.dendrite.process_time
             if response.dendrite.process_time is not None
             else timeout
@@ -59,38 +59,169 @@ def get_response_times(uids: List[int], responses, timeout: float):
     return axon_times
 
 
-def sigmoid_scale(
-    axon_time: float,
-    num_pools: int = NUM_POOLS,
-    steepness: float = STEEPNESS,
-    div_factor: float = DIV_FACTOR,
-    timeout: float = QUERY_TIMEOUT,
-) -> float:
-    offset = -float(num_pools) / div_factor
-    return (
-        (1 / (1 + math.exp(steepness * axon_time + offset)))
-        if axon_time < timeout
-        else 0
-    )
+def format_allocations(
+    allocations: Dict[str, float],
+    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+):
+    # TODO: better way to do this?
+    if allocations is None:
+        allocations = {}
+    allocs = allocations.copy()
+    pools = assets_and_pools["pools"]
+
+    # pad the allocations
+    for pool_id in pools.keys():
+        if pool_id not in allocs:
+            allocs[pool_id] = 0.0
+
+    # sort the allocations by pool id
+    formatted_allocs = {pool_id: allocs[pool_id] for pool_id in sorted(allocs.keys())}
+
+    return formatted_allocs
 
 
-def reward(
+def reward_miner_apy(
     query: int,
     max_apy: float,
     miner_apy: float,
-    axon_time: float,
-    num_pools: int = NUM_POOLS,
+) -> float:
+    # Define a small epsilon to avoid division by zero
+    epsilon = 1e-10
+
+    # Check if max_apy is very close to sys.float_info.min
+    if abs(max_apy - sys.float_info.min) < epsilon:
+        # If max_apy is too close to sys.float_info.min, return a default value
+        return 0.0
+
+    # Calculate the adjusted APY reward, avoiding division by zero
+    return (miner_apy - sys.float_info.min) / (max_apy - sys.float_info.min + epsilon)
+
+
+def calculate_penalties(
+    similarity_matrix: Dict[str, Dict[str, float]],
+    axon_times: Dict[str, float],
+    similarity_threshold: float = SIMILARITY_THRESHOLD,
+):
+    penalties = {miner: 0 for miner in similarity_matrix}
+
+    for miner_a, similarities in similarity_matrix.items():
+        for miner_b, similarity in similarities.items():
+            if similarity <= similarity_threshold:
+                if axon_times[miner_a] <= axon_times[miner_b]:
+                    penalties[miner_b] += 1
+
+    return penalties
+
+
+def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties):
+    rewards = torch.zeros(len(miners))
+    max_penalty = max(penalties.values()) + 1  # Add 1 to avoid division by zero
+
+    for idx, miner_id in enumerate(miners):
+        # Calculate penalty adjustment
+        penalty_factor = (max_penalty - penalties[miner_id]) / max_penalty
+
+        # Calculate the final reward
+        reward = rewards_apy[idx] * penalty_factor
+        rewards[idx] = reward
+
+    return rewards
+
+
+def adjust_rewards_for_plagiarism(
+    rewards_apy: torch.FloatTensor,
+    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
+    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    uids: List,
+    axon_times: Dict[str, float],
+) -> torch.FloatTensor:
+    """
+    Adjusts the annual percentage yield (APY) rewards for miners based on the similarity of their allocations
+    to others and their arrival times, penalizing plagiarized or overly similar strategies.
+
+    This function calculates the similarity between each pair of miners' allocation strategies and applies a penalty
+    to those whose allocations are too similar to others, considering the order in which they arrived. Miners who
+    arrived earlier with unique strategies are given preference, and those with similar strategies arriving later
+    are penalized. The final APY rewards are adjusted accordingly.
+
+    Args:
+        rewards_apy (torch.FloatTensor): The initial APY rewards for the miners, before adjustments.
+        apys_and_allocations (Dict[str, Dict[str, Union[Dict[str, float], float]]]):
+            A dictionary containing APY values and allocation strategies for each miner. The keys are miner identifiers,
+            and the values are dictionaries that include their allocations and APYs.
+        assets_and_pools (Dict[str, Union[Dict[str, float], float]]):
+            A dictionary representing the available assets and their corresponding pools.
+        uids (List): A list of unique identifiers for the miners.
+        axon_times (Dict[str, float]): A dictionary that tracks the arrival times of each miner, with the keys being
+            miner identifiers and the values being their arrival times. Earlier times are lower values.
+
+    Returns:
+        torch.FloatTensor: The adjusted APY rewards for the miners, accounting for penalties due to similarity with
+        other miners' strategies and their arrival times.
+    Notes:
+        - This function relies on the helper functions `calculate_penalties` and `calculate_rewards_with_adjusted_penalties`
+          which are defined separately.
+        - The `format_allocations` function used in the similarity calculation converts the allocation dictionaries
+          to a consistent format suitable for comparison.
+    """
+    # Step 1: Calculate pairwise similarity (e.g., using Euclidean distance)
+    similarity_matrix = {}
+    for miner_a, info in apys_and_allocations.items():
+        _alloc_a = info["allocations"]
+        alloc_a = np.array(
+            list(format_allocations(_alloc_a, assets_and_pools).values())
+        )
+        similarity_matrix[miner_a] = {}
+        for miner_b, _alloc_b in apys_and_allocations.items():
+            _alloc_b = info["allocations"]
+            alloc_b = np.array(
+                list(format_allocations(_alloc_b, assets_and_pools).values())
+            )
+            if miner_a != miner_b:
+                similarity_matrix[miner_a][miner_b] = np.linalg.norm(alloc_a - alloc_b)
+
+    # Step 2: Apply penalties considering axon times
+    penalties = calculate_penalties(similarity_matrix, axon_times)
+
+    # Step 3: Calculate final rewards with adjusted penalties
+    rewards = calculate_rewards_with_adjusted_penalties(uids, rewards_apy, penalties)
+
+    return rewards
+
+
+def _get_rewards(
+    self,
+    query: int,
+    max_apy: float,
+    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
+    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    uids: List[int],
+    axon_times: List[float],
 ) -> float:
     """
-    Reward the miner response to the dummy request. This method returns a reward
+    Rewards miner responses to request. This method returns a reward
     value for the miner, which is used to update the miner's score.
 
     Returns:
-    - float: The reward value for the miner.
+    - adjusted_rewards: The reward values for the miners.
     """
-    return (0.2 * sigmoid_scale(axon_time, num_pools=num_pools)) + (
-        0.8 * miner_apy / max_apy
+
+    rewards_apy = torch.FloatTensor(
+        [
+            reward_miner_apy(
+                query,
+                max_apy=max_apy,
+                miner_apy=apys_and_allocations[uid]["apy"],
+            )
+            for uid in uids
+        ]
+    ).to(self.device)
+
+    adjusted_rewards = adjust_rewards_for_plagiarism(
+        rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
     )
+
+    return adjusted_rewards
 
 
 def calculate_aggregate_apy(
@@ -126,7 +257,7 @@ def calculate_aggregate_apy(
 def get_rewards(
     self,
     query: int,
-    uids: List,
+    uids: List[str],
     responses: List,
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
@@ -215,12 +346,15 @@ def get_rewards(
     for idx in range(len(responses)):
         # TODO: cleaner way to do this?
         if responses[idx].allocations is None or axon_times[uids[idx]] >= QUERY_TIMEOUT:
-            continue
-
-        allocs[uids[idx]] = {
-            "apy": apys[uids[idx]],
-            "allocations": responses[idx].allocations,
-        }
+            allocs[uids[idx]] = {
+                "apy": sys.float_info.min,
+                "allocations": None,
+            }
+        else:
+            allocs[uids[idx]] = {
+                "apy": apys[uids[idx]],
+                "allocations": responses[idx].allocations,
+            }
 
     sorted_apys = {
         k: v for k, v in sorted(apys.items(), key=lambda item: item[1], reverse=True)
@@ -232,20 +366,18 @@ def get_rewards(
 
     bt.logging.debug(f"sorted apys: {sorted_apys}")
     bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
+    bt.logging.debug(f"allocs:\n{allocs}")
 
     # Get all the reward results by iteratively calling your reward() function.
     return (
-        torch.FloatTensor(
-            [
-                reward(
-                    query,
-                    max_apy=max_apy,
-                    miner_apy=apys[uid],
-                    axon_time=axon_times[uid],
-                    num_pools=len(uids),
-                )
-                for uid in uids
-            ]
-        ).to(self.device),
+        _get_rewards(
+            self,
+            query,
+            max_apy,
+            apys_and_allocations=allocs,
+            assets_and_pools=init_assets_and_pools,
+            uids=uids,
+            axon_times=axon_times,
+        ),
         allocs,
     )
