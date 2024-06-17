@@ -20,7 +20,9 @@ CHUNK_RATIO = 0.01  # chunk size as a percentage of total assets allocated durin
 GREEDY_SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
 REVERSION_SPEED = 0.1  # reversion speed to median borrow rate of pools
-TIMESTEPS = 50  # simulation timesteps
+MIN_TIMESTEPS = 50
+MAX_TIMESTEPS = 200
+TIMESTEPS_STEP = 5
 STOCHASTICITY = 0.025  # stochasticity - some randomness to sprinkle into the simulation
 POOL_RESERVE_SIZE = 1.0
 

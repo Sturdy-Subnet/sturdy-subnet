@@ -174,7 +174,10 @@ def get_rewards(
             continue
 
         # miner does not appear to be cheating - so we init simulator data
-        self.simulator.init_data(copy.deepcopy(init_assets_and_pools), allocations)
+        self.simulator.init_data(
+            init_assets_and_pools=copy.deepcopy(init_assets_and_pools),
+            init_allocations=allocations,
+        )
 
         # update reserves given allocations
         try:
