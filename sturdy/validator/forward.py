@@ -79,9 +79,10 @@ async def query_and_score_miners(
     organic: bool = False,
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
-    self.simulator.initialize()
     if organic:
-        self.simulator.timesteps = 0
+        self.simulator.initialize(timesteps=0)
+    else:
+        self.simulator.initialize()
     # initialize simulator data
     # if there is no "organic" info then generate synthetic info
     if assets_and_pools is not None:

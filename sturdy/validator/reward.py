@@ -281,6 +281,7 @@ def get_rewards(
 
     init_assets_and_pools = copy.deepcopy(self.simulator.assets_and_pools)
 
+    bt.logging.debug(f"Running simulator for {self.simulator.timesteps} timesteps for each allocation...")
     for response_idx, response in enumerate(responses):
         # reset simulator for next run
         self.simulator.reset()
