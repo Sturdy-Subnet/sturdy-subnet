@@ -166,18 +166,18 @@ def adjust_rewards_for_plagiarism(
     """
     # Step 1: Calculate pairwise similarity (e.g., using Euclidean distance)
     similarity_matrix = {}
-    for miner_a, info in apys_and_allocations.items():
-        _alloc_a = info["allocations"]
+    for miner_a, info_a in apys_and_allocations.items():
+        _alloc_a = info_a["allocations"]
         alloc_a = np.array(
             list(format_allocations(_alloc_a, assets_and_pools).values())
         )
         similarity_matrix[miner_a] = {}
-        for miner_b, _alloc_b in apys_and_allocations.items():
-            _alloc_b = info["allocations"]
-            alloc_b = np.array(
-                list(format_allocations(_alloc_b, assets_and_pools).values())
-            )
+        for miner_b, info_b in apys_and_allocations.items():
             if miner_a != miner_b:
+                _alloc_b = info_b["allocations"]
+                alloc_b = np.array(
+                    list(format_allocations(_alloc_b, assets_and_pools).values())
+                )
                 similarity_matrix[miner_a][miner_b] = np.linalg.norm(alloc_a - alloc_b)
 
     # Step 2: Apply penalties considering axon times
