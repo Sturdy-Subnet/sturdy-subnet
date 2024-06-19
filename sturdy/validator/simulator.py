@@ -14,15 +14,10 @@ import copy
 class Simulator(object):
     def __init__(
         self,
-        # config,
-        timesteps=TIMESTEPS,
-        reversion_speed=REVERSION_SPEED,
-        stochasticity=STOCHASTICITY,
+        reversion_speed: float = REVERSION_SPEED,
         seed=None,
     ):
-        self.timesteps = timesteps
         self.reversion_speed = reversion_speed
-        self.stochasticity = stochasticity
         self.assets_and_pools = {}
         self.allocations = {}
         self.pool_history = []
@@ -64,9 +59,31 @@ class Simulator(object):
         ]
 
     # initialize fresh simulation instance
-    def initialize(self):
+    def initialize(self, timesteps: int = None, stochasticity: float = None):
         # create fresh rng state
         self.init_rng = np.random.RandomState(self.seed)
+        self.rng_state_container = copy.copy(self.init_rng)
+
+        if timesteps is None:
+            self.timesteps = self.rng_state_container.choice(
+                np.arange(
+                    MIN_TIMESTEPS, MAX_TIMESTEPS + TIMESTEPS_STEP, TIMESTEPS_STEP
+                ),
+            )
+        else:
+            self.timesteps = timesteps
+
+        if stochasticity is None:
+            self.stochasticity = self.rng_state_container.choice(
+                np.arange(
+                    MIN_STOCHASTICITY,
+                    MAX_STOCHASTICITY + STOCHASTICITY_STEP,
+                    STOCHASTICITY_STEP,
+                ),
+            )
+        else:
+            self.stochasticity = stochasticity
+
         self.rng_state_container = copy.copy(self.init_rng)
 
     # reset sim to initial params for rng

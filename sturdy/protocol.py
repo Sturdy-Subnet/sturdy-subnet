@@ -25,7 +25,7 @@ from sturdy.pools import BasePoolModel
 
 class AllocInfo(TypedDict):
     apy: str
-    allocations: Dict[str, float]
+    allocations: Union[Dict[str, float], None]
 
 
 class AllocateAssetsRequest(BaseModel):

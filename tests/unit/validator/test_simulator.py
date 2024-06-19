@@ -20,7 +20,7 @@ class TestSimulator(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.simulator = Simulator(
-            timesteps=300, reversion_speed=0.05, stochasticity=0.01
+            reversion_speed=0.05
         )
 
     def test_init_data(self):
@@ -44,7 +44,7 @@ class TestSimulator(unittest.TestCase):
             self.assertGreaterEqual(pool["borrow_rate"], 0)
 
         self.simulator = Simulator(
-            timesteps=300, reversion_speed=0.05, stochasticity=0.01
+            reversion_speed=0.05,
         )
 
         # should raise error
@@ -88,8 +88,9 @@ class TestSimulator(unittest.TestCase):
         self.simulator.init_data()
 
         init_pools = copy.deepcopy(self.simulator.assets_and_pools["pools"])
+        total_assets = self.simulator.assets_and_pools["total_assets"]
 
-        allocs = {"0": TOTAL_ASSETS / 10}  # should be 0.1 if total assets is 1
+        allocs = {"0": total_assets / 10}  # should be 0.1 if total assets is 1
 
         self.simulator.update_reserves_with_allocs(allocs)
 
@@ -112,7 +113,7 @@ class TestSimulator(unittest.TestCase):
             self.assertEqual(b_rate_should_be, new_pool_hist_init["borrow_rate"])
 
     def test_initialization(self):
-        self.simulator.initialize()
+        self.simulator.initialize(timesteps=50)
         self.assertIsNotNone(self.simulator.init_rng)
         self.assertIsNotNone(self.simulator.rng_state_container)
         init_state_container = copy.deepcopy(self.simulator.init_rng)
@@ -122,7 +123,7 @@ class TestSimulator(unittest.TestCase):
         self.assertTrue(states_equal)
 
         # should reinit with fresh rng state
-        self.simulator.initialize()
+        self.simulator.initialize(timesteps=50)
         new_state_container = copy.deepcopy(self.simulator.rng_state_container)
 
         new_state = new_state_container.get_state()
@@ -131,7 +132,7 @@ class TestSimulator(unittest.TestCase):
         self.assertFalse(are_states_equal)
 
     def test_reset(self):
-        self.simulator.initialize()
+        self.simulator.initialize(timesteps=50)
         self.simulator.init_data()
         init_state_container = copy.deepcopy(self.simulator.init_rng)
         init_state = init_state_container.get_state()
@@ -167,14 +168,14 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(init_assets_pools, new_assets_pools)
 
         self.simulator = Simulator(
-            timesteps=300, reversion_speed=0.05, stochasticity=0.01
+            reversion_speed=0.05,
         )
 
         # should raise error
         self.assertRaises(RuntimeError, self.simulator.reset)
 
     def test_sim_run(self):
-        self.simulator.initialize()
+        self.simulator.initialize(timesteps=50)
         self.simulator.init_data()
         self.simulator.run()
 
@@ -202,7 +203,7 @@ class TestSimulator(unittest.TestCase):
 
         # check if simulation runs the same across "reset()s"
         # first run
-        self.simulator.initialize()
+        self.simulator.initialize(timesteps=50)
         self.simulator.init_data()
         self.simulator.run()
         pool_history0 = copy.deepcopy(self.simulator.pool_history)
@@ -214,7 +215,7 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(pool_history0, pool_history1)
 
         self.simulator = Simulator(
-            timesteps=300, reversion_speed=0.05, stochasticity=0.01
+            reversion_speed=0.05,
         )
 
         # should raise error

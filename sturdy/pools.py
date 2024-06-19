@@ -358,7 +358,7 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
         for x in range(NUM_POOLS)
     }
 
-    assets_and_pools["total_assets"] = TOTAL_ASSETS
+    assets_and_pools["total_assets"] = randrange_float(MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen)
     assets_and_pools["pools"] = pools
 
     return assets_and_pools

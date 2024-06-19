@@ -167,7 +167,7 @@ async def vali():
 @app.post("/allocate")
 async def allocate(body: AllocateAssetsRequest):
     synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
-    result = await query_and_score_miners(core_validator, synapse.assets_and_pools)
+    result = await query_and_score_miners(core_validator, assets_and_pools=synapse.assets_and_pools, organic=True)
     ret = AllocateAssetsResponse(allocations=result)
     return ret
 

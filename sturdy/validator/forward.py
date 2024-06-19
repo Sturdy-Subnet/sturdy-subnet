@@ -46,11 +46,11 @@ async def forward(self):
 async def query_miner(
     self,
     synapse: bt.Synapse,
-    uid: List[int],
+    uid: List[str],
     deserialize: bool = False,
 ):
     response = await self.dendrite.forward(
-        axons=self.metagraph.axons[uid],
+        axons=self.metagraph.axons[int(uid)],
         synapse=synapse,
         timeout=QUERY_TIMEOUT,
         deserialize=deserialize,
@@ -63,7 +63,7 @@ async def query_miner(
 async def query_multiple_miners(
     self,
     synapse: bt.Synapse,
-    uids: List[int],
+    uids: List[str],
     deserialize: bool = False,
 ):
     uid_to_query_task = {
@@ -76,24 +76,25 @@ async def query_multiple_miners(
 
 async def query_and_score_miners(
     self,
-    assets_and_pools: Dict[str, Union[BasePoolModel, float]] = None,
+    assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
     organic: bool = False,
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
-    if not organic:
+    if organic:
+        self.simulator.initialize(timesteps=0)
+    else:
         self.simulator.initialize()
     # initialize simulator data
-    # if there is organic info then generate synthetic info
-    if not organic:
-        if assets_and_pools is not None:
-            self.simulator.init_data(init_assets_and_pools=assets_and_pools)
-        else:
-            self.simulator.init_data()
+    # if there is no "organic" info then generate synthetic info
+    if assets_and_pools is not None:
+        self.simulator.init_data(init_assets_and_pools=assets_and_pools)
+    else:
+        self.simulator.init_data()
 
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
     active_uids = [
-        uid
+        str(uid)
         for uid in range(self.metagraph.n.item())
         if self.metagraph.axons[uid].is_serving
     ]
@@ -126,5 +127,6 @@ async def query_and_score_miners(
 
     bt.logging.info(f"Scored responses: {rewards}")
 
-    self.update_scores(rewards, active_uids)
+    int_active_uids = [int(uid) for uid in active_uids]
+    self.update_scores(rewards, int_active_uids)
     return allocs
