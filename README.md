@@ -100,21 +100,14 @@ There are three core files.
 
 - After generating allocations, miners then send their outputs to validators to be scored. In order
   to do this, validators run a simulation which simulates borrow behaviour over a predetermined
-  amount of timesteps. The scores of miners are determined based on their relative aggregate yields
-  over the simulated timesteps and their response latency. This means that the fastest, best
-  allocating miner will receive the most emissions, with an `80%` weight placed on yield alone, and
-  the other `20%` being dependent on miner latency. The resulting score is between a range of
-  `0-1`. In math speak: $$s_{{k}} = 0.8y_k + 0.2r_k $$ where $s_k$, $y_k$, and $r_k$ are the score,
-  yield, latency of miner $k$ respectively. The reward curve of $r_k$ is determined by a sigmoid
-  curve with response time being the function (see below). Note: The timeout for a miner is 10
-  seconds, hence why the reward for >= 10s of response time is 0. For more information on how
+  amount of timesteps. The scores of miners are determined based on their relative aggregate
+  yields, and miners which have similar allocations to other miners will be penalized if they are
+  not perceived as being original. If miners fail to respond in ~10 seconds after receiving the request they are scored
+  poorly.
+  The best allocating miner will receive the most emissions. For more information on how
   miners are rewarded and how the simulator works- please see
   [reward.py](sturdy/validator/reward.py) and [simulator.py](sturdy/validator/simulator.py)
   respectively.
-
-<div align="center"> 
-    <img src="./assets/latency_scaling.png" />
-</div> 
 
 - We provide a demo which plots simulations in [plot_simulator.py](demos/plot_simulator.py). We
   provide a sample output of the script below:

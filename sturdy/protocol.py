@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 class AllocInfo(typing.TypedDict):
     apy: str
-    allocations: typing.Dict[str, float]
+    allocations: typing.Union[typing.Dict[str, float], None]
 
 
 class AllocateAssetsRequest(BaseModel):
