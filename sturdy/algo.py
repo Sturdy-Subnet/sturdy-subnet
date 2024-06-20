@@ -20,8 +20,8 @@ def greedy_allocation_algorithm(synapse: AllocateAssets) -> Dict:
         current_supply_rates = {
             k: format_num_prec(
                 supply_rate(
-                    util_rate=v["borrow_amount"]
-                    / (current_allocations[k] + pools[k]["reserve_size"]),
+                    util_rate=v.borrow_amount
+                    / (current_allocations[k] + pools[k].reserve_size),
                     pool=v,
                 )
             )

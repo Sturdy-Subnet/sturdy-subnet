@@ -1,4 +1,3 @@
-import os
 import unittest
 from web3 import Web3
 from web3.contract import Contract
@@ -50,8 +49,8 @@ class TestAavePool(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_pool_contract"))
         self.assertTrue(isinstance(pool._pool_contract, Contract))
 
-    def test_supply_apy(self):
-        print("----==== test_supply_apy ====----")
+    def test_supply_rate(self):
+        print("----==== test_supply_rate ====----")
         pool = AaveV3DefaultInterestRatePool(
             pool_id="test",
             contract_address="0x018008bfb33d285247A21d44E50697654f754e63",
@@ -70,8 +69,8 @@ class TestAavePool(unittest.TestCase):
         apy_before = reserve_data.currentLiquidityRate / 1e27
         print(f"apy before supplying: {apy_before}")
 
-        # calculate predicted future supply rate after supplying 1000 DAI
-        apy_after = pool.supply_apy(int(1e23))
+        # calculate predicted future supply rate after supplying 100000 DAI
+        apy_after = pool.supply_rate(int(1e23))
         print(f"apy after supplying 100000 DAI: {apy_after}")
         self.assertLess(apy_after, apy_before)
 

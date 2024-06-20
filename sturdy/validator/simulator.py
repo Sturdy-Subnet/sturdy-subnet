@@ -123,14 +123,13 @@ class Simulator(object):
             pool.reserve_size += alloc
             pool_from_history = pool_history_start[uid]
             pool_from_history.reserve_size += allocations[uid]
-            pool_from_history.borrow_rate = pool.borrow_rate
 
     # initialize pools
     # Function to update borrow amounts and other pool params based on reversion rate and stochasticity
     def generate_new_pool_data(self):
         latest_pool_data = self.pool_history[-1]
-        curr_borrow_rates = np.array(
-            [pool.borrow_rate for _, pool in latest_pool_data.items()]
+        curr_supply_rates = np.array(
+            [pool.supply_rate for _, pool in latest_pool_data.items()]
         )
         curr_borrow_amounts = np.array(
             [pool.borrow_amount for _, pool in latest_pool_data.items()]
@@ -139,12 +138,12 @@ class Simulator(object):
             [pool.reserve_size for _, pool in latest_pool_data.items()]
         )
 
-        median_rate = np.median(curr_borrow_rates)  # Calculate the median borrow rate
+        median_rate = np.median(curr_supply_rates)  # Calculate the median borrow rate
         noise = self.rng_state_container.normal(
-            0, self.stochasticity, len(curr_borrow_rates)
+            0, self.stochasticity, len(curr_supply_rates)
         )  # Add some random noise
         rate_changes = (
-            -self.reversion_speed * (curr_borrow_rates - median_rate) + noise
+            -self.reversion_speed * (curr_supply_rates - median_rate) + noise
         )  # Mean reversion principle
         new_borrow_amounts = (
             curr_borrow_amounts + rate_changes * curr_borrow_amounts

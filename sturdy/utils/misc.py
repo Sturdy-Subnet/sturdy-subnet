@@ -104,12 +104,12 @@ def format_num_prec(
 
 def borrow_rate(util_rate: float, pool: Dict) -> float:
     interest_rate = (
-        pool["base_rate"] + (util_rate / pool["optimal_util_rate"]) * pool["base_slope"]
-        if util_rate < pool["optimal_util_rate"]
-        else pool["base_rate"]
-        + pool["base_slope"]
-        + ((util_rate - pool["optimal_util_rate"]) / (1 - pool["optimal_util_rate"]))
-        * pool["kink_slope"]
+        pool.base_rate + (util_rate / pool.optimal_util_rate) * pool.base_slope
+        if util_rate < pool.optimal_util_rate
+        else pool.base_rate
+        + pool.base_slope
+        + ((util_rate - pool.optimal_util_rate) / (1 - pool.optimal_util_rate))
+        * pool.kink_slope
     )
 
     return interest_rate

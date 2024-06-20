@@ -130,9 +130,9 @@ class ChainBasedPoolModel(BaseModel):
 
 class ChainBasedPoolFactory:
     @staticmethod
-    def create_product(product_type: str, **kwargs) -> ChainBasedPoolModel:
+    def create_product(product_type: str = "default", **kwargs) -> ChainBasedPoolModel:
         if product_type == "default":
-            return ChainBasedPoolModel(**kwargs)
+            return BasePool(**kwargs)
         if product_type == "aave_v3":
             return AaveV3DefaultInterestRatePool(**kwargs)
         else:
@@ -238,7 +238,8 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 
             strategy_contract = self.web3_provider.eth.contract(abi=reserve_strat_abi)
             self._strategy_contract = retry_with_backoff(
-                strategy_contract, address=self._reserve_data.interestRateStrategyAddress
+                strategy_contract,
+                address=self._reserve_data.interestRateStrategyAddress,
             )
 
             stable_debt_token_abi_file_path = (
@@ -285,13 +286,15 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             nextScaledVariableDebt = retry_with_backoff(
                 self._variable_debt_token_contract.functions.scaledTotalSupply().call
             )
-            self._totalVariableDebt = rayMul(nextScaledVariableDebt, nextVariableBorrowIndex)
+            self._totalVariableDebt = rayMul(
+                nextScaledVariableDebt, nextVariableBorrowIndex
+            )
 
         except Exception as err:
             bt.logging.error("Failed to sync to chain!")
             bt.logging.error(err)
 
-    def supply_apy(self, amount: int) -> float:
+    def supply_rate(self, amount: int) -> float:
         """Returns supply rate given new deposit amount"""
         try:
             reserveConfiguration = self._reserve_data.configuration
@@ -327,38 +330,40 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
     assets_and_pools = {}
 
-    pools = {
-        str(x): {
-            BasePool(
-                pool_id=str(x),
-                base_rate=randrange_float(
-                    MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen
-                ),
-                base_slope=randrange_float(
-                    MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen
-                ),
-                kink_slope=randrange_float(
-                    MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen
-                ),  # kink rate - kicks in after pool hits optimal util rate
-                optimal_util_rate=randrange_float(
-                    MIN_OPTIMAL_RATE,
-                    MAX_OPTIMAL_RATE,
-                    OPTIMAL_UTIL_STEP,
-                    rng_gen=rng_gen,
-                ),  # optimal util rate - after which the kink slope kicks in
-                borrow_amount=format_num_prec(
-                    POOL_RESERVE_SIZE
-                    * randrange_float(
-                        MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen=rng_gen
-                    )
-                ),  # initial borrowed amount from pool
-                reserve_size=POOL_RESERVE_SIZE,
-            )
-        }
+    pools = [
+        BasePool(
+            pool_id=str(x),
+            base_rate=randrange_float(
+                MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen
+            ),
+            base_slope=randrange_float(
+                MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen
+            ),
+            kink_slope=randrange_float(
+                MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen
+            ),  # kink rate - kicks in after pool hits optimal util rate
+            optimal_util_rate=randrange_float(
+                MIN_OPTIMAL_RATE,
+                MAX_OPTIMAL_RATE,
+                OPTIMAL_UTIL_STEP,
+                rng_gen=rng_gen,
+            ),  # optimal util rate - after which the kink slope kicks in
+            borrow_amount=format_num_prec(
+                POOL_RESERVE_SIZE
+                * randrange_float(
+                    MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen=rng_gen
+                )
+            ),  # initial borrowed amount from pool
+            reserve_size=POOL_RESERVE_SIZE,
+        )
         for x in range(NUM_POOLS)
-    }
+    ]
 
-    assets_and_pools["total_assets"] = randrange_float(MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen)
+    pools = {str(pool.pool_id): pool for pool in pools}
+
+    assets_and_pools["total_assets"] = randrange_float(
+        MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen
+    )
     assets_and_pools["pools"] = pools
 
     return assets_and_pools

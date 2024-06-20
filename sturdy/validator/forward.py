@@ -20,7 +20,6 @@ import bittensor as bt
 from typing import List, Dict, Union
 import asyncio
 
-from sturdy.pools import BasePoolModel
 from sturdy.protocol import AllocateAssets
 from sturdy.validator.reward import get_rewards
 from sturdy.protocol import AllocInfo

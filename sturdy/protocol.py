@@ -20,7 +20,7 @@ from typing import Dict, TypedDict, Optional, Union
 import bittensor as bt
 from pydantic import BaseModel, Field
 
-from sturdy.pools import BasePoolModel
+from sturdy.pools import BasePoolModel, ChainBasedPoolModel
 
 
 class AllocInfo(TypedDict):
@@ -32,7 +32,7 @@ class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
 
-    assets_and_pools: Dict[str, Union[Dict[str, BasePoolModel], float]] = Field(
+    assets_and_pools: Dict[str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]] = Field(
         ...,
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
@@ -62,7 +62,7 @@ class AllocateAssetsBase(BaseModel):
 
     # Required request input, filled by sending dendrite caller.
     # TODO: what type should this be?
-    assets_and_pools: Dict[str, Union[Dict[str, BasePoolModel], float]] = Field(
+    assets_and_pools: Dict[str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]] = Field(
         ...,
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",

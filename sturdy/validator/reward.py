@@ -25,7 +25,7 @@ from typing import List, Dict, Tuple, Any, Union
 import copy
 
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
-from sturdy.utils.misc import supply_rate, check_allocations
+from sturdy.utils.misc import check_allocations
 from sturdy.protocol import AllocInfo
 
 
@@ -241,8 +241,7 @@ def calculate_aggregate_apy(
         curr_yield = 0
         for uid, allocs in allocations.items():
             pool_data = pools[uid]
-            util_rate = pool_data["borrow_amount"] / pool_data["reserve_size"]
-            pool_yield = allocs * supply_rate(util_rate, assets_and_pools["pools"][uid])
+            pool_yield = allocs * pool_data.supply_rate
             curr_yield += pool_yield
         pct_yield += curr_yield
 
