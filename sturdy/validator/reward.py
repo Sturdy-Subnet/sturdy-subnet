@@ -147,7 +147,7 @@ def get_similarity_matrix(
                     list(format_allocations(_alloc_b, assets_and_pools).values())
                 )
                 similarity_matrix[miner_a][miner_b] = (
-                    np.linalg.norm(alloc_a - alloc_b) / total_assets
+                    np.linalg.norm(alloc_a - alloc_b) / np.sqrt(2 * total_assets**2)
                 )
 
     return similarity_matrix

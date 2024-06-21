@@ -67,44 +67,48 @@ class TestRewardFunctions(unittest.TestCase):
         expected = (1e9 - sys.float_info.min) / (1e10 - sys.float_info.min + 1e-10)
         self.assertAlmostEqual(result, expected, places=6)
 
-    def test_get_similarity_matrix(self):
-        apys_and_allocations = {
-            "miner_1": {"apy": 0.05, "allocations": {"pool_1": 30, "pool_2": 20}},
-            "miner_2": {"apy": 0.04, "allocations": {"pool_1": 40, "pool_2": 10}},
-            "miner_3": {"apy": 0.06, "allocations": {"pool_1": 30, "pool_2": 20}},
-        }
-        assets_and_pools = {
-            "pools": {
-                "pool_1": {"reserve_size": 100},
-                "pool_2": {"reserve_size": 100},
-            },
-            "total_assets": 100,
-        }
+def test_get_similarity_matrix_normalized_euclidean(self):
+    apys_and_allocations = {
+        "miner_1": {"apy": 0.05, "allocations": {"pool_1": 30, "pool_2": 20}},
+        "miner_2": {"apy": 0.04, "allocations": {"pool_1": 40, "pool_2": 10}},
+        "miner_3": {"apy": 0.06, "allocations": {"pool_1": 30, "pool_2": 20}},
+    }
+    assets_and_pools = {
+        "pools": {
+            "pool_1": {"reserve_size": 100},
+            "pool_2": {"reserve_size": 100},
+        },
+        "total_assets": 100,
+    }
 
-        expected_similarity_matrix = {
-            "miner_1": {
-                "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / 100,
-                "miner_3": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / 100,
-            },
-            "miner_2": {
-                "miner_1": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / 100,
-                "miner_3": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / 100,
-            },
-            "miner_3": {
-                "miner_1": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / 100,
-                "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / 100,
-            },
-        }
+    total_assets = assets_and_pools["total_assets"]
+    normalization_factor = np.sqrt(2 * total_assets**2)  # √(2 * total_assets^2)
 
-        result = get_similarity_matrix(apys_and_allocations, assets_and_pools)
+    expected_similarity_matrix = {
+        "miner_1": {
+            "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / normalization_factor,
+            "miner_3": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / normalization_factor,
+        },
+        "miner_2": {
+            "miner_1": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / normalization_factor,
+            "miner_3": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / normalization_factor,
+        },
+        "miner_3": {
+            "miner_1": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / normalization_factor,
+            "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / normalization_factor,
+        },
+    }
 
-        for miner_a in expected_similarity_matrix:
-            for miner_b in expected_similarity_matrix[miner_a]:
-                self.assertAlmostEqual(
-                    result[miner_a][miner_b],
-                    expected_similarity_matrix[miner_a][miner_b],
-                    places=5,
-                )
+    result = get_similarity_matrix(apys_and_allocations, assets_and_pools)
+
+    for miner_a in expected_similarity_matrix:
+        for miner_b in expected_similarity_matrix[miner_a]:
+            self.assertAlmostEqual(
+                result[miner_a][miner_b],
+                expected_similarity_matrix[miner_a][miner_b],
+                places=5,
+            )
+
 
     def test_calculate_penalties(self):
         similarity_matrix = {
