@@ -67,6 +67,7 @@ class TestRewardFunctions(unittest.TestCase):
         expected = (1e9 - sys.float_info.min) / (1e10 - sys.float_info.min + 1e-10)
         self.assertAlmostEqual(result, expected, places=6)
 
+
 def test_get_similarity_matrix_normalized_euclidean(self):
     apys_and_allocations = {
         "miner_1": {"apy": 0.05, "allocations": {"pool_1": 30, "pool_2": 20}},
@@ -86,16 +87,22 @@ def test_get_similarity_matrix_normalized_euclidean(self):
 
     expected_similarity_matrix = {
         "miner_1": {
-            "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / normalization_factor,
-            "miner_3": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / normalization_factor,
+            "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10]))
+            / normalization_factor,
+            "miner_3": np.linalg.norm(np.array([30, 20]) - np.array([30, 20]))
+            / normalization_factor,
         },
         "miner_2": {
-            "miner_1": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / normalization_factor,
-            "miner_3": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / normalization_factor,
+            "miner_1": np.linalg.norm(np.array([40, 10]) - np.array([30, 20]))
+            / normalization_factor,
+            "miner_3": np.linalg.norm(np.array([40, 10]) - np.array([30, 20]))
+            / normalization_factor,
         },
         "miner_3": {
-            "miner_1": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / normalization_factor,
-            "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / normalization_factor,
+            "miner_1": np.linalg.norm(np.array([30, 20]) - np.array([30, 20]))
+            / normalization_factor,
+            "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10]))
+            / normalization_factor,
         },
     }
 
@@ -108,7 +115,6 @@ def test_get_similarity_matrix_normalized_euclidean(self):
                 expected_similarity_matrix[miner_a][miner_b],
                 places=5,
             )
-
 
     def test_calculate_penalties(self):
         similarity_matrix = {
