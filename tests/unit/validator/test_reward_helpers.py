@@ -4,11 +4,14 @@ import sys
 
 from sturdy.validator.reward import (
     format_allocations,
+    get_similarity_matrix,
     reward_miner_apy,
     calculate_penalties,
     calculate_rewards_with_adjusted_penalties,
     adjust_rewards_for_plagiarism,
 )
+
+import numpy as np
 
 
 class TestRewardFunctions(unittest.TestCase):
@@ -63,6 +66,45 @@ class TestRewardFunctions(unittest.TestCase):
         result = reward_miner_apy(query=1, max_apy=1e10, miner_apy=1e9)
         expected = (1e9 - sys.float_info.min) / (1e10 - sys.float_info.min + 1e-10)
         self.assertAlmostEqual(result, expected, places=6)
+
+    def test_get_similarity_matrix(self):
+        apys_and_allocations = {
+            "miner_1": {"apy": 0.05, "allocations": {"pool_1": 30, "pool_2": 20}},
+            "miner_2": {"apy": 0.04, "allocations": {"pool_1": 40, "pool_2": 10}},
+            "miner_3": {"apy": 0.06, "allocations": {"pool_1": 30, "pool_2": 20}},
+        }
+        assets_and_pools = {
+            "pools": {
+                "pool_1": {"reserve_size": 100},
+                "pool_2": {"reserve_size": 100},
+            },
+            "total_assets": 100,
+        }
+
+        expected_similarity_matrix = {
+            "miner_1": {
+                "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / 100,
+                "miner_3": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / 100,
+            },
+            "miner_2": {
+                "miner_1": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / 100,
+                "miner_3": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / 100,
+            },
+            "miner_3": {
+                "miner_1": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / 100,
+                "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / 100,
+            },
+        }
+
+        result = get_similarity_matrix(apys_and_allocations, assets_and_pools)
+
+        for miner_a in expected_similarity_matrix:
+            for miner_b in expected_similarity_matrix[miner_a]:
+                self.assertAlmostEqual(
+                    result[miner_a][miner_b],
+                    expected_similarity_matrix[miner_a][miner_b],
+                    places=5,
+                )
 
     def test_calculate_penalties(self):
         similarity_matrix = {
@@ -155,16 +197,19 @@ class TestRewardFunctions(unittest.TestCase):
             "1": {"apy": 0.04, "allocations": {"asset_1": 0.25, "asset_2": 0.25}},
             "2": {"apy": 0.03, "allocations": {"asset_1": 0.2, "asset_2": 0.4}},
         }
-        assets_and_pools = {"pools": {"asset_1": 1000, "asset_2": 1000}}
+        assets_and_pools = {
+            "total_assets": 1,
+            "pools": {"asset_1": 1000, "asset_2": 1000},
+        }
         uids = ["0", "1", "2"]
         axon_times = {"0": 1, "1": 2, "2": 3}
 
-        expected_rewards = torch.FloatTensor([0.0500, 0.0267, 0.0100])
+        expected_rewards = torch.FloatTensor([0.0500, 0.0200, 0.0300])
         result = adjust_rewards_for_plagiarism(
             rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
         )
 
-        torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e05)
+        torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
 
 
 if __name__ == "__main__":
