@@ -3,7 +3,8 @@ from typing import Dict, Union
 
 from sturdy.utils.misc import check_allocations
 from sturdy.pools import (
-    BasePool,
+    BasePoolModel,
+    ChainBasedPoolModel,
     generate_assets_and_pools,
     generate_initial_allocations_for_pools,
 )
@@ -28,7 +29,9 @@ class Simulator(object):
     # initializes data - by default these are randomly generated
     def init_data(
         self,
-        init_assets_and_pools: Dict[str, Union[BasePool, float]] = None,
+        init_assets_and_pools: Dict[
+            str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+        ] = None,
         init_allocations: Dict[str, float] = None,
     ):
         if self.rng_state_container is None or self.init_rng is None:
@@ -128,8 +131,8 @@ class Simulator(object):
     # Function to update borrow amounts and other pool params based on reversion rate and stochasticity
     def generate_new_pool_data(self):
         latest_pool_data = self.pool_history[-1]
-        curr_supply_rates = np.array(
-            [pool.supply_rate for _, pool in latest_pool_data.items()]
+        curr_borrow_rates = np.array(
+            [pool.borrow_rate for _, pool in latest_pool_data.items()]
         )
         curr_borrow_amounts = np.array(
             [pool.borrow_amount for _, pool in latest_pool_data.items()]
@@ -138,12 +141,12 @@ class Simulator(object):
             [pool.reserve_size for _, pool in latest_pool_data.items()]
         )
 
-        median_rate = np.median(curr_supply_rates)  # Calculate the median borrow rate
+        median_rate = np.median(curr_borrow_rates)  # Calculate the median borrow rate
         noise = self.rng_state_container.normal(
-            0, self.stochasticity, len(curr_supply_rates)
+            0, self.stochasticity, len(curr_borrow_rates)
         )  # Add some random noise
         rate_changes = (
-            -self.reversion_speed * (curr_supply_rates - median_rate) + noise
+            -self.reversion_speed * (curr_borrow_rates - median_rate) + noise
         )  # Mean reversion principle
         new_borrow_amounts = (
             curr_borrow_amounts + rate_changes * curr_borrow_amounts

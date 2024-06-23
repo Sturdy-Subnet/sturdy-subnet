@@ -21,13 +21,13 @@ def plot_simulation_results(simulator):
 
     for t in range(simulator.timesteps):
         borrow_amounts = [
-            pool["borrow_amount"] for pool in simulator.pool_history[t].values()
+            pool.borrow_amount for pool in simulator.pool_history[t].values()
         ]
         reserve_sizes = [
-            pool["reserve_size"] for pool in simulator.pool_history[t].values()
+            pool.reserve_size for pool in simulator.pool_history[t].values()
         ]
         borrow_rates = [
-            pool["borrow_rate"] for pool in simulator.pool_history[t].values()
+            pool.borrow_rate for pool in simulator.pool_history[t].values()
         ]
         utilization_rates = [
             borrow_amounts[i] / reserve_sizes[i] for i in range(len(borrow_amounts))

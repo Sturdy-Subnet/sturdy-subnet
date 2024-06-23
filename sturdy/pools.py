@@ -15,10 +15,11 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from typing import Dict
+from typing import Dict, Union
+from enum import Enum
 
 import json
-from pydantic import BaseModel, Field, PrivateAttr, validator, root_validator
+from pydantic import BaseModel, Field, PrivateAttr, root_validator
 from web3 import Web3
 from web3.contract import Contract
 import numpy as np
@@ -127,27 +128,38 @@ class ChainBasedPoolModel(BaseModel):
 
         return values
 
+    def pool_init(self, **args):
+        raise NotImplementedError("pool_init() has not been implemented!")
 
-class ChainBasedPoolFactory:
+    def sync(self, **args):
+        raise NotImplementedError("sync() has not been implemented!")
+
+
+class POOL_TYPES(str, Enum):
+    DEFAULT = "DEFAULT"
+    AAVE_V3 = "AAVE_V3"
+
+
+class PoolFactory:
     @staticmethod
-    def create_product(product_type: str = "default", **kwargs) -> ChainBasedPoolModel:
-        if product_type == "default":
-            return BasePool(**kwargs)
-        if product_type == "aave_v3":
-            return AaveV3DefaultInterestRatePool(**kwargs)
-        else:
-            raise ValueError(f"Unknown product type: {product_type}")
+    def create_pool(
+        pool_type: POOL_TYPES, **kwargs
+    ) -> Union[BasePoolModel, ChainBasedPoolModel]:
+        match pool_type:
+            case POOL_TYPES.DEFAULT:
+                return BasePool(**kwargs)
+            case POOL_TYPES.AAVE_V3:
+                return AaveV3DefaultInterestRatePool(**kwargs)
+            case _:
+                raise ValueError(f"Unknown product type: {pool_type}")
 
 
 class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
-    web3_provider: Web3 = Field(
-        ..., required=True, description="web3 provider used to query data"
-    )
-
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
+    _underlying_asset_contract: Contract = PrivateAttr()
     _underlying_asset_address: str = PrivateAttr()
     _reserve_data = PrivateAttr()
     _strategy_contract = PrivateAttr()
@@ -155,14 +167,14 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _nextAvgStableBorrowRate = PrivateAttr()
     _variable_debt_token_contract = PrivateAttr()
     _totalVariableDebt = PrivateAttr()
+    _initted: bool = PrivateAttr(False)
 
     class Config:
         arbitrary_types_allowed = True
 
-    @validator("web3_provider", pre=False)
-    def check_w3_provider(cls, value: Web3, values) -> Web3:
+    def pool_init(self, web3_provider: Web3):
         try:
-            assert value.is_connected()
+            assert web3_provider.is_connected()
         except Exception as err:
             bt.logging.error("Failed to connect to Web3 instance!")
             bt.logging.error(err)
@@ -172,10 +184,12 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             atoken_abi_file = atoken_abi_file_path.open()
             atoken_abi = json.load(atoken_abi_file)
             atoken_abi_file.close()
-            atoken_contract = value.eth.contract(abi=atoken_abi, decode_tuples=True)
-            cls._atoken_contract = retry_with_backoff(
+            atoken_contract = web3_provider.eth.contract(
+                abi=atoken_abi, decode_tuples=True
+            )
+            self._atoken_contract = retry_with_backoff(
                 atoken_contract,
-                address=values.get("contract_address"),
+                address=self.contract_address,
             )
 
             pool_abi_file_path = Path(__file__).parent / "../abi/Pool.json"
@@ -183,24 +197,42 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             pool_abi = json.load(pool_abi_file)
             pool_abi_file.close()
 
-            atoken_contract = cls._atoken_contract
+            atoken_contract = self._atoken_contract
             pool_address = retry_with_backoff(atoken_contract.functions.POOL().call)
 
-            pool_contract = value.eth.contract(abi=pool_abi, decode_tuples=True)
-            cls._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
-
-            cls._underlying_asset_address = retry_with_backoff(
-                cls._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call
+            pool_contract = web3_provider.eth.contract(abi=pool_abi, decode_tuples=True)
+            self._pool_contract = retry_with_backoff(
+                pool_contract, address=pool_address
             )
+
+            self._underlying_asset_address = retry_with_backoff(
+                self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call
+            )
+
+            erc20_abi_file_path = Path(__file__).parent / "../abi/IERC20.json"
+            erc20_abi_file = erc20_abi_file_path.open()
+            erc20_abi = json.load(erc20_abi_file)
+            erc20_abi_file.close()
+
+            underlying_asset_contract = web3_provider.eth.contract(
+                abi=erc20_abi, decode_tuples=True
+            )
+            self._underlying_asset_contract = retry_with_backoff(
+                underlying_asset_contract, address=self._underlying_asset_address
+            )
+
+            self._initted = True
 
         except Exception as err:
             bt.logging.error("Failed to load contract!")
             bt.logging.error(err)
 
-        return value
+        return web3_provider
 
-    def sync(self):
+    def sync(self, web3_provider: Web3):
         """Syncs with chain"""
+        if not self._initted:
+            self.pool_init(web3_provider)
         try:
             pool_abi_file_path = Path(__file__).parent / "../abi/Pool.json"
             pool_abi_file = pool_abi_file_path.open()
@@ -212,9 +244,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 atoken_contract_onchain.functions.POOL().call
             )
 
-            pool_contract = self.web3_provider.eth.contract(
-                abi=pool_abi, decode_tuples=True
-            )
+            pool_contract = web3_provider.eth.contract(abi=pool_abi, decode_tuples=True)
             self._pool_contract = retry_with_backoff(
                 pool_contract, address=pool_address
             )
@@ -236,7 +266,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             reserve_strat_abi = json.load(reserve_strat_abi_file)
             reserve_strat_abi_file.close()
 
-            strategy_contract = self.web3_provider.eth.contract(abi=reserve_strat_abi)
+            strategy_contract = web3_provider.eth.contract(abi=reserve_strat_abi)
             self._strategy_contract = retry_with_backoff(
                 strategy_contract,
                 address=self._reserve_data.interestRateStrategyAddress,
@@ -249,7 +279,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             stable_debt_token_abi = json.load(stable_debt_token_abi_file)
             stable_debt_token_abi_file.close()
 
-            stable_debt_token_contract = self.web3_provider.eth.contract(
+            stable_debt_token_contract = web3_provider.eth.contract(
                 abi=stable_debt_token_abi
             )
             stable_debt_token_contract = retry_with_backoff(
@@ -273,7 +303,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             variable_debt_token_abi = json.load(variable_debt_token_abi_file)
             variable_debt_token_abi_file.close()
 
-            variable_debt_token_contract = self.web3_provider.eth.contract(
+            variable_debt_token_contract = web3_provider.eth.contract(
                 abi=variable_debt_token_abi
             )
             self._variable_debt_token_contract = retry_with_backoff(
@@ -294,17 +324,18 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             bt.logging.error("Failed to sync to chain!")
             bt.logging.error(err)
 
-    def supply_rate(self, amount: int) -> float:
+    def supply_rate(self, amount: float) -> float:
         """Returns supply rate given new deposit amount"""
         try:
             reserveConfiguration = self._reserve_data.configuration
             reserveFactor = getReserveFactor(reserveConfiguration)
+            decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
 
             (nextLiquidityRate, _, _) = retry_with_backoff(
                 self._strategy_contract.functions.calculateInterestRates(
                     (
                         self._reserve_data.unbacked,
-                        amount,
+                        int(amount * 10**decimals),
                         0,
                         self._nextTotalStableDebt,
                         self._totalVariableDebt,
@@ -371,10 +402,10 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
 
 # generate intial allocations for pools
 def generate_initial_allocations_for_pools(
-    assets_and_pools: Dict, size: int = NUM_POOLS, rng_gen=np.random
+    assets_and_pools: Dict, rng_gen=np.random
 ) -> Dict:
-    nums = np.ones(size)
-    allocs = nums / np.sum(nums) * assets_and_pools["total_assets"]
-    allocations = {str(i): alloc for i, alloc in enumerate(allocs)}
+    pools = assets_and_pools["pools"]
+    alloc = assets_and_pools["total_assets"] / len(pools)
+    allocations = {str(uid): alloc for uid in pools}
 
     return allocations

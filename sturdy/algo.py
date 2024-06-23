@@ -4,6 +4,7 @@ from sturdy.utils.misc import format_num_prec, supply_rate
 from sturdy.constants import CHUNK_RATIO
 
 
+# NOTE: THIS IS JUST AN EXAMPLE - THIS MAY NOT WORK FOR ALL KINDS OF POOLS
 def greedy_allocation_algorithm(synapse: AllocateAssets) -> Dict:
     max_balance = synapse.assets_and_pools["total_assets"]
     balance = max_balance

@@ -9,6 +9,7 @@ from sturdy.pools import AaveV3DefaultInterestRatePool
 from sturdy.utils.misc import retry_with_backoff
 
 
+# TODO: test pool_init seperately???
 class TestAavePool(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -22,9 +23,9 @@ class TestAavePool(unittest.TestCase):
         pool = AaveV3DefaultInterestRatePool(
             pool_id="test",
             contract_address="0x018008bfb33d285247A21d44E50697654f754e63",
-            web3_provider=self.w3,
         )
 
+        pool.pool_init(self.w3)
         self.assertTrue(hasattr(pool, "_atoken_contract"))
         self.assertTrue(isinstance(pool._atoken_contract, Contract))
 
@@ -37,11 +38,10 @@ class TestAavePool(unittest.TestCase):
         pool = AaveV3DefaultInterestRatePool(
             pool_id="test",
             contract_address="0x018008bfb33d285247A21d44E50697654f754e63",
-            web3_provider=self.w3,
         )
 
         # sync pool params
-        pool.sync()
+        pool.sync(web3_provider=self.w3)
 
         self.assertTrue(hasattr(pool, "_atoken_contract"))
         self.assertTrue(isinstance(pool._atoken_contract, Contract))
@@ -54,11 +54,10 @@ class TestAavePool(unittest.TestCase):
         pool = AaveV3DefaultInterestRatePool(
             pool_id="test",
             contract_address="0x018008bfb33d285247A21d44E50697654f754e63",
-            web3_provider=self.w3,
         )
 
         # sync pool params
-        pool.sync()
+        pool.sync(web3_provider=self.w3)
 
         reserve_data = retry_with_backoff(
             pool._pool_contract.functions.getReserveData(
@@ -70,7 +69,7 @@ class TestAavePool(unittest.TestCase):
         print(f"apy before supplying: {apy_before}")
 
         # calculate predicted future supply rate after supplying 100000 DAI
-        apy_after = pool.supply_rate(int(1e23))
+        apy_after = pool.supply_rate(100000.0)
         print(f"apy after supplying 100000 DAI: {apy_after}")
         self.assertLess(apy_after, apy_before)
 

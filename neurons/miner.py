@@ -64,11 +64,13 @@ class Miner(BaseMinerNeuron):
         """
         bt.logging.debug("forward()")
 
-        # use default greedy alloaction algorithm to generate allocations
+        # try use default greedy alloaction algorithm to generate allocations
         try:
             synapse.allocations = greedy_allocation_algorithm(synapse)
         except Exception as e:
             bt.logging.error(f"Error: {e}")
+            # just return the auto vali generated allocations
+            synapse.allocations = synapse.allocations
 
         bt.logging.info(f"sending allocations: {synapse.allocations}")
         return synapse

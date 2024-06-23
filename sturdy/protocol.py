@@ -21,7 +21,7 @@ from typing_extensions import TypedDict
 import bittensor as bt
 from pydantic import BaseModel, Field
 
-from sturdy.pools import BasePoolModel, ChainBasedPoolModel
+from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
 
 
 class AllocInfo(TypedDict):
@@ -33,7 +33,12 @@ class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
 
-    assets_and_pools: Dict[str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]] = Field(
+    type: POOL_TYPES = Field(
+        default=POOL_TYPES.DEFAULT, required=True, description="type of pool"
+    )
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ] = Field(
         ...,
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
@@ -61,9 +66,16 @@ class AllocateAssetsBase(BaseModel):
     - allocations: A list of pools and their respective allocations, when filled, represents the response from the miner.
     """
 
+    class Config:
+        use_enum_values = True
+
     # Required request input, filled by sending dendrite caller.
-    # TODO: what type should this be?
-    assets_and_pools: Dict[str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]] = Field(
+    type: POOL_TYPES = Field(
+        default=POOL_TYPES.DEFAULT, required=True, description="type of pool"
+    )
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ] = Field(
         ...,
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
@@ -80,6 +92,6 @@ class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
         # TODO: figure out how to only show certain keys from pools and/or allocations
         return (
-            f"AllocateAssets(assets_and_pools={self.assets_and_pools})"
+            f"AllocateAssets(type={self.type}, assets_and_pools={self.assets_and_pools})"
             f"allocations={self.allocations}"
         )
