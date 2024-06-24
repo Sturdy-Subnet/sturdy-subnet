@@ -35,6 +35,7 @@ import uvicorn
 from db import sql
 
 # Bittensor Validator Template:
+from sturdy.pools import POOL_TYPES, PoolFactory
 from sturdy.validator import forward, query_and_score_miners
 from sturdy.utils.misc import get_synapse_from_body
 from sturdy.protocol import (
@@ -167,7 +168,40 @@ async def vali():
 @app.post("/allocate")
 async def allocate(body: AllocateAssetsRequest):
     synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
-    result = await query_and_score_miners(core_validator, assets_and_pools=synapse.assets_and_pools, organic=True)
+    bt.logging.debug(f"Synapse:\n{synapse}")
+    pools = synapse.assets_and_pools["pools"]
+    if synapse.type == POOL_TYPES.DEFAULT:
+        bt.logging.debug("converting to BasePool...")
+        new_pools = {
+            uid: PoolFactory.create_pool(
+                pool_type=synapse.type,
+                pool_id=pool.pool_id,
+                base_rate=pool.base_rate,
+                base_slope=pool.base_slope,
+                kink_slope=pool.kink_slope,
+                optimal_util_rate=pool.optimal_util_rate,
+                borrow_amount=pool.borrow_amount,
+                reserve_size=pool.reserve_size,
+            )
+            for uid, pool in pools.items()
+        }
+        synapse.assets_and_pools["pools"] = new_pools
+    else:
+        bt.logging.debug("converting to chain based pool...")
+        new_pools = {
+            uid: PoolFactory.create_pool(
+                pool_type=synapse.type,
+                web3_provider=core_validator.w3,
+                pool_id=pool.pool_id,
+                contract_address=pool.contract_address,
+            )
+            for uid, pool in pools.items()
+        }
+        synapse.assets_and_pools["pools"] = new_pools
+
+    result = await query_and_score_miners(
+        core_validator, pool_type=synapse.type, assets_and_pools=synapse.assets_and_pools, organic=True
+    )
     ret = AllocateAssetsResponse(allocations=result)
     return ret
 

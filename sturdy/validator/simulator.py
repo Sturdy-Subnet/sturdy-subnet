@@ -1,8 +1,10 @@
 import numpy as np
 from typing import Dict, Union
 
-from sturdy.utils.misc import borrow_rate, check_allocations
+from sturdy.utils.misc import check_allocations
 from sturdy.pools import (
+    BasePoolModel,
+    ChainBasedPoolModel,
     generate_assets_and_pools,
     generate_initial_allocations_for_pools,
 )
@@ -27,7 +29,9 @@ class Simulator(object):
     # initializes data - by default these are randomly generated
     def init_data(
         self,
-        init_assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
+        init_assets_and_pools: Dict[
+            str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+        ] = None,
         init_allocations: Dict[str, float] = None,
     ):
         if self.rng_state_container is None or self.init_rng is None:
@@ -52,13 +56,7 @@ class Simulator(object):
         # initialize pool history
         self.pool_history = [
             {
-                uid: {
-                    "borrow_amount": pool["borrow_amount"],
-                    "reserve_size": pool["reserve_size"],
-                    "borrow_rate": borrow_rate(
-                        pool["borrow_amount"] / pool["reserve_size"], pool
-                    ),
-                }
+                uid: copy.deepcopy(pool)
                 for uid, pool in self.assets_and_pools["pools"].items()
             }
         ]
@@ -102,12 +100,12 @@ class Simulator(object):
     # update the reserves in the pool with given allocations
     def update_reserves_with_allocs(self, allocs=None):
         if (
-            len(self.pool_history) != 1
+            len(self.pool_history) <= 0
             or len(self.assets_and_pools) <= 0
             or len(self.allocations) <= 0
         ):
             raise RuntimeError(
-                "You must first initialize() and init_data() before running the simulation!!!"
+                "You must first initialize() and init_data() before updating reserves!!!"
             )
 
         if allocs is None:
@@ -125,25 +123,22 @@ class Simulator(object):
         for uid, alloc in allocations.items():
             pool = self.assets_and_pools["pools"][uid]
             pool_history_start = self.pool_history[0]
-            pool["reserve_size"] += alloc
+            pool.reserve_size += alloc
             pool_from_history = pool_history_start[uid]
-            pool_from_history["reserve_size"] += allocations[uid]
-            pool_from_history["borrow_rate"] = borrow_rate(
-                pool["borrow_amount"] / pool["reserve_size"], pool
-            )
+            pool_from_history.reserve_size += allocations[uid]
 
     # initialize pools
     # Function to update borrow amounts and other pool params based on reversion rate and stochasticity
     def generate_new_pool_data(self):
         latest_pool_data = self.pool_history[-1]
         curr_borrow_rates = np.array(
-            [pool["borrow_rate"] for _, pool in latest_pool_data.items()]
+            [pool.borrow_rate for _, pool in latest_pool_data.items()]
         )
         curr_borrow_amounts = np.array(
-            [pool["borrow_amount"] for _, pool in latest_pool_data.items()]
+            [pool.borrow_amount for _, pool in latest_pool_data.items()]
         )
         curr_reserve_sizes = np.array(
-            [pool["reserve_size"] for _, pool in latest_pool_data.items()]
+            [pool.reserve_size for _, pool in latest_pool_data.items()]
         )
 
         median_rate = np.median(curr_borrow_rates)  # Calculate the median borrow rate
@@ -161,17 +156,14 @@ class Simulator(object):
         )  # Ensure borrow amounts do not exceed reserves
         pool_uids = list(latest_pool_data.keys())
 
-        new_pool_data = {
-            pool_uids[i]: {
-                "borrow_amount": amounts[i],
-                "reserve_size": curr_reserve_sizes[i],
-                "borrow_rate": borrow_rate(
-                    amounts[i] / curr_reserve_sizes[i],
-                    self.assets_and_pools["pools"][pool_uids[i]],
-                ),
-            }
-            for i in range(len(amounts))
-        }
+        new_pools = [
+            copy.deepcopy(pool) for pool in self.assets_and_pools["pools"].values()
+        ]
+
+        for idx, pool in enumerate(new_pools):
+            pool.borrow_amount = amounts[idx]
+
+        new_pool_data = {pool_uids[uid]: pool for uid, pool in enumerate(new_pools)}
 
         return new_pool_data
 

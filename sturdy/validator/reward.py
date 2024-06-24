@@ -25,7 +25,8 @@ from typing import List, Dict, Tuple, Any, Union
 import copy
 
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
-from sturdy.utils.misc import supply_rate, check_allocations
+from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
+from sturdy.utils.misc import check_allocations
 from sturdy.protocol import AllocInfo
 
 
@@ -61,7 +62,9 @@ def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, 
 
 def format_allocations(
     allocations: Dict[str, float],
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ],
 ):
     # TODO: better way to do this?
     if allocations is None:
@@ -180,7 +183,9 @@ def get_similarity_matrix(
 def adjust_rewards_for_plagiarism(
     rewards_apy: torch.FloatTensor,
     apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ],
     uids: List,
     axon_times: Dict[str, float],
 ) -> torch.FloatTensor:
@@ -230,7 +235,9 @@ def _get_rewards(
     query: int,
     max_apy: float,
     apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ],
     uids: List[int],
     axon_times: List[float],
 ) -> float:
@@ -262,9 +269,12 @@ def _get_rewards(
 
 def calculate_aggregate_apy(
     allocations: Dict[str, float],
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ],
     timesteps: int,
     pool_history: Dict[str, Dict[str, Any]],
+    pool_type: POOL_TYPES = POOL_TYPES.DEFAULT,
 ):
     """
     Calculates aggregate yields given intial assets and pools, pool history, and number of timesteps
@@ -277,8 +287,14 @@ def calculate_aggregate_apy(
         curr_yield = 0
         for uid, allocs in allocations.items():
             pool_data = pools[uid]
-            util_rate = pool_data["borrow_amount"] / pool_data["reserve_size"]
-            pool_yield = allocs * supply_rate(util_rate, assets_and_pools["pools"][uid])
+            pool_yield = 0.0
+            if pool_type == POOL_TYPES.DEFAULT:
+                pool_yield = allocs * pool_data.supply_rate
+            # TODO: right now this only supports aave-based pools
+            # we assume we only want immediate apy
+            else:
+                pool_yield = pool_data.supply_rate(allocs)
+                return pool_yield
             curr_yield += pool_yield
         pct_yield += curr_yield
 
@@ -297,6 +313,7 @@ def get_rewards(
     query: int,
     uids: List[str],
     responses: List,
+    pool_type: POOL_TYPES = POOL_TYPES.DEFAULT,
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -349,25 +366,33 @@ def get_rewards(
             init_allocations=allocations,
         )
 
+        # TODO: assuming that we are only getting immediate apy for organic chainbasedpool requests
+        pools_to_scan = self.simulator.pool_history[0]
         # update reserves given allocations
-        try:
-            self.simulator.update_reserves_with_allocs()
-        except Exception as e:
-            bt.logging.error(e)
-            bt.logging.error(
-                "Failed to update reserves with miner allocations - PENALIZING MINER"
-            )
-            miner_uid = uids[response_idx]
-            apys[miner_uid] = sys.float_info.min
-            continue
+        match pool_type:
+            case POOL_TYPES.AAVE_V3:
+                for _, pool in pools_to_scan.items():
+                    pool.sync(self.w3)
+            case _:
+                try:
+                    self.simulator.update_reserves_with_allocs()
+                except Exception as e:
+                    bt.logging.error(e)
+                    bt.logging.error(
+                        "Failed to update reserves with miner allocations - PENALIZING MINER"
+                    )
+                    miner_uid = uids[response_idx]
+                    apys[miner_uid] = sys.float_info.min
+                    continue
 
-        self.simulator.run()
+                self.simulator.run()
 
         aggregate_apy = calculate_aggregate_apy(
             allocations,
             init_assets_and_pools,
             self.simulator.timesteps,
             self.simulator.pool_history,
+            pool_type,
         )
 
         if aggregate_apy > max_apy:
@@ -387,6 +412,7 @@ def get_rewards(
 
     # TODO: should probably move some things around later down the road
     allocs = {}
+    filtered_allocs = {}
     for idx in range(len(responses)):
         # TODO: cleaner way to do this?
         if responses[idx].allocations is None or axon_times[uids[idx]] >= QUERY_TIMEOUT:
@@ -400,6 +426,18 @@ def get_rewards(
                 "allocations": responses[idx].allocations,
             }
 
+            filtered_allocs[uids[idx]] = {
+                "apy": apys[uids[idx]],
+                "allocations": responses[idx].allocations,
+            }
+
+    sorted_filtered_allocs = {
+        uid: allocs
+        for uid, allocs in sorted(
+            filtered_allocs.items(), key=lambda item: item[1]["apy"], reverse=True
+        )
+    }
+
     sorted_apys = {
         k: v for k, v in sorted(apys.items(), key=lambda item: item[1], reverse=True)
     }
@@ -410,7 +448,7 @@ def get_rewards(
 
     bt.logging.debug(f"sorted apys: {sorted_apys}")
     bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
-    bt.logging.debug(f"allocs:\n{allocs}")
+    bt.logging.debug(f"sorted filtered allocs:\n{sorted_filtered_allocs}")
 
     # Get all the reward results by iteratively calling your reward() function.
     return (
@@ -423,5 +461,5 @@ def get_rewards(
             uids=uids,
             axon_times=axon_times,
         ),
-        allocs,
+        sorted_filtered_allocs,
     )

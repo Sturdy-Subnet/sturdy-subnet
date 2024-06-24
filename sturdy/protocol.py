@@ -16,21 +16,29 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import typing
+from typing import Dict, Optional, Union
+from typing_extensions import TypedDict
 import bittensor as bt
 from pydantic import BaseModel, Field
 
+from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
 
-class AllocInfo(typing.TypedDict):
+
+class AllocInfo(TypedDict):
     apy: str
-    allocations: typing.Union[typing.Dict[str, float], None]
+    allocations: Union[Dict[str, float], None]
 
 
 class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
 
-    assets_and_pools: typing.Dict[str, typing.Dict | float] = Field(
+    type: POOL_TYPES = Field(
+        default=POOL_TYPES.DEFAULT, required=True, description="type of pool"
+    )
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ] = Field(
         ...,
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
@@ -41,7 +49,7 @@ class AllocateAssetsResponse(BaseModel):
     class Config:
         use_enum_values = True
 
-    allocations: typing.Dict[str, AllocInfo] = Field(
+    allocations: Dict[str, AllocInfo] = Field(
         ...,
         required=True,
         description="allocations produce by miners",
@@ -58,16 +66,23 @@ class AllocateAssetsBase(BaseModel):
     - allocations: A list of pools and their respective allocations, when filled, represents the response from the miner.
     """
 
+    class Config:
+        use_enum_values = True
+
     # Required request input, filled by sending dendrite caller.
-    # TODO: what type should this be?
-    assets_and_pools: typing.Dict[str, typing.Dict | float] = Field(
+    type: POOL_TYPES = Field(
+        default=POOL_TYPES.DEFAULT, required=True, description="type of pool"
+    )
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ] = Field(
         ...,
         required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
 
     # Optional request output, filled by recieving axon.
-    allocations: typing.Optional[typing.Dict[str, float]] = Field(
+    allocations: Optional[Dict[str, float]] = Field(
         None,
         description="allocations produce by miners",
     )
@@ -77,6 +92,6 @@ class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
         # TODO: figure out how to only show certain keys from pools and/or allocations
         return (
-            f"AllocateAssets(assets_and_pools={self.assets_and_pools})"
+            f"AllocateAssets(type={self.type}, assets_and_pools={self.assets_and_pools})"
             f"allocations={self.allocations}"
         )

@@ -16,10 +16,12 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import copy
 import bittensor as bt
 from typing import List, Dict, Union
 import asyncio
 
+from sturdy.pools import POOL_TYPES
 from sturdy.protocol import AllocateAssets
 from sturdy.validator.reward import get_rewards
 from sturdy.protocol import AllocInfo
@@ -77,6 +79,7 @@ async def query_and_score_miners(
     self,
     assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
     organic: bool = False,
+    pool_type: POOL_TYPES = POOL_TYPES.DEFAULT,
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
     if organic:
@@ -86,7 +89,7 @@ async def query_and_score_miners(
     # initialize simulator data
     # if there is no "organic" info then generate synthetic info
     if assets_and_pools is not None:
-        self.simulator.init_data(init_assets_and_pools=assets_and_pools)
+        self.simulator.init_data(init_assets_and_pools=copy.deepcopy(assets_and_pools))
     else:
         self.simulator.init_data()
 
@@ -103,6 +106,7 @@ async def query_and_score_miners(
     responses = await query_multiple_miners(
         self,
         AllocateAssets(
+            type=pool_type,
             assets_and_pools=self.simulator.assets_and_pools,
             allocations=self.simulator.allocations,
         ),
@@ -122,6 +126,7 @@ async def query_and_score_miners(
         query=self.step,
         uids=active_uids,
         responses=responses,
+        pool_type=pool_type,
     )
 
     bt.logging.info(f"Scored responses: {rewards}")
