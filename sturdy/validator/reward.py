@@ -128,6 +128,55 @@ def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties):
     return rewards
 
 
+def get_similarity_matrix(
+    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
+    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+):
+    """
+    Calculates the similarity matrix for the allocation strategies of miners using normalized Euclidean distance.
+
+    This function computes a similarity matrix based on the Euclidean distance between the allocation vectors of miners,
+    normalized by the maximum possible distance in the given asset space. Each miner's allocation is compared with every
+    other miner's allocation, resulting in a matrix where each element (i, j) represents the normalized Euclidean distance
+    between the allocations of miner_i and miner_j.
+
+    The similarity metric is scaled between 0 and 1, where 0 indicates identical allocations and 1 indicates the maximum
+    possible distance between the allocation 'vectors'.
+
+    Args:
+        apys_and_allocations (Dict[str, Dict[str, Union[Dict[str, float], float]]]):
+            A dictionary containing the APY and allocation strategies for each miner. The keys are miner identifiers,
+            and the values are dictionaries with their respective allocations and APYs.
+        assets_and_pools (Dict[str, Union[Dict[str, float], float]]):
+            A dictionary representing the assets available to the miner as well as the pools they can allocate to
+
+    Returns:
+        Dict[str, Dict[str, float]]:
+            A nested dictionary where each key is a miner identifier, and the value is another dictionary containing the
+            normalized Euclidean distances to every other miner. The distances are scaled between 0 and 1.
+    """
+
+    similarity_matrix = {}
+    total_assets = assets_and_pools["total_assets"]
+    for miner_a, info_a in apys_and_allocations.items():
+        _alloc_a = info_a["allocations"]
+        alloc_a = np.array(
+            list(format_allocations(_alloc_a, assets_and_pools).values())
+        )
+        similarity_matrix[miner_a] = {}
+        for miner_b, info_b in apys_and_allocations.items():
+            if miner_a != miner_b:
+                _alloc_b = info_b["allocations"]
+                alloc_b = np.array(
+                    list(format_allocations(_alloc_b, assets_and_pools).values())
+                )
+                similarity_matrix[miner_a][miner_b] = np.linalg.norm(
+                    alloc_a - alloc_b
+                ) / np.sqrt(2 * total_assets**2)
+
+    return similarity_matrix
+
+
 def adjust_rewards_for_plagiarism(
     rewards_apy: torch.FloatTensor,
     apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
@@ -165,20 +214,7 @@ def adjust_rewards_for_plagiarism(
           to a consistent format suitable for comparison.
     """
     # Step 1: Calculate pairwise similarity (e.g., using Euclidean distance)
-    similarity_matrix = {}
-    for miner_a, info_a in apys_and_allocations.items():
-        _alloc_a = info_a["allocations"]
-        alloc_a = np.array(
-            list(format_allocations(_alloc_a, assets_and_pools).values())
-        )
-        similarity_matrix[miner_a] = {}
-        for miner_b, info_b in apys_and_allocations.items():
-            if miner_a != miner_b:
-                _alloc_b = info_b["allocations"]
-                alloc_b = np.array(
-                    list(format_allocations(_alloc_b, assets_and_pools).values())
-                )
-                similarity_matrix[miner_a][miner_b] = np.linalg.norm(alloc_a - alloc_b)
+    similarity_matrix = get_similarity_matrix(apys_and_allocations, assets_and_pools)
 
     # Step 2: Apply penalties considering axon times
     penalties = calculate_penalties(similarity_matrix, axon_times)
@@ -281,7 +317,9 @@ def get_rewards(
 
     init_assets_and_pools = copy.deepcopy(self.simulator.assets_and_pools)
 
-    bt.logging.debug(f"Running simulator for {self.simulator.timesteps} timesteps for each allocation...")
+    bt.logging.debug(
+        f"Running simulator for {self.simulator.timesteps} timesteps for each allocation..."
+    )
     for response_idx, response in enumerate(responses):
         # reset simulator for next run
         self.simulator.reset()
