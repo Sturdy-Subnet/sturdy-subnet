@@ -32,6 +32,7 @@ from sturdy.utils.misc import (
     retry_with_backoff,
     rayMul,
     getReserveFactor,
+    ttl_cache,
 )
 from sturdy.constants import *
 
@@ -168,9 +169,23 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _variable_debt_token_contract = PrivateAttr()
     _totalVariableDebt = PrivateAttr()
     _initted: bool = PrivateAttr(False)
+    _reserveFactor = PrivateAttr()
+    _decimals: int = PrivateAttr()
 
     class Config:
         arbitrary_types_allowed = True
+
+    def __hash__(self):
+        return hash((self._atoken_contract.address, self._underlying_asset_address))
+
+    def __eq__(self, other):
+        if not isinstance(other, AaveV3DefaultInterestRatePool):
+            return NotImplemented
+        # Compare the attributes for equality
+        return (self._atoken_contract.address, self._underlying_asset_address) == (
+            other._atoken_contract.address,
+            other._underlying_asset_address,
+        )
 
     def pool_init(self, web3_provider: Web3):
         try:
@@ -320,27 +335,34 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 nextScaledVariableDebt, nextVariableBorrowIndex
             )
 
+            reserveConfiguration = self._reserve_data.configuration
+            self._reserveFactor = getReserveFactor(reserveConfiguration)
+            self._decimals = retry_with_backoff(
+                self._underlying_asset_contract.functions.decimals().call
+            )
+
         except Exception as err:
             bt.logging.error("Failed to sync to chain!")
             bt.logging.error(err)
 
+    # last 256 unique calls to this will be cached for the next 60 seconds
+    @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: float) -> float:
         """Returns supply rate given new deposit amount"""
         try:
-            reserveConfiguration = self._reserve_data.configuration
-            reserveFactor = getReserveFactor(reserveConfiguration)
-            decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
-
+            # TODO: the returned supply rate is accurate only when we haven't already deposited anything into it
+            # i.e. if we already have some tokens in the pool, and we would like to rebalance to allocate a certain amount
+            # into them, then we wouldn't actually know the resulting supply rate accurately
             (nextLiquidityRate, _, _) = retry_with_backoff(
                 self._strategy_contract.functions.calculateInterestRates(
                     (
                         self._reserve_data.unbacked,
-                        int(amount * 10**decimals),
+                        int(amount * 10**self._decimals),
                         0,
                         self._nextTotalStableDebt,
                         self._totalVariableDebt,
                         self._nextAvgStableBorrowRate,
-                        reserveFactor,
+                        self._reserveFactor,
                         self._underlying_asset_address,
                         self._atoken_contract.address,
                     )

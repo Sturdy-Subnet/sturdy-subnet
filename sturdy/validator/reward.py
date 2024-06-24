@@ -267,6 +267,29 @@ def _get_rewards(
     return adjusted_rewards
 
 
+def calculate_apy(
+    allocations: Dict[str, float],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+    ],
+):
+    """
+    Calculates immediate projected yields given intial assets and pools, pool history, and number of timesteps
+    """
+
+    # calculate projected yield
+    initial_balance = assets_and_pools["total_assets"]
+    pools = assets_and_pools["pools"]
+    pct_yield = 0
+    for uid, pool in pools.items():
+        allocation = allocations[uid]
+        pool_yield = allocation * pool.supply_rate(allocation)
+        pct_yield += pool_yield
+    pct_yield /= initial_balance
+
+    return pct_yield
+
+
 def calculate_aggregate_apy(
     allocations: Dict[str, float],
     assets_and_pools: Dict[
@@ -287,14 +310,7 @@ def calculate_aggregate_apy(
         curr_yield = 0
         for uid, allocs in allocations.items():
             pool_data = pools[uid]
-            pool_yield = 0.0
-            if pool_type == POOL_TYPES.DEFAULT:
-                pool_yield = allocs * pool_data.supply_rate
-            # TODO: right now this only supports aave-based pools
-            # we assume we only want immediate apy
-            else:
-                pool_yield = pool_data.supply_rate(allocs)
-                return pool_yield
+            pool_yield = allocs * pool_data.supply_rate
             curr_yield += pool_yield
         pct_yield += curr_yield
 
@@ -337,6 +353,15 @@ def get_rewards(
     bt.logging.debug(
         f"Running simulator for {self.simulator.timesteps} timesteps for each allocation..."
     )
+
+    # TODO: assuming that we are only getting immediate apy for organic chainbasedpool requests
+    pools_to_scan = init_assets_and_pools["pools"]
+    # update reserves given allocations
+    if pool_type == POOL_TYPES.AAVE_V3:
+        for _, pool in pools_to_scan.items():
+            pool.sync(self.w3)
+
+    resulting_apy = 0.0
     for response_idx, response in enumerate(responses):
         # reset simulator for next run
         self.simulator.reset()
@@ -360,45 +385,43 @@ def get_rewards(
             apys[miner_uid] = sys.float_info.min
             continue
 
-        # miner does not appear to be cheating - so we init simulator data
-        self.simulator.init_data(
-            init_assets_and_pools=copy.deepcopy(init_assets_and_pools),
-            init_allocations=allocations,
-        )
+        if pool_type == POOL_TYPES.DEFAULT:
+            try:
+                # miner does not appear to be cheating - so we init simulator data
+                self.simulator.init_data(
+                    init_assets_and_pools=copy.deepcopy(init_assets_and_pools),
+                    init_allocations=allocations,
+                )
+                self.simulator.update_reserves_with_allocs()
+            except Exception as e:
+                bt.logging.error(e)
+                bt.logging.error(
+                    "Failed to update reserves with miner allocations - PENALIZING MINER"
+                )
+                miner_uid = uids[response_idx]
+                apys[miner_uid] = sys.float_info.min
+                continue
 
-        # TODO: assuming that we are only getting immediate apy for organic chainbasedpool requests
-        pools_to_scan = self.simulator.pool_history[0]
-        # update reserves given allocations
-        match pool_type:
-            case POOL_TYPES.AAVE_V3:
-                for _, pool in pools_to_scan.items():
-                    pool.sync(self.w3)
-            case _:
-                try:
-                    self.simulator.update_reserves_with_allocs()
-                except Exception as e:
-                    bt.logging.error(e)
-                    bt.logging.error(
-                        "Failed to update reserves with miner allocations - PENALIZING MINER"
-                    )
-                    miner_uid = uids[response_idx]
-                    apys[miner_uid] = sys.float_info.min
-                    continue
+            self.simulator.run()
 
-                self.simulator.run()
+            resulting_apy = calculate_aggregate_apy(
+                allocations,
+                init_assets_and_pools,
+                self.simulator.timesteps,
+                self.simulator.pool_history,
+                pool_type,
+            )
 
-        aggregate_apy = calculate_aggregate_apy(
-            allocations,
-            init_assets_and_pools,
-            self.simulator.timesteps,
-            self.simulator.pool_history,
-            pool_type,
-        )
+        else:
+            resulting_apy = calculate_apy(
+                allocations,
+                init_assets_and_pools,
+            )
 
-        if aggregate_apy > max_apy:
-            max_apy = aggregate_apy
+        if resulting_apy > max_apy:
+            max_apy = resulting_apy
 
-        apys[uids[response_idx]] = aggregate_apy
+        apys[uids[response_idx]] = resulting_apy
 
     axon_times = get_response_times(
         uids=uids, responses=responses, timeout=QUERY_TIMEOUT
