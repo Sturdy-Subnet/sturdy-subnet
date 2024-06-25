@@ -154,14 +154,15 @@ async def api_key_validator(request, call_next):
 core_validator = None
 
 
-@app.get("/test")
-async def test():
-    return {"Hello": "World"}
-
-
 @app.get("/vali")
 async def vali():
     ret = {"step": core_validator.step, "config": core_validator.config}
+    return ret
+
+
+@app.get("/status")
+async def status():
+    ret = {"status": "OK"}
     return ret
 
 
@@ -200,7 +201,10 @@ async def allocate(body: AllocateAssetsRequest):
         synapse.assets_and_pools["pools"] = new_pools
 
     result = await query_and_score_miners(
-        core_validator, pool_type=synapse.type, assets_and_pools=synapse.assets_and_pools, organic=True
+        core_validator,
+        pool_type=synapse.type,
+        assets_and_pools=synapse.assets_and_pools,
+        organic=True,
     )
     ret = AllocateAssetsResponse(allocations=result)
     return ret
