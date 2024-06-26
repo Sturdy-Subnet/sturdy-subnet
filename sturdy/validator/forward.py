@@ -77,7 +77,7 @@ async def query_multiple_miners(
 
 async def query_and_score_miners(
     self,
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
+    assets_and_pools: Dict[str, Union[Dict[str, int], int]] = None,
     organic: bool = False,
     pool_type: POOL_TYPES = POOL_TYPES.DEFAULT,
 ) -> Dict[int, AllocInfo]:

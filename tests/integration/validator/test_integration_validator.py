@@ -35,7 +35,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.347,
                     optimal_util_rate=0.9,
                     pool_id="0",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "1": BasePool(
                     base_rate=0.01,
@@ -44,7 +44,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.187,
                     optimal_util_rate=0.9,
                     pool_id="1",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "2": BasePool(
                     base_rate=0.02,
@@ -53,7 +53,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.662,
                     optimal_util_rate=0.9,
                     pool_id="2",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "3": BasePool(
                     base_rate=0.01,
@@ -62,7 +62,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.386,
                     optimal_util_rate=0.9,
                     pool_id="3",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "4": BasePool(
                     base_rate=0.03,
@@ -71,7 +71,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.163,
                     optimal_util_rate=0.65,
                     pool_id="4",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "5": BasePool(
                     base_rate=0.05,
@@ -80,7 +80,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.232,
                     optimal_util_rate=0.75,
                     pool_id="5",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "6": BasePool(
                     base_rate=0.01,
@@ -89,7 +89,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.997,
                     optimal_util_rate=0.8,
                     pool_id="6",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "7": BasePool(
                     base_rate=0.02,
@@ -98,7 +98,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.543,
                     optimal_util_rate=0.75,
                     pool_id="7",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "8": BasePool(
                     base_rate=0.01,
@@ -107,7 +107,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.352,
                     optimal_util_rate=0.8,
                     pool_id="8",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
                 "9": BasePool(
                     base_rate=0.04,
@@ -116,7 +116,7 @@ class TestValidator(IsolatedAsyncioTestCase):
                     kink_slope=0.617,
                     optimal_util_rate=0.8,
                     pool_id="9",
-                    reserve_size=1.0,
+                    reserve_size=1e18,
                 ),
             },
             "total_assets": 2.0,

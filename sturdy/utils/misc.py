@@ -120,15 +120,15 @@ def supply_rate(util_rate: float, pool: Dict) -> float:
 
 
 def check_allocations(
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
-    allocations: Dict[str, float],
+    assets_and_pools: Dict[str, Union[Dict[str, int], int]],
+    allocations: Dict[str, int],
 ) -> bool:
     """
     Checks allocations from miner.
 
     Args:
-    - assets_and_pools (Dict[str, Union[Dict[str, float], float]]): The assets and pools which the allocations are for.
-    - allocations (Dict[str, float]): The allocations to validate.
+    - assets_and_pools (Dict[str, Union[Dict[str, int], int]]): The assets and pools which the allocations are for.
+    - allocations (Dict[str, int]): The allocations to validate.
 
     Returns:
     - bool: Represents if allocations are valid.
@@ -140,7 +140,7 @@ def check_allocations(
 
     # Ensure the 'total_assets' key exists in assets_and_pools and is a valid number
     to_allocate = assets_and_pools.get("total_assets")
-    if to_allocate is None or not isinstance(to_allocate, (int, float)):
+    if to_allocate is None or not isinstance(to_allocate, int):
         return False
 
     to_allocate = Decimal(str(to_allocate))

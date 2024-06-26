@@ -13,9 +13,9 @@ OPTIMAL_UTIL_STEP = 0.05
 MIN_UTIL_RATE = 0.55
 MAX_UTIL_RATE = 0.95
 UTIL_RATE_STEP = 0.05
-MIN_TOTAL_ASSETS = 0.5
-MAX_TOTAL_ASSETS = 3.0
-TOTAL_ASSETS_STEP = 0.1
+MIN_TOTAL_ASSETS = 500e18  # 500 when converted from wei -> ether unit
+MAX_TOTAL_ASSETS = 3000e18  # 3000
+TOTAL_ASSETS_STEP = 100e18  # 100
 CHUNK_RATIO = 0.01  # chunk size as a percentage of total assets allocated during each iteration of greedy allocation algorithm
 GREEDY_SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
@@ -27,7 +27,7 @@ TIMESTEPS_STEP = 5
 MIN_STOCHASTICITY = 0.02  # min stochasticity
 MAX_STOCHASTICITY = 0.05  # max stochasticity
 STOCHASTICITY_STEP = 0.005
-POOL_RESERVE_SIZE = 1.0
+POOL_RESERVE_SIZE = 1000e18  # 1000
 
 QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 10  # timeout (seconds)

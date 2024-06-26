@@ -30,9 +30,9 @@ class Simulator(object):
     def init_data(
         self,
         init_assets_and_pools: Dict[
-            str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+            str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
         ] = None,
-        init_allocations: Dict[str, float] = None,
+        init_allocations: Dict[str, int] = None,
     ):
         if self.rng_state_container is None or self.init_rng is None:
             raise RuntimeError(

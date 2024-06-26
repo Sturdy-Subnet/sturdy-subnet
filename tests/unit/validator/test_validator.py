@@ -1,7 +1,6 @@
 import unittest
 from unittest import IsolatedAsyncioTestCase
 import torch
-import sys
 
 from sturdy.pools import BasePool
 from sturdy.protocol import AllocateAssets
@@ -29,108 +28,108 @@ class TestValidator(IsolatedAsyncioTestCase):
                 "0": BasePool(
                     base_rate=0.03,
                     base_slope=0.072,
-                    borrow_amount=0.85,
+                    borrow_amount=int(0.85e18),
                     kink_slope=0.347,
                     optimal_util_rate=0.9,
                     pool_id="0",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "1": BasePool(
                     base_rate=0.01,
                     base_slope=0.011,
-                    borrow_amount=0.55,
+                    borrow_amount=int(0.55e18),
                     kink_slope=0.187,
                     optimal_util_rate=0.9,
                     pool_id="1",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "2": BasePool(
                     base_rate=0.02,
                     base_slope=0.067,
-                    borrow_amount=0.7,
+                    borrow_amount=int(0.7e18),
                     kink_slope=0.662,
                     optimal_util_rate=0.9,
                     pool_id="2",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "3": BasePool(
                     base_rate=0.01,
                     base_slope=0.044,
-                    borrow_amount=0.7,
+                    borrow_amount=int(0.7e18),
                     kink_slope=0.386,
                     optimal_util_rate=0.9,
                     pool_id="3",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "4": BasePool(
                     base_rate=0.03,
                     base_slope=0.044,
-                    borrow_amount=0.75,
+                    borrow_amount=int(0.75e18),
                     kink_slope=0.163,
                     optimal_util_rate=0.65,
                     pool_id="4",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "5": BasePool(
                     base_rate=0.05,
                     base_slope=0.021,
-                    borrow_amount=0.85,
+                    borrow_amount=int(0.85e18),
                     kink_slope=0.232,
                     optimal_util_rate=0.75,
                     pool_id="5",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "6": BasePool(
                     base_rate=0.01,
                     base_slope=0.062,
-                    borrow_amount=0.7,
+                    borrow_amount=int(0.7e18),
                     kink_slope=0.997,
                     optimal_util_rate=0.8,
                     pool_id="6",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "7": BasePool(
                     base_rate=0.02,
                     base_slope=0.098,
-                    borrow_amount=0.9,
+                    borrow_amount=int(0.9e18),
                     kink_slope=0.543,
                     optimal_util_rate=0.75,
                     pool_id="7",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "8": BasePool(
                     base_rate=0.01,
                     base_slope=0.028,
-                    borrow_amount=0.55,
+                    borrow_amount=int(0.55e18),
                     kink_slope=0.352,
                     optimal_util_rate=0.8,
                     pool_id="8",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
                 "9": BasePool(
                     base_rate=0.04,
                     base_slope=0.066,
-                    borrow_amount=0.7,
+                    borrow_amount=int(0.7e18),
                     kink_slope=0.617,
                     optimal_util_rate=0.8,
                     pool_id="9",
-                    reserve_size=1.0,
+                    reserve_size=1000e18,
                 ),
             },
-            "total_assets": 2.0,
+            "total_assets": int(2000e18),
         }
 
         cls.allocations = {
-            "0": 0.71358786,
-            "1": 0.0,
-            "2": 0.32651705,
-            "3": 0.14316355,
-            "4": 0.28526227,
-            "5": 0.22716462,
-            "6": 0.07140061,
-            "7": 0.23290404,
-            "8": 0.0,
-            "9": 0.0,
+            "0": int(0.71358786e18),
+            "1": int(0),
+            "2": int(0.32651705e18),
+            "3": int(0.14316355e18),
+            "4": int(0.28526227e18),
+            "5": int(0.22716462e18),
+            "6": int(0.07140061e18),
+            "7": int(0.23290404e18),
+            "8": int(0),
+            "9": int(0)
         }
 
         cls.validator.simulator.initialize(timesteps=50)
@@ -205,8 +204,8 @@ class TestValidator(IsolatedAsyncioTestCase):
         assets_and_pools = copy.deepcopy(self.assets_and_pools)
 
         allocations = copy.deepcopy(self.allocations)
-        # increase one of the allocations by +1  -> clearly this means the miner is cheating!!!
-        allocations["0"] += 1.0
+        # increase one of the allocations by +10000  -> clearly this means the miner is cheating!!!
+        allocations["0"] += 10000e18
 
         validator.simulator.reset()
         validator.simulator.init_data(
@@ -249,7 +248,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         for _, allocInfo in allocs.items():
-            self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
+            self.assertEqual(allocInfo["apy"], 0)
 
         # rewards should all be the same (0)
         self.assertEqual(all(rewards), 0)
@@ -311,7 +310,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         for _, allocInfo in allocs.items():
-            self.assertAlmostEqual(allocInfo["apy"], sys.float_info.min, places=18)
+            self.assertEqual(allocInfo["apy"], 0)
 
         # rewards should all be the same (0)
         self.assertEqual(all(rewards), 0)

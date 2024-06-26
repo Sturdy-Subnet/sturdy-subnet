@@ -4,6 +4,7 @@ from unittest import TestCase
 from sturdy.protocol import AllocateAssets
 from sturdy.pools import generate_assets_and_pools
 from sturdy.algo import greedy_allocation_algorithm
+from sturdy.utils.misc import check_allocations
 
 
 class TestGreedyAlgorithm(TestCase):
@@ -14,6 +15,7 @@ class TestGreedyAlgorithm(TestCase):
         synapse = AllocateAssets(assets_and_pools=assets_and_pools)
         allocations = greedy_allocation_algorithm(synapse=synapse)
         self.assertLessEqual(sum(allocations.values()), total_assets)
+        self.assertTrue(check_allocations(assets_and_pools, allocations))
 
 
 if __name__ == "__main__":

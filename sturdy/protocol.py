@@ -26,7 +26,7 @@ from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
 
 class AllocInfo(TypedDict):
     apy: str
-    allocations: Union[Dict[str, float], None]
+    allocations: Union[Dict[str, int], None]
 
 
 class AllocateAssetsRequest(BaseModel):
@@ -37,7 +37,7 @@ class AllocateAssetsRequest(BaseModel):
         default=POOL_TYPES.DEFAULT, required=True, description="type of pool"
     )
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
         ...,
         required=True,
@@ -74,7 +74,7 @@ class AllocateAssetsBase(BaseModel):
         default=POOL_TYPES.DEFAULT, required=True, description="type of pool"
     )
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], float]
+        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
         ...,
         required=True,
@@ -82,7 +82,7 @@ class AllocateAssetsBase(BaseModel):
     )
 
     # Optional request output, filled by recieving axon.
-    allocations: Optional[Dict[str, float]] = Field(
+    allocations: Optional[Dict[str, int]] = Field(
         None,
         description="allocations produce by miners",
     )

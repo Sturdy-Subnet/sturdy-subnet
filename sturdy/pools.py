@@ -49,8 +49,10 @@ class BasePoolModel(BaseModel):
     optimal_util_rate: float = Field(
         ..., required=True, description="optimal utilisation rate"
     )
-    borrow_amount: float = Field(..., required=True, description="borrow amount")
-    reserve_size: float = Field(..., required=True, description="pool reserve size")
+    borrow_amount: int = Field(..., required=True, description="borrow amount in wei")
+    reserve_size: int = Field(
+        ..., required=True, description="pool reserve size in wei"
+    )
 
     @root_validator
     def check_params(cls, values):
@@ -401,12 +403,13 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
                 OPTIMAL_UTIL_STEP,
                 rng_gen=rng_gen,
             ),  # optimal util rate - after which the kink slope kicks in
-            borrow_amount=format_num_prec(
-                POOL_RESERVE_SIZE
-                * randrange_float(
-                    MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen=rng_gen
-                )
-            ),  # initial borrowed amount from pool
+            borrow_amount=int(
+                format_num_prec(
+                    POOL_RESERVE_SIZE
+                    * randrange_float(
+                        MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen=rng_gen
+                    )
+                )),  # initial borrowed amount from pool
             reserve_size=POOL_RESERVE_SIZE,
         )
         for x in range(NUM_POOLS)
