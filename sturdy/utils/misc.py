@@ -20,7 +20,7 @@ import time
 import numpy as np
 from pydantic import BaseModel
 import bittensor as bt
-from sturdy.constants import GREEDY_SIG_FIGS, RESERVE_FACTOR_MASK, RESERVE_FACTOR_START_BIT_POSITION
+from sturdy.constants import SIG_FIGS, RESERVE_FACTOR_MASK, RESERVE_FACTOR_START_BIT_POSITION
 from math import floor
 from typing import Callable, Dict, Any, Type, Union
 from functools import lru_cache, update_wrapper
@@ -34,8 +34,8 @@ def randrange_float(
     start,
     stop,
     step,
-    sig: int = GREEDY_SIG_FIGS,
-    max_prec: int = GREEDY_SIG_FIGS,
+    sig: int = SIG_FIGS,
+    max_prec: int = SIG_FIGS,
     rng_gen=np.random,
 ):
     num_steps = int((stop - start) / step)
@@ -97,7 +97,7 @@ def get_synapse_from_body(
 
 
 def format_num_prec(
-    num: float, sig: int = GREEDY_SIG_FIGS, max_prec: int = GREEDY_SIG_FIGS
+    num: float, sig: int = SIG_FIGS, max_prec: int = SIG_FIGS
 ) -> float:
     return float(f"{{0:.{max_prec}f}}".format(float(format(num, f".{sig}f"))))
 

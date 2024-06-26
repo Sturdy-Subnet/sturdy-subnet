@@ -16,8 +16,7 @@ UTIL_RATE_STEP = 0.05
 MIN_TOTAL_ASSETS = 500e18  # 500 when converted from wei -> ether unit
 MAX_TOTAL_ASSETS = 3000e18  # 3000
 TOTAL_ASSETS_STEP = 100e18  # 100
-CHUNK_RATIO = 0.01  # chunk size as a percentage of total assets allocated during each iteration of greedy allocation algorithm
-GREEDY_SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
+SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
 REVERSION_SPEED = 0.1  # reversion speed to median borrow rate of pools
 MIN_TIMESTEPS = 50

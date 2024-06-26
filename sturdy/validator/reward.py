@@ -307,7 +307,7 @@ def calculate_aggregate_apy(
         curr_yield = 0
         for uid, allocs in allocations.items():
             pool_data = pools[uid]
-            pool_yield = allocs * pool_data.supply_rate
+            pool_yield = allocs * pool_data.supply_rate / 365
             curr_yield += pool_yield
         pct_yield += curr_yield
 
