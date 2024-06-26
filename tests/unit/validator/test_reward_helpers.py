@@ -55,8 +55,8 @@ class TestRewardFunctions(unittest.TestCase):
         self.assertEqual(result, expected_output)
 
     def test_reward_miner_apy_normal(self):
-        result = reward_miner_apy(query=1, max_apy=int(0.05e18), miner_apy=int(0.03e18))
-        expected = Web3.to_wei((3e16) / (5e16), "ether")
+        result = reward_miner_apy(query=1, max_apy=0.05, miner_apy=0.03)
+        expected = 0.03 / 0.05
         self.assertEqual(result, expected)
 
     def test_reward_miner_apy_zero_division(self):

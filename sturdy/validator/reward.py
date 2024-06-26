@@ -91,7 +91,8 @@ def reward_miner_apy(
     # Calculate the adjusted APY reward
     if max_apy <= 0:
         return 0
-    return Web3.to_wei(miner_apy / max_apy, "ether")
+
+    return (miner_apy) / (max_apy)
 
 
 def calculate_penalties(
