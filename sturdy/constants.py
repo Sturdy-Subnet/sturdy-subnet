@@ -32,10 +32,6 @@ POOL_RESERVE_SIZE = 1.0
 QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 10  # timeout (seconds)
 
-# latency reward curve scaling parameters
-STEEPNESS = 1.0
-DIV_FACTOR = 1.5  # a scaling factor
-
 # The following constants are for different pool models
 # Aave
 RESERVE_FACTOR_START_BIT_POSITION = 64
