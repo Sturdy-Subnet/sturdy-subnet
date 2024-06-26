@@ -113,7 +113,9 @@ def calculate_penalties(
 
 def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties):
     rewards = torch.zeros(len(miners))
-    max_penalty = max(penalties.values()) + 1  # Add 1 to avoid division by zero
+    max_penalty = max(penalties.values())
+    if max_penalty == 0:
+        return rewards_apy
 
     for idx, miner_id in enumerate(miners):
         # Calculate penalty adjustment
@@ -160,15 +162,18 @@ def get_similarity_matrix(
         _alloc_a = info_a["allocations"]
         alloc_a = np.array(
             list(format_allocations(_alloc_a, assets_and_pools).values()),
-            dtype=np.float32
+            dtype=np.float32,
         )
         similarity_matrix[miner_a] = {}
         for miner_b, info_b in apys_and_allocations.items():
             if miner_a != miner_b:
                 _alloc_b = info_b["allocations"]
+                if _alloc_a is None or _alloc_b is None:
+                    similarity_matrix[miner_a][miner_b] = float("inf")
+                    continue
                 alloc_b = np.array(
                     list(format_allocations(_alloc_b, assets_and_pools).values()),
-                    dtype=np.float32
+                    dtype=np.float32,
                 )
                 similarity_matrix[miner_a][miner_b] = np.linalg.norm(
                     alloc_a - alloc_b
@@ -185,6 +190,7 @@ def adjust_rewards_for_plagiarism(
     ],
     uids: List,
     axon_times: Dict[str, float],
+    similarity_threshold: float = SIMILARITY_THRESHOLD,
 ) -> torch.FloatTensor:
     """
     Adjusts the annual percentage yield (APY) rewards for miners based on the similarity of their allocations
@@ -217,9 +223,10 @@ def adjust_rewards_for_plagiarism(
     """
     # Step 1: Calculate pairwise similarity (e.g., using Euclidean distance)
     similarity_matrix = get_similarity_matrix(apys_and_allocations, assets_and_pools)
+    bt.logging.debug(f"similarity matrix:\n{similarity_matrix}")
 
     # Step 2: Apply penalties considering axon times
-    penalties = calculate_penalties(similarity_matrix, axon_times)
+    penalties = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
 
     # Step 3: Calculate final rewards with adjusted penalties
     rewards = calculate_rewards_with_adjusted_penalties(uids, rewards_apy, penalties)
@@ -312,8 +319,6 @@ def calculate_aggregate_apy(
         pct_yield += curr_yield
 
     pct_yield /= initial_balance
-    if timesteps == 0:
-        return pct_yield * 365
     aggregate_apy = (
         pct_yield / timesteps
     ) * 365  # for simplicity each timestep is a day in the simulator

@@ -83,7 +83,7 @@ async def query_and_score_miners(
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
     if organic:
-        self.simulator.initialize(timesteps=0)
+        self.simulator.initialize(timesteps=1)
     else:
         self.simulator.initialize()
     # initialize simulator data
