@@ -75,7 +75,7 @@ def format_allocations(
     # pad the allocations
     for pool_id in pools.keys():
         if pool_id not in allocs:
-            allocs[pool_id] = 0.0
+            allocs[pool_id] = 0
 
     # sort the allocations by pool id
     formatted_allocs = {pool_id: allocs[pool_id] for pool_id in sorted(allocs.keys())}
@@ -156,16 +156,18 @@ def get_similarity_matrix(
     similarity_matrix = {}
     total_assets = assets_and_pools["total_assets"]
     for miner_a, info_a in apys_and_allocations.items():
-        _alloc_a = info_a["allocations"]
+        _alloc_a = info_a["allocations"].copy()
         alloc_a = np.array(
-            list(format_allocations(_alloc_a, assets_and_pools).values())
+            list(format_allocations(_alloc_a, assets_and_pools).values()),
+            dtype=np.float32
         )
         similarity_matrix[miner_a] = {}
         for miner_b, info_b in apys_and_allocations.items():
             if miner_a != miner_b:
-                _alloc_b = info_b["allocations"]
+                _alloc_b = info_b["allocations"].copy()
                 alloc_b = np.array(
-                    list(format_allocations(_alloc_b, assets_and_pools).values())
+                    list(format_allocations(_alloc_b, assets_and_pools).values()),
+                    dtype=np.float32
                 )
                 similarity_matrix[miner_a][miner_b] = np.linalg.norm(
                     alloc_a - alloc_b
