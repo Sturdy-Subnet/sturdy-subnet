@@ -223,7 +223,6 @@ def adjust_rewards_for_plagiarism(
     """
     # Step 1: Calculate pairwise similarity (e.g., using Euclidean distance)
     similarity_matrix = get_similarity_matrix(apys_and_allocations, assets_and_pools)
-    bt.logging.debug(f"similarity matrix:\n{similarity_matrix}")
 
     # Step 2: Apply penalties considering axon times
     penalties = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
