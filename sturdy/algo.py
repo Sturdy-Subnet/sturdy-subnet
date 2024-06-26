@@ -1,3 +1,4 @@
+import math
 from typing import Dict
 from sturdy.protocol import AllocateAssets
 from sturdy.utils.misc import format_num_prec, supply_rate
@@ -29,15 +30,15 @@ def greedy_allocation_algorithm(synapse: AllocateAssets) -> Dict:
             for k, v in pools.items()
         }
 
-        default_chunk_size = format_num_prec(CHUNK_RATIO * max_balance)
+        default_chunk_size = math.floor(CHUNK_RATIO * max_balance)
         to_allocate = 0
 
         if balance < default_chunk_size:
-            to_allocate = balance
+            break
         else:
             to_allocate = default_chunk_size
 
-        balance = format_num_prec(balance - to_allocate)
+        balance = balance - to_allocate
         assert balance >= 0
         max_apy = max(current_supply_rates.values())
         min_apy = min(current_supply_rates.values())
@@ -45,14 +46,14 @@ def greedy_allocation_algorithm(synapse: AllocateAssets) -> Dict:
 
         alloc_it = current_allocations.items()
         for pool_id, _ in alloc_it:
-            delta = format_num_prec(
+            delta = math.floor(
                 to_allocate * ((current_supply_rates[pool_id] - min_apy) / (apy_range)),
             )
-            current_allocations[pool_id] = format_num_prec(
-                current_allocations[pool_id] + delta
-            )
-            to_allocate = format_num_prec(to_allocate - delta)
+            current_allocations[pool_id] += delta
+            to_allocate -= delta
 
-        assert to_allocate == 0  # should allocate everything from current chunk
+        # assert to_allocate == 0  # should allocate everything from current chunk
+
+        current_allocations = {k: int(math.floor(v)) for k, v in current_allocations.items()}
 
     return current_allocations

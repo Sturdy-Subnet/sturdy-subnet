@@ -15,6 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import math
 from typing import Dict, Union
 from enum import Enum
 
@@ -417,9 +418,9 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
 
     pools = {str(pool.pool_id): pool for pool in pools}
 
-    assets_and_pools["total_assets"] = randrange_float(
+    assets_and_pools["total_assets"] = math.floor(randrange_float(
         MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen
-    )
+    ))
     assets_and_pools["pools"] = pools
 
     return assets_and_pools
