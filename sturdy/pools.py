@@ -41,19 +41,13 @@ from sturdy.constants import *
 class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
 
-    pool_id: str = Field(..., required=True, description="uid of pool")
-    base_rate: float = Field(..., required=True, description="base interest rate")
-    base_slope: float = Field(
-        ..., required=True, description="base interest rate slope"
-    )
-    kink_slope: float = Field(..., required=True, description="kink slope")
-    optimal_util_rate: float = Field(
-        ..., required=True, description="optimal utilisation rate"
-    )
-    borrow_amount: int = Field(..., required=True, description="borrow amount in wei")
-    reserve_size: int = Field(
-        ..., required=True, description="pool reserve size in wei"
-    )
+    pool_id: str = Field(..., description="uid of pool")
+    base_rate: float = Field(..., description="base interest rate")
+    base_slope: float = Field(..., description="base interest rate slope")
+    kink_slope: float = Field(..., description="kink slope")
+    optimal_util_rate: float = Field(..., description="optimal utilisation rate")
+    borrow_amount: int = Field(..., description="borrow amount in wei")
+    reserve_size: int = Field(..., description="pool reserve size in wei")
 
     @root_validator
     def check_params(cls, values):
@@ -118,10 +112,8 @@ class ChainBasedPoolModel(BaseModel):
         contract_address: (str),
     """
 
-    pool_id: str = Field(..., required=True, description="uid of pool")
-    contract_address: str = Field(
-        ..., required=True, description="address of contract to call"
-    )
+    pool_id: str = Field(..., description="uid of pool")
+    contract_address: str = Field(..., description="address of contract to call")
 
     @root_validator
     def check_params(cls, values):
@@ -410,7 +402,8 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
                     * randrange_float(
                         MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen=rng_gen
                     )
-                )),  # initial borrowed amount from pool
+                )
+            ),  # initial borrowed amount from pool
             reserve_size=POOL_RESERVE_SIZE,
         )
         for x in range(NUM_POOLS)
@@ -418,9 +411,11 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
 
     pools = {str(pool.pool_id): pool for pool in pools}
 
-    assets_and_pools["total_assets"] = math.floor(randrange_float(
-        MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen
-    ))
+    assets_and_pools["total_assets"] = math.floor(
+        randrange_float(
+            MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen
+        )
+    )
     assets_and_pools["pools"] = pools
 
     return assets_and_pools

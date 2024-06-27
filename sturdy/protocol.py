@@ -34,13 +34,12 @@ class AllocateAssetsRequest(BaseModel):
         use_enum_values = True
 
     type: POOL_TYPES = Field(
-        default=POOL_TYPES.DEFAULT, required=True, description="type of pool"
+        default=POOL_TYPES.DEFAULT, description="type of pool"
     )
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
         ...,
-        required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
 
@@ -51,7 +50,6 @@ class AllocateAssetsResponse(BaseModel):
 
     allocations: Dict[str, AllocInfo] = Field(
         ...,
-        required=True,
         description="allocations produce by miners",
     )
 
@@ -69,15 +67,13 @@ class AllocateAssetsBase(BaseModel):
     class Config:
         use_enum_values = True
 
-    # Required request input, filled by sending dendrite caller.
     type: POOL_TYPES = Field(
-        default=POOL_TYPES.DEFAULT, required=True, description="type of pool"
+        default=POOL_TYPES.DEFAULT, description="type of pool"
     )
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
         ...,
-        required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
 

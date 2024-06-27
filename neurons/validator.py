@@ -166,7 +166,7 @@ async def status():
     return ret
 
 
-@app.post("/allocate")
+@app.post("/allocate", response_model=AllocateAssetsResponse)
 async def allocate(body: AllocateAssetsRequest):
     synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
     bt.logging.debug(f"Synapse:\n{synapse}")
