@@ -25,7 +25,7 @@ from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
 
 
 class AllocInfo(TypedDict):
-    apy: str
+    apy: int
     allocations: Union[Dict[str, int], None]
 
 
@@ -33,9 +33,7 @@ class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
 
-    type: POOL_TYPES = Field(
-        default=POOL_TYPES.DEFAULT, description="type of pool"
-    )
+    type: POOL_TYPES = Field(default=POOL_TYPES.DEFAULT, description="type of pool")
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
@@ -67,9 +65,7 @@ class AllocateAssetsBase(BaseModel):
     class Config:
         use_enum_values = True
 
-    type: POOL_TYPES = Field(
-        default=POOL_TYPES.DEFAULT, description="type of pool"
-    )
+    type: POOL_TYPES = Field(default=POOL_TYPES.DEFAULT, description="type of pool")
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(

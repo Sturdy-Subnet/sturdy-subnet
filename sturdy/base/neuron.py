@@ -115,10 +115,12 @@ class BaseNeuron(ABC):
         self.step = 0
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
+    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
+        ...
 
     @abstractmethod
-    def run(self): ...
+    def run(self):
+        ...
 
     def sync(self):
         """
@@ -132,7 +134,9 @@ class BaseNeuron(ABC):
             try:
                 self.resync_metagraph()
             except Exception as e:
-                bt.logging.error("There was an issue with trying to sync with the metagraph! See Error:")
+                bt.logging.error(
+                    "There was an issue with trying to sync with the metagraph! See Error:"
+                )
                 bt.logging.error(e)
 
         if self.should_set_weights():

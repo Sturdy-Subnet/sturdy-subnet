@@ -65,11 +65,11 @@ class TestAavePool(unittest.TestCase):
             ).call
         )
 
-        apy_before = reserve_data.currentLiquidityRate / 1e27
+        apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
         print(f"apy before supplying: {apy_before}")
 
         # calculate predicted future supply rate after supplying 100000 DAI
-        apy_after = pool.supply_rate(100000.0)
+        apy_after = pool.supply_rate(100000e18)
         print(f"apy after supplying 100000 DAI: {apy_after}")
         self.assertLess(apy_after, apy_before)
 

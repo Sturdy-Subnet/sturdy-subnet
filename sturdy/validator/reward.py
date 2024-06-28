@@ -22,10 +22,9 @@ import torch
 from typing import List, Dict, Tuple, Any, Union
 import copy
 
-from web3 import Web3
-
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
+from sturdy.utils.ethmath import wei_div, wei_mul
 from sturdy.utils.misc import check_allocations
 from sturdy.protocol import AllocInfo
 
@@ -286,11 +285,11 @@ def calculate_apy(
     pct_yield = 0
     for uid, pool in pools.items():
         allocation = allocations[uid]
-        pool_yield = allocation * pool.supply_rate(allocation)
+        pool_yield = wei_mul(allocation, pool.supply_rate(allocation))
         pct_yield += pool_yield
-    pct_yield /= initial_balance
+    pct_yield = wei_div(pct_yield, initial_balance)
 
-    return Web3.to_wei(pct_yield, "ether")
+    return pct_yield
 
 
 def calculate_aggregate_apy(
@@ -313,16 +312,16 @@ def calculate_aggregate_apy(
         curr_yield = 0
         for uid, allocs in allocations.items():
             pool_data = pools[uid]
-            pool_yield = allocs * pool_data.supply_rate / 365
+            pool_yield = wei_mul(allocs, pool_data.supply_rate)
             curr_yield += pool_yield
         pct_yield += curr_yield
 
-    pct_yield /= initial_balance
-    aggregate_apy = (
-        pct_yield / timesteps
-    ) * 365  # for simplicity each timestep is a day in the simulator
+    pct_yield = wei_div(pct_yield, initial_balance)
+    aggregate_apy = int(
+        pct_yield // timesteps
+    )  # for simplicity each timestep is a day in the simulator
 
-    return Web3.to_wei(aggregate_apy, "ether")
+    return aggregate_apy
 
 
 def get_rewards(

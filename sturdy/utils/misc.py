@@ -20,11 +20,17 @@ import time
 import numpy as np
 from pydantic import BaseModel
 import bittensor as bt
-from sturdy.constants import SIG_FIGS, RESERVE_FACTOR_MASK, RESERVE_FACTOR_START_BIT_POSITION
+from sturdy.constants import (
+    SIG_FIGS,
+    RESERVE_FACTOR_MASK,
+    RESERVE_FACTOR_START_BIT_POSITION,
+)
 from math import floor
 from typing import Callable, Dict, Any, Type, Union
 from functools import lru_cache, update_wrapper
 from decimal import Decimal
+
+from sturdy.utils.ethmath import wei_div, wei_mul
 
 # TODO: cleanup functions - lay them out better across files?
 
@@ -96,27 +102,30 @@ def get_synapse_from_body(
     return synapse
 
 
-def format_num_prec(
-    num: float, sig: int = SIG_FIGS, max_prec: int = SIG_FIGS
-) -> float:
+def format_num_prec(num: float, sig: int = SIG_FIGS, max_prec: int = SIG_FIGS) -> float:
     return float(f"{{0:.{max_prec}f}}".format(float(format(num, f".{sig}f"))))
 
 
-def borrow_rate(util_rate: float, pool: Dict) -> float:
+def borrow_rate(util_rate, pool) -> int:
     interest_rate = (
-        pool.base_rate + (util_rate / pool.optimal_util_rate) * pool.base_slope
+        pool.base_rate
+        + wei_mul(wei_div(util_rate, pool.optimal_util_rate), pool.base_slope)
         if util_rate < pool.optimal_util_rate
         else pool.base_rate
         + pool.base_slope
-        + ((util_rate - pool.optimal_util_rate) / (1 - pool.optimal_util_rate))
-        * pool.kink_slope
+        + wei_mul(
+            wei_div(
+                (util_rate - pool.optimal_util_rate), (1e18 - pool.optimal_util_rate)
+            ),
+            pool.kink_slope,
+        )
     )
 
     return interest_rate
 
 
-def supply_rate(util_rate: float, pool: Dict) -> float:
-    return util_rate * borrow_rate(util_rate, pool)
+def supply_rate(util_rate, pool):
+    return wei_mul(util_rate, pool.borrow_rate)
 
 
 def check_allocations(

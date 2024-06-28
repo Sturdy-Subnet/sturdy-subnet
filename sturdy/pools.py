@@ -27,6 +27,7 @@ import numpy as np
 import bittensor as bt
 from pathlib import Path
 
+from sturdy.utils.ethmath import wei_div, wei_mul
 from sturdy.utils.misc import (
     randrange_float,
     format_num_prec,
@@ -42,10 +43,10 @@ class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
 
     pool_id: str = Field(..., description="uid of pool")
-    base_rate: float = Field(..., description="base interest rate")
-    base_slope: float = Field(..., description="base interest rate slope")
-    kink_slope: float = Field(..., description="kink slope")
-    optimal_util_rate: float = Field(..., description="optimal utilisation rate")
+    base_rate: int = Field(..., description="base interest rate")
+    base_slope: int = Field(..., description="base interest rate slope")
+    kink_slope: int = Field(..., description="kink slope")
+    optimal_util_rate: int = Field(..., description="optimal utilisation rate")
     borrow_amount: int = Field(..., description="borrow amount in wei")
     reserve_size: int = Field(..., description="pool reserve size in wei")
 
@@ -82,26 +83,32 @@ class BasePool(BasePoolModel):
     """
 
     @property
-    def util_rate(self) -> float:
-        return self.borrow_amount / self.reserve_size
+    def util_rate(self) -> int:
+        return wei_div(self.borrow_amount, self.reserve_size)
 
     @property
-    def borrow_rate(self) -> float:
+    def borrow_rate(self) -> int:
         util_rate = self.util_rate
         interest_rate = (
-            self.base_rate + (util_rate / self.optimal_util_rate) * self.base_slope
+            self.base_rate
+            + wei_mul(wei_div(util_rate, self.optimal_util_rate), self.base_slope)
             if util_rate < self.optimal_util_rate
             else self.base_rate
             + self.base_slope
-            + ((util_rate - self.optimal_util_rate) / (1 - self.optimal_util_rate))
-            * self.kink_slope
+            + wei_mul(
+                wei_div(
+                    (util_rate - self.optimal_util_rate),
+                    (1e18 - self.optimal_util_rate),
+                ),
+                self.kink_slope,
+            )
         )
 
         return interest_rate
 
     @property
     def supply_rate(self):
-        return self.util_rate * self.borrow_rate
+        return wei_mul(self.util_rate, self.borrow_rate)
 
 
 class ChainBasedPoolModel(BaseModel):
@@ -128,6 +135,9 @@ class ChainBasedPoolModel(BaseModel):
         raise NotImplementedError("pool_init() has not been implemented!")
 
     def sync(self, **args):
+        raise NotImplementedError("sync() has not been implemented!")
+
+    def supply_rate(self, **args):
         raise NotImplementedError("sync() has not been implemented!")
 
 
@@ -352,7 +362,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 self._strategy_contract.functions.calculateInterestRates(
                     (
                         self._reserve_data.unbacked,
-                        int(amount * 10**self._decimals),
+                        int((amount * 10**self._decimals) // 1e18),
                         0,
                         self._nextTotalStableDebt,
                         self._totalVariableDebt,
@@ -365,7 +375,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             )
 
             # return liquidity_rate / 1e27
-            return nextLiquidityRate / 1e27
+            return Web3.to_wei(nextLiquidityRate / 1e27, "ether")
 
         except Exception as e:
             bt.logging.error("Failed to retrieve supply apy!")
@@ -398,9 +408,14 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
             ),  # optimal util rate - after which the kink slope kicks in
             borrow_amount=int(
                 format_num_prec(
-                    POOL_RESERVE_SIZE
-                    * randrange_float(
-                        MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen=rng_gen
+                    wei_mul(
+                        POOL_RESERVE_SIZE,
+                        randrange_float(
+                            MIN_UTIL_RATE,
+                            MAX_UTIL_RATE,
+                            UTIL_RATE_STEP,
+                            rng_gen=rng_gen,
+                        ),
                     )
                 )
             ),  # initial borrowed amount from pool

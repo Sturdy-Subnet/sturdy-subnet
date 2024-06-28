@@ -5,6 +5,7 @@ from sturdy.pools import (
     generate_initial_allocations_for_pools,
 )
 from sturdy.constants import *
+from sturdy.utils.ethmath import wei_mul
 
 
 class TestPoolAndAllocGeneration(unittest.TestCase):
@@ -51,9 +52,9 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
 
                 self.assertTrue(hasattr(pool_info, "borrow_amount"))
                 self.assertTrue(
-                    MIN_UTIL_RATE * POOL_RESERVE_SIZE
+                    wei_mul(MIN_UTIL_RATE, POOL_RESERVE_SIZE)
                     <= pool_info.borrow_amount
-                    <= MAX_UTIL_RATE * POOL_RESERVE_SIZE
+                    <= wei_mul(MAX_UTIL_RATE, POOL_RESERVE_SIZE)
                 )
 
     def test_generate_initial_allocations_for_pools(self):

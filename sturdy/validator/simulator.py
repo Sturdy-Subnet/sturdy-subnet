@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Dict, Union
 
+from sturdy.utils.ethmath import wei_mul_arrays
 from sturdy.utils.misc import check_allocations
 from sturdy.pools import (
     BasePoolModel,
@@ -143,13 +144,13 @@ class Simulator(object):
 
         median_rate = np.median(curr_borrow_rates)  # Calculate the median borrow rate
         noise = self.rng_state_container.normal(
-            0, self.stochasticity, len(curr_borrow_rates)
+            0, self.stochasticity * 1e18, len(curr_borrow_rates)
         )  # Add some random noise
         rate_changes = (
-            -self.reversion_speed * (curr_borrow_rates - median_rate) + noise
+            -self.reversion_speed * ((curr_borrow_rates - median_rate) // 1e18) + noise
         )  # Mean reversion principle
-        new_borrow_amounts = (
-            curr_borrow_amounts + rate_changes * curr_borrow_amounts
+        new_borrow_amounts = curr_borrow_amounts + wei_mul_arrays(
+            rate_changes, curr_borrow_amounts
         )  # Update the borrow amounts
         amounts = np.clip(
             new_borrow_amounts, 0, curr_reserve_sizes
