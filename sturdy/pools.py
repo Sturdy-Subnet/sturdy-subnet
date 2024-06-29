@@ -352,18 +352,29 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, amount: float) -> float:
+    def supply_rate(self, user_addr: str, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
-            # TODO: the returned supply rate is accurate only when we haven't already deposited anything into it
-            # i.e. if we already have some tokens in the pool, and we would like to rebalance to allocate a certain amount
-            # into them, then we wouldn't actually know the resulting supply rate accurately
+            already_deposited = int(
+                retry_with_backoff(
+                    self._atoken_contract.functions.balanceOf(
+                        Web3.to_checksum_address(user_addr)
+                    ).call
+                )
+                * 10**self._decimals
+                // 1e18
+            )
+
+            delta = amount - already_deposited
+            to_deposit = delta if delta > 0 else 0
+            to_remove = abs(delta) if delta < 0 else 0
+
             (nextLiquidityRate, _, _) = retry_with_backoff(
                 self._strategy_contract.functions.calculateInterestRates(
                     (
                         self._reserve_data.unbacked,
-                        int((amount * 10**self._decimals) // 1e18),
-                        0,
+                        int(to_deposit),
+                        int(to_remove),
                         self._nextTotalStableDebt,
                         self._totalVariableDebt,
                         self._nextAvgStableBorrowRate,
@@ -381,7 +392,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             bt.logging.error("Failed to retrieve supply apy!")
             bt.logging.error(e)
 
-        return 0.0
+        return 0
 
 
 # TODO: add different interest rate models in the future - we use a single simple model for now
