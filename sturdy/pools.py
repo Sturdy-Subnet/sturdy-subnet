@@ -120,6 +120,7 @@ class ChainBasedPoolModel(BaseModel):
     """
 
     pool_id: str = Field(..., description="uid of pool")
+    user_address: str = Field(..., description="address of the 'user' - used for various on-chain calls")
     contract_address: str = Field(..., description="address of contract to call")
 
     @root_validator
@@ -128,6 +129,8 @@ class ChainBasedPoolModel(BaseModel):
             raise ValueError("pool id is empty")
         if not Web3.is_address(values.get("contract_address")):
             raise ValueError("pool address is invalid!")
+        if not Web3.is_address(values.get("user_address")):
+            raise ValueError("user address is invalid!")
 
         return values
 

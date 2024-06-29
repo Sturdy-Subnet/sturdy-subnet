@@ -285,7 +285,7 @@ def calculate_apy(
     pct_yield = 0
     for uid, pool in pools.items():
         allocation = allocations[uid]
-        pool_yield = wei_mul(allocation, pool.supply_rate(allocation))
+        pool_yield = wei_mul(allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation))
         pct_yield += pool_yield
     pct_yield = wei_div(pct_yield, initial_balance)
 
