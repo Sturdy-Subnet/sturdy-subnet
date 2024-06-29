@@ -194,6 +194,7 @@ async def allocate(body: AllocateAssetsRequest):
                 pool_type=synapse.type,
                 web3_provider=core_validator.w3,
                 pool_id=pool.pool_id,
+                user_address=pool.user_address,  # TODO: is there a cleaner way to do this?
                 contract_address=pool.contract_address,
             )
             for uid, pool in pools.items()
