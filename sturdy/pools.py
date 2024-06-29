@@ -160,7 +160,7 @@ class PoolFactory:
             case POOL_TYPES.AAVE_V3:
                 return AaveV3DefaultInterestRatePool(**kwargs)
             case _:
-                raise ValueError(f"Unknown product type: {pool_type}")
+                raise ValueError(f"Unknown pool type: {pool_type}")
 
 
 class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):

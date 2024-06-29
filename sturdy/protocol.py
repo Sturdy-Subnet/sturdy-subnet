@@ -33,7 +33,7 @@ class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
 
-    type: POOL_TYPES = Field(default=POOL_TYPES.DEFAULT, description="type of pool")
+    pool_type: POOL_TYPES = Field(default=POOL_TYPES.DEFAULT, description="type of pool")
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
@@ -65,7 +65,7 @@ class AllocateAssetsBase(BaseModel):
     class Config:
         use_enum_values = True
 
-    type: POOL_TYPES = Field(default=POOL_TYPES.DEFAULT, description="type of pool")
+    pool_type: POOL_TYPES = Field(default=POOL_TYPES.DEFAULT, description="type of pool")
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
@@ -84,6 +84,6 @@ class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
         # TODO: figure out how to only show certain keys from pools and/or allocations
         return (
-            f"AllocateAssets(type={self.type}, assets_and_pools={self.assets_and_pools})"
+            f"AllocateAssets(pool_type={self.pool_type}, assets_and_pools={self.assets_and_pools})"
             f"allocations={self.allocations}"
         )

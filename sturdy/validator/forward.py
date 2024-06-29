@@ -106,7 +106,7 @@ async def query_and_score_miners(
     responses = await query_multiple_miners(
         self,
         AllocateAssets(
-            type=pool_type,
+            pool_type=pool_type,
             assets_and_pools=self.simulator.assets_and_pools,
             allocations=self.simulator.allocations,
         ),

@@ -171,11 +171,11 @@ async def allocate(body: AllocateAssetsRequest):
     synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
     bt.logging.debug(f"Synapse:\n{synapse}")
     pools = synapse.assets_and_pools["pools"]
-    if synapse.type == POOL_TYPES.DEFAULT:
+    if synapse.pool_type == POOL_TYPES.DEFAULT:
         bt.logging.debug("converting to BasePool...")
         new_pools = {
             uid: PoolFactory.create_pool(
-                pool_type=synapse.type,
+                pool_type=synapse.pool_type,
                 pool_id=pool.pool_id,
                 base_rate=pool.base_rate,
                 base_slope=pool.base_slope,
@@ -191,7 +191,7 @@ async def allocate(body: AllocateAssetsRequest):
         bt.logging.debug("converting to chain based pool...")
         new_pools = {
             uid: PoolFactory.create_pool(
-                pool_type=synapse.type,
+                pool_type=synapse.pool_type,
                 web3_provider=core_validator.w3,
                 pool_id=pool.pool_id,
                 user_address=pool.user_address,  # TODO: is there a cleaner way to do this?
@@ -203,7 +203,7 @@ async def allocate(body: AllocateAssetsRequest):
 
     result = await query_and_score_miners(
         core_validator,
-        pool_type=synapse.type,
+        pool_type=synapse.pool_type,
         assets_and_pools=synapse.assets_and_pools,
         organic=True,
     )
