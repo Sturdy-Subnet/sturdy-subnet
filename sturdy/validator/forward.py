@@ -21,8 +21,7 @@ import bittensor as bt
 from typing import List, Dict, Union
 import asyncio
 
-from sturdy.pools import POOL_TYPES
-from sturdy.protocol import AllocateAssets
+from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from sturdy.validator.reward import get_rewards
 from sturdy.protocol import AllocInfo
 from sturdy.constants import QUERY_TIMEOUT
@@ -78,11 +77,10 @@ async def query_multiple_miners(
 async def query_and_score_miners(
     self,
     assets_and_pools: Dict[str, Union[Dict[str, int], int]] = None,
-    organic: bool = False,
-    pool_type: POOL_TYPES = POOL_TYPES.DEFAULT,
+    request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
-    if organic:
+    if request_type is REQUEST_TYPES.ORGANIC:
         self.simulator.initialize(timesteps=1)
     else:
         self.simulator.initialize()
@@ -105,8 +103,9 @@ async def query_and_score_miners(
 
     responses = await query_multiple_miners(
         self,
+        # TODO: REWORK
         AllocateAssets(
-            pool_type=pool_type,
+            request_type=request_type,
             assets_and_pools=self.simulator.assets_and_pools,
             allocations=self.simulator.allocations,
         ),
@@ -121,12 +120,12 @@ async def query_and_score_miners(
     bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
     # Adjust the scores based on responses from miners.
+    # TODO: REWORK
     rewards, allocs = get_rewards(
         self,
         query=self.step,
         uids=active_uids,
         responses=responses,
-        pool_type=pool_type,
     )
 
     bt.logging.info(f"Scored responses: {rewards}")

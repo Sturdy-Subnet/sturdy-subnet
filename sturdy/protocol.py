@@ -16,12 +16,19 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+from enum import Enum
 from typing import Dict, Optional, Union
 from typing_extensions import TypedDict
 import bittensor as bt
 from pydantic import BaseModel, Field
+import web3
 
-from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
+from sturdy.pools import BasePoolModel, ChainBasedPoolModel
+
+
+class REQUEST_TYPES(int, Enum):
+    ORGANIC = 0
+    SYNTHETIC = 1
 
 
 class AllocInfo(TypedDict):
@@ -33,12 +40,18 @@ class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.DEFAULT, description="type of pool")
+    request_type: REQUEST_TYPES = Field(
+        default=REQUEST_TYPES.ORGANIC, description="type of request"
+    )
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
+    )
+    user_address: str = Field(
+        default=web3.constants.ADDRESS_ZERO,
+        description="address of the 'user' - used for various on-chain calls for organic requests",
     )
 
 
@@ -65,12 +78,18 @@ class AllocateAssetsBase(BaseModel):
     class Config:
         use_enum_values = True
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.DEFAULT, description="type of pool")
+    request_type: REQUEST_TYPES = Field(
+        default=REQUEST_TYPES.ORGANIC, description="type of request"
+    )
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
     ] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
+    )
+    user_address: str = Field(
+        default=web3.constants.ADDRESS_ZERO,
+        description="address of the 'user' - used for various on-chain calls",
     )
 
     # Optional request output, filled by recieving axon.
@@ -84,6 +103,6 @@ class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
         # TODO: figure out how to only show certain keys from pools and/or allocations
         return (
-            f"AllocateAssets(pool_type={self.pool_type}, assets_and_pools={self.assets_and_pools})"
+            f"AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools})"
             f"allocations={self.allocations}"
         )

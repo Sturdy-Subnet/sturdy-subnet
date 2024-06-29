@@ -26,7 +26,7 @@ from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
 from sturdy.utils.ethmath import wei_div, wei_mul
 from sturdy.utils.misc import check_allocations
-from sturdy.protocol import AllocInfo
+from sturdy.protocol import REQUEST_TYPES, AllocInfo
 
 
 def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, int]:
@@ -299,7 +299,6 @@ def calculate_aggregate_apy(
     ],
     timesteps: int,
     pool_history: Dict[str, Dict[str, Any]],
-    pool_type: POOL_TYPES = POOL_TYPES.DEFAULT,
 ):
     """
     Calculates aggregate yields given intial assets and pools, pool history, and number of timesteps
@@ -329,7 +328,6 @@ def get_rewards(
     query: int,
     uids: List[str],
     responses: List,
-    pool_type: POOL_TYPES = POOL_TYPES.DEFAULT,
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -357,8 +355,8 @@ def get_rewards(
     # TODO: assuming that we are only getting immediate apy for organic chainbasedpool requests
     pools_to_scan = init_assets_and_pools["pools"]
     # update reserves given allocations
-    if pool_type == POOL_TYPES.AAVE_V3:
-        for _, pool in pools_to_scan.items():
+    for _, pool in pools_to_scan.items():
+        if pool.pool_type == POOL_TYPES.AAVE_V3:
             pool.sync(self.w3)
 
     resulting_apy = 0
@@ -385,7 +383,8 @@ def get_rewards(
             apys[miner_uid] = 0
             continue
 
-        if pool_type == POOL_TYPES.DEFAULT:
+        # TODO: rework
+        if response.request_type == REQUEST_TYPES.SYNTHETIC:
             try:
                 # miner does not appear to be cheating - so we init simulator data
                 self.simulator.init_data(
@@ -404,12 +403,12 @@ def get_rewards(
 
             self.simulator.run()
 
+            # TODO: REWORK
             resulting_apy = calculate_aggregate_apy(
                 allocations,
                 init_assets_and_pools,
                 self.simulator.timesteps,
                 self.simulator.pool_history,
-                pool_type,
             )
 
         else:

@@ -3,7 +3,7 @@ from unittest import IsolatedAsyncioTestCase
 import torch
 
 from sturdy.pools import BasePool
-from sturdy.protocol import AllocateAssets
+from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from neurons.validator import Validator
 from sturdy.validator.reward import get_rewards
 from sturdy.constants import QUERY_TIMEOUT
@@ -156,6 +156,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
         synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
             assets_and_pools=copy.deepcopy(assets_and_pools),
             allocations=copy.deepcopy(allocations),
         )
@@ -222,6 +223,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
         synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
             assets_and_pools=copy.deepcopy(assets_and_pools),
             allocations=copy.deepcopy(allocations),
         )
@@ -284,6 +286,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
         synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
             assets_and_pools=copy.deepcopy(assets_and_pools),
             allocations=copy.deepcopy(allocations),
         )

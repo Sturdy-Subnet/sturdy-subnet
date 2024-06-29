@@ -22,6 +22,8 @@ from enum import Enum
 import json
 from pydantic import BaseModel, Field, PrivateAttr, root_validator
 from web3 import Web3
+import web3
+import web3.constants
 from web3.contract import Contract
 import numpy as np
 import bittensor as bt
@@ -39,10 +41,16 @@ from sturdy.utils.misc import (
 from sturdy.constants import *
 
 
+class POOL_TYPES(int, Enum):
+    SYNTHETIC = 0
+    AAVE_V3 = 1
+
+
 class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
 
     pool_id: str = Field(..., description="uid of pool")
+    pool_type: POOL_TYPES = Field(default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool")
     base_rate: int = Field(..., description="base interest rate")
     base_slope: int = Field(..., description="base interest rate slope")
     kink_slope: int = Field(..., description="kink slope")
@@ -120,7 +128,11 @@ class ChainBasedPoolModel(BaseModel):
     """
 
     pool_id: str = Field(..., description="uid of pool")
-    user_address: str = Field(..., description="address of the 'user' - used for various on-chain calls")
+    pool_type: POOL_TYPES = Field(..., description="type of pool")
+    user_address: str = Field(
+        default=web3.constants.ADDRESS_ZERO,
+        description="address of the 'user' - used for various on-chain calls",
+    )
     contract_address: str = Field(..., description="address of contract to call")
 
     @root_validator
@@ -144,18 +156,13 @@ class ChainBasedPoolModel(BaseModel):
         raise NotImplementedError("sync() has not been implemented!")
 
 
-class POOL_TYPES(str, Enum):
-    DEFAULT = "DEFAULT"
-    AAVE_V3 = "AAVE_V3"
-
-
 class PoolFactory:
     @staticmethod
     def create_pool(
         pool_type: POOL_TYPES, **kwargs
     ) -> Union[BasePoolModel, ChainBasedPoolModel]:
         match pool_type:
-            case POOL_TYPES.DEFAULT:
+            case POOL_TYPES.SYNTHETIC:
                 return BasePool(**kwargs)
             case POOL_TYPES.AAVE_V3:
                 return AaveV3DefaultInterestRatePool(**kwargs)
@@ -165,6 +172,8 @@ class PoolFactory:
 
 class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
+
+    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_V3, const=True, description="type of pool")
 
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
@@ -405,6 +414,7 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
     pools = [
         BasePool(
             pool_id=str(x),
+            pool_type=POOL_TYPES.SYNTHETIC,
             base_rate=randrange_float(
                 MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen
             ),
