@@ -285,7 +285,9 @@ def calculate_apy(
     pct_yield = 0
     for uid, pool in pools.items():
         allocation = allocations[uid]
-        pool_yield = wei_mul(allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation))
+        pool_yield = wei_mul(
+            allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation)
+        )
         pct_yield += pool_yield
     pct_yield = wei_div(pct_yield, initial_balance)
 
@@ -383,39 +385,36 @@ def get_rewards(
             apys[miner_uid] = 0
             continue
 
-        # TODO: rework
-        if response.request_type == REQUEST_TYPES.SYNTHETIC:
-            try:
+        try:
+            if response.request_type == REQUEST_TYPES.SYNTHETIC:
                 # miner does not appear to be cheating - so we init simulator data
                 self.simulator.init_data(
                     init_assets_and_pools=copy.deepcopy(init_assets_and_pools),
                     init_allocations=allocations,
                 )
                 self.simulator.update_reserves_with_allocs()
-            except Exception as e:
-                bt.logging.error(e)
-                bt.logging.error(
-                    "Failed to update reserves with miner allocations - PENALIZING MINER"
+
+                self.simulator.run()
+
+                # TODO: REWORK
+                resulting_apy = calculate_aggregate_apy(
+                    allocations,
+                    init_assets_and_pools,
+                    self.simulator.timesteps,
+                    self.simulator.pool_history,
                 )
-                miner_uid = uids[response_idx]
-                apys[miner_uid] = 0
-                continue
 
-            self.simulator.run()
-
-            # TODO: REWORK
-            resulting_apy = calculate_aggregate_apy(
-                allocations,
-                init_assets_and_pools,
-                self.simulator.timesteps,
-                self.simulator.pool_history,
-            )
-
-        else:
-            resulting_apy = calculate_apy(
-                allocations,
-                init_assets_and_pools,
-            )
+            else:
+                resulting_apy = calculate_apy(
+                    allocations,
+                    init_assets_and_pools,
+                )
+        except Exception as e:
+            bt.logging.error(e)
+            bt.logging.error("Failed to calculate apy - PENALIZING MINER")
+            miner_uid = uids[response_idx]
+            apys[miner_uid] = 0
+            continue
 
         if resulting_apy > max_apy:
             max_apy = resulting_apy
