@@ -180,6 +180,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             validator.step,
             active_uids,
             responses=responses,
+            assets_and_pools=assets_and_pools,
         )
 
         print(f"allocs: {allocs}")
@@ -247,6 +248,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             validator.step,
             active_uids,
             responses=responses,
+            assets_and_pools=assets_and_pools,
         )
 
         for _, allocInfo in allocs.items():
@@ -310,6 +312,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             validator.step,
             active_uids,
             responses=responses,
+            assets_and_pools=assets_and_pools
         )
 
         for _, allocInfo in allocs.items():

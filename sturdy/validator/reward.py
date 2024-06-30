@@ -330,6 +330,7 @@ def get_rewards(
     query: int,
     uids: List[str],
     responses: List,
+    assets_and_pools: Dict[str, Union[Dict[str, int], int]],
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -348,7 +349,7 @@ def get_rewards(
     max_apy = 0
     apys = {}
 
-    init_assets_and_pools = copy.deepcopy(self.simulator.assets_and_pools)
+    init_assets_and_pools = copy.deepcopy(assets_and_pools)
 
     bt.logging.debug(
         f"Running simulator for {self.simulator.timesteps} timesteps for each allocation..."

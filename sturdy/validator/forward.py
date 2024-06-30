@@ -84,12 +84,14 @@ async def query_and_score_miners(
         self.simulator.initialize(timesteps=1)
     else:
         self.simulator.initialize()
+
+        if assets_and_pools is not None:
+            self.simulator.init_data(init_assets_and_pools=copy.deepcopy(assets_and_pools))
+        else:
+            self.simulator.init_data()
+            assets_and_pools = self.simulator.assets_and_pools
     # initialize simulator data
     # if there is no "organic" info then generate synthetic info
-    if assets_and_pools is not None:
-        self.simulator.init_data(init_assets_and_pools=copy.deepcopy(assets_and_pools))
-    else:
-        self.simulator.init_data()
 
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
@@ -126,6 +128,7 @@ async def query_and_score_miners(
         query=self.step,
         uids=active_uids,
         responses=responses,
+        assets_and_pools=assets_and_pools
     )
 
     bt.logging.info(f"Scored responses: {rewards}")
