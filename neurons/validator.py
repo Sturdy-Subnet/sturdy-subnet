@@ -35,9 +35,11 @@ import uvicorn
 from db import sql
 
 # Bittensor Validator Template:
+from sturdy.pools import POOL_TYPES, PoolFactory
 from sturdy.validator import forward, query_and_score_miners
 from sturdy.utils.misc import get_synapse_from_body
 from sturdy.protocol import (
+    REQUEST_TYPES,
     AllocateAssets,
     AllocateAssetsRequest,
     AllocateAssetsResponse,
@@ -153,21 +155,63 @@ async def api_key_validator(request, call_next):
 core_validator = None
 
 
-@app.get("/test")
-async def test():
-    return {"Hello": "World"}
-
-
 @app.get("/vali")
 async def vali():
     ret = {"step": core_validator.step, "config": core_validator.config}
     return ret
 
 
-@app.post("/allocate")
+@app.get("/status")
+async def status():
+    ret = {"status": "OK"}
+    return ret
+
+
+@app.post("/allocate", response_model=AllocateAssetsResponse)
 async def allocate(body: AllocateAssetsRequest):
     synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
-    result = await query_and_score_miners(core_validator, assets_and_pools=synapse.assets_and_pools, organic=True)
+    bt.logging.debug(f"Synapse:\n{synapse}")
+    pools = synapse.assets_and_pools["pools"]
+
+    new_pools = {}
+    for uid, pool in pools.items():
+        match synapse.request_type:
+            case REQUEST_TYPES.SYNTHETIC:
+                new_pool = PoolFactory.create_pool(
+                    pool_type=pool.pool_type,
+                    pool_id=pool.pool_id,
+                    base_rate=pool.base_rate,
+                    base_slope=pool.base_slope,
+                    kink_slope=pool.kink_slope,
+                    optimal_util_rate=pool.optimal_util_rate,
+                    borrow_amount=pool.borrow_amount,
+                    reserve_size=pool.reserve_size,
+                )
+                new_pools[uid] = new_pool
+            case _:  # TODO: We assume this is an "organic request"
+                match pool.pool_type:
+                    case POOL_TYPES.AAVE_V3:
+                        new_pool = PoolFactory.create_pool(
+                            pool_type=pool.pool_type,
+                            web3_provider=core_validator.w3,
+                            pool_id=pool.pool_id,
+                            user_address=synapse.user_address,  # TODO: is there a cleaner way to do this?
+                            contract_address=pool.contract_address,
+                        )
+                        new_pools[uid] = new_pool
+
+                    case _:
+                        raise TypeError(f"Invalid Organic Pool Type: {pool.pool_type}")
+
+    synapse.assets_and_pools["pools"] = new_pools
+
+    # TODO: REWORK
+    result = await query_and_score_miners(
+        core_validator,
+        assets_and_pools=synapse.assets_and_pools,
+        request_type=synapse.request_type,
+    )
+
     ret = AllocateAssetsResponse(allocations=result)
     return ret
 
