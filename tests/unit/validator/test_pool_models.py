@@ -8,8 +8,14 @@ from eth_account import Account
 # import brownie
 # from brownie import network
 
-from sturdy.pools import AaveV3DefaultInterestRatePool
+import os
+from dotenv import load_dotenv
+
+from sturdy.pools import AaveV3DefaultInterestRatePool, VariableInterestSturdySiloStrategy
 from sturdy.utils.misc import retry_with_backoff
+
+load_dotenv()
+MAINNET_FORKING_URL = os.getenv("MAINNET_FORKING_URL")
 
 
 # TODO: test pool_init seperately???
@@ -188,7 +194,9 @@ class TestAavePool(unittest.TestCase):
         )
 
         # Send the transaction
-        tx_hash = retry_with_backoff(self.w3.eth.send_raw_transaction, signed_tx.rawTransaction)
+        tx_hash = retry_with_backoff(
+            self.w3.eth.send_raw_transaction, signed_tx.rawTransaction
+        )
         print(f"supply weth tx hash: {tx_hash}")
 
         reserve_data = retry_with_backoff(
@@ -205,6 +213,71 @@ class TestAavePool(unittest.TestCase):
         print(f"apy after rebalancing ether: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertGreater(apy_after, apy_before)
+
+
+class TestSturdySiloStrategy(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # runs tests on local mainnet fork at block: 20225081
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.contract_address = "0x0b8C80fd9CaC5570Ff829416f0aFCE7aF6F3C6f8"
+        # Create a funded account for testing
+        cls.account = Account.create()
+        cls.w3.eth.send_transaction(
+            {
+                "to": cls.account.address,
+                "from": cls.w3.eth.accounts[0],
+                "value": cls.w3.to_wei(200000, "ether"),
+            }
+        )
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": MAINNET_FORKING_URL,
+                        "blockNumber": 20225081,
+                    },
+                },
+            ],
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])
+        print(f"snapshot id: {cls.snapshot_id}")
+
+    def setUp(self):
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])
+        print(f"snapshot id: {self.snapshot_id}")
+
+    def tearDown(self):
+        # Optional: Revert to the original snapshot after each test
+        print("reverting to original evm snapshot")
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)
+
+    def test_silo_strategy_contract(self):
+        print("----==== test_pool_contract ====----")
+        # we call the aave3 weth atoken proxy contract in this example
+        pool = VariableInterestSturdySiloStrategy(
+            pool_id="test",
+            contract_address=self.contract_address,
+        )
+
+        pool.pool_init(self.w3)
+
+        self.assertTrue(hasattr(pool, "_silo_strategy_contract"))
+        self.assertTrue(isinstance(pool._silo_strategy_contract, Contract))
+        print(f"silo contract: {pool._silo_strategy_contract.address}")
+
+        self.assertTrue(hasattr(pool, "_pair_contract"))
+        self.assertTrue(isinstance(pool._pair_contract, Contract))
+        print(f"pair contract: {pool._pair_contract.address}")
+
+        self.assertTrue(hasattr(pool, "_rate_model_contract"))
+        self.assertTrue(isinstance(pool._rate_model_contract, Contract))
+        print(f"rate model contract: {pool._rate_model_contract.address}")
 
 
 if __name__ == "__main__":

@@ -44,13 +44,16 @@ from sturdy.constants import *
 class POOL_TYPES(int, Enum):
     SYNTHETIC = 0
     AAVE_V3 = 1
+    STURDY_SILO = 2
 
 
 class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
 
     pool_id: str = Field(..., description="uid of pool")
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool")
+    pool_type: POOL_TYPES = Field(
+        default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool"
+    )
     base_rate: int = Field(..., description="base interest rate")
     base_slope: int = Field(..., description="base interest rate slope")
     kink_slope: int = Field(..., description="kink slope")
@@ -173,7 +176,9 @@ class PoolFactory:
 class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_V3, const=True, description="type of pool")
+    pool_type: POOL_TYPES = Field(
+        default=POOL_TYPES.AAVE_V3, const=True, description="type of pool"
+    )
 
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
@@ -405,6 +410,96 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             bt.logging.error(e)
 
         return 0
+
+
+class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
+
+    pool_type: POOL_TYPES = Field(
+        POOL_TYPES.STURDY_SILO, const=True, description="type of pool"
+    )
+
+    _silo_strategy_contract: Contract = PrivateAttr()
+    _pair_contract: Contract = PrivateAttr()
+    _rate_model_contract: Contract = PrivateAttr()
+
+    # def __hash__(self):
+    #     return hash((self._atoken_contract.address, self._underlying_asset_address))
+
+    # def __eq__(self, other):
+    #     if not isinstance(other, AaveV3DefaultInterestRatePool):
+    #         return NotImplemented
+    #     # Compare the attributes for equality
+    #     return (self._atoken_contract.address, self._underlying_asset_address) == (
+    #         other._atoken_contract.address,
+    #         other._underlying_asset_address,
+    #     )
+
+    def pool_init(self, web3_provider: Web3):
+        try:
+            assert web3_provider.is_connected()
+        except Exception as err:
+            bt.logging.error("Failed to connect to Web3 instance!")
+            bt.logging.error(err)
+
+        try:
+            silo_strategy_abi_file_path = (
+                Path(__file__).parent / "../abi/SturdySiloStrategy.json"
+            )
+            silo_strategy_abi_file = silo_strategy_abi_file_path.open()
+            silo_strategy_abi = json.load(silo_strategy_abi_file)
+            silo_strategy_abi_file.close()
+
+            silo_strategy_contract = web3_provider.eth.contract(
+                abi=silo_strategy_abi, decode_tuples=True
+            )
+            self._silo_strategy_contract = retry_with_backoff(
+                silo_strategy_contract, address=self.contract_address
+            )
+
+            pair_abi_file_path = (
+                Path(__file__).parent / "../abi/SturdySiloStrategy.json"
+            )
+            pair_abi_file = pair_abi_file_path.open()
+            pair_abi = json.load(pair_abi_file)
+            pair_abi_file.close()
+
+            pair_contract_address = retry_with_backoff(
+                self._silo_strategy_contract.functions.pair().call
+            )
+            pair_contract = web3_provider.eth.contract(abi=pair_abi, decode_tuples=True)
+            self._pair_contract = retry_with_backoff(
+                pair_contract, address=pair_contract_address
+            )
+
+            rate_model_abi_file_path = (
+                Path(__file__).parent / "../abi/VariableInterestRate.json"
+            )
+            rate_model_abi_file = rate_model_abi_file_path.open()
+            rate_model_abi = json.load(rate_model_abi_file)
+            rate_model_abi_file.close()
+
+            rate_model_contract_address = retry_with_backoff(
+                self._pair_contract.functions.rateContract().call
+            )
+            rate_model_contract = web3_provider.eth.contract(abi=rate_model_abi, decode_tuples=True)
+            self._rate_model_contract = retry_with_backoff(
+                rate_model_contract, address=rate_model_contract_address
+            )
+
+        except Exception as e:
+            bt.logging.error(e)
+
+    def sync(self, web3_provider: Web3):
+        if not self._initted:
+            self.pool_init(web3_provider)
+        """Syncs with chain"""
+        pass
+
+    # last 256 unique calls to this will be cached for the next 60 seconds
+    # TODO: __hash__, __eq__, and ttl caching
+    # @ttl_cache(maxsize=256, ttl=60)
+    def supply_rate(self, user_addr: str, amount: int) -> int:
+        """Returns supply rate given new deposit amount"""
 
 
 # TODO: add different interest rate models in the future - we use a single simple model for now
