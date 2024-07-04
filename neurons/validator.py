@@ -35,7 +35,7 @@ import uvicorn
 from db import sql
 
 # Bittensor Validator Template:
-from sturdy.pools import POOL_TYPES, PoolFactory
+from sturdy.pools import PoolFactory
 from sturdy.validator import forward, query_and_score_miners
 from sturdy.utils.misc import get_synapse_from_body
 from sturdy.protocol import (
@@ -189,19 +189,14 @@ async def allocate(body: AllocateAssetsRequest):
                 )
                 new_pools[uid] = new_pool
             case _:  # TODO: We assume this is an "organic request"
-                match pool.pool_type:
-                    case POOL_TYPES.AAVE_V3:
-                        new_pool = PoolFactory.create_pool(
-                            pool_type=pool.pool_type,
-                            web3_provider=core_validator.w3,
-                            pool_id=pool.pool_id,
-                            user_address=synapse.user_address,  # TODO: is there a cleaner way to do this?
-                            contract_address=pool.contract_address,
-                        )
-                        new_pools[uid] = new_pool
-
-                    case _:
-                        raise TypeError(f"Invalid Organic Pool Type: {pool.pool_type}")
+                new_pool = PoolFactory.create_pool(
+                    pool_type=pool.pool_type,
+                    web3_provider=core_validator.w3,
+                    pool_id=pool.pool_id,
+                    user_address=synapse.user_address,  # TODO: is there a cleaner way to do this?
+                    contract_address=pool.contract_address,
+                )
+                new_pools[uid] = new_pool
 
     synapse.assets_and_pools["pools"] = new_pools
 

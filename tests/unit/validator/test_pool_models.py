@@ -22,7 +22,7 @@ MAINNET_FORKING_URL = os.getenv("MAINNET_FORKING_URL")
 class TestAavePool(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # runs tests on local mainnet fork at block: 20018411
+        # runs tests on local mainnet fork at block: 20233401
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
 
@@ -222,9 +222,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
 
-        cls.contract_address = "0x0b8C80fd9CaC5570Ff829416f0aFCE7aF6F3C6f8"
-        # Fraxlend FRAX-gOHM
-        cls.pair_address = "0xa4Ddd4770588EF97A3a03E4B7E3885d824159bAA"
+        cls.contract_address = "0x0669091F451142b3228171aE6aD794cF98288124"
         # Create a funded account for testing
         cls.account = Account.create()
         cls.w3.eth.send_transaction(
@@ -241,7 +239,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": MAINNET_FORKING_URL,
-                        "blockNumber": 20231449,
+                        "blockNumber": 20233401,
                     },
                 },
             ],
@@ -281,54 +279,13 @@ class TestSturdySiloStrategy(unittest.TestCase):
         self.assertTrue(isinstance(pool._rate_model_contract, Contract))
         print(f"rate model contract: {pool._rate_model_contract.address}")
 
-        # change the pair address to FRAX-WETH, and the subsequent rate model address too
-
-        pair_abi_file_path = (
-            Path(__file__).parent / "../../../abi/SturdyPair.json"
-        )
-        pair_abi_file = pair_abi_file_path.open()
-        pair_abi = json.load(pair_abi_file)
-        pair_abi_file.close()
-
-        pair_contract_address = self.pair_address
-        pair_contract = self.w3.eth.contract(abi=pair_abi, decode_tuples=True)
-        pool._pair_contract = retry_with_backoff(
-            pair_contract, address=pair_contract_address
-        )
-
-        rate_model_abi_file_path = (
-            Path(__file__).parent / "../../../abi/VariableInterestRate.json"
-        )
-        rate_model_abi_file = rate_model_abi_file_path.open()
-        rate_model_abi = json.load(rate_model_abi_file)
-        rate_model_abi_file.close()
-
-        rate_model_contract_address = retry_with_backoff(
-            pool._pair_contract.functions.rateContract().call,
-        )
-
-        rate_model_contract = self.w3.eth.contract(
-            abi=rate_model_abi, decode_tuples=True
-        )
-        pool._rate_model_contract = retry_with_backoff(
-            rate_model_contract, address=rate_model_contract_address
-        )
-
-        self.assertTrue(hasattr(pool, "_pair_contract"))
-        self.assertTrue(isinstance(pool._pair_contract, Contract))
-        print(f"pair contract: {pool._pair_contract.address}")
-
-        self.assertTrue(hasattr(pool, "_rate_model_contract"))
-        self.assertTrue(isinstance(pool._rate_model_contract, Contract))
-        print(f"rate model contract: {pool._rate_model_contract.address}")
-
-        whale_addr = self.w3.to_checksum_address("0xf6e697e95d4008f81044337a749ecf4d15c30ea6")
+        whale_addr = self.w3.to_checksum_address("0x0669091F451142b3228171aE6aD794cF98288124")
         # don't change deposit amount to pool by much
-        prev_supply_rate = pool.supply_rate(whale_addr, int(600000e18), self.w3)
-        # increase deposit amount to pool by ~100000e18 (~100,000 FRAX)
-        supply_rate_increase = pool.supply_rate(whale_addr, int(700000e18), self.w3)
-        # decrease deposit amount to pool by ~100000e18 (~100,000 FRAX)
-        supply_rate_decrease = pool.supply_rate(whale_addr, int(500000e18), self.w3)
+        prev_supply_rate = pool.supply_rate(whale_addr, int(630e18), self.w3)
+        # increase deposit amount to pool by ~100e18 (~630 pxETH)
+        supply_rate_increase = pool.supply_rate(whale_addr, int(730e18), self.w3)
+        # decrease deposit amount to pool by ~100e18 (~530 pxETH)
+        supply_rate_decrease = pool.supply_rate(whale_addr, int(530e18), self.w3)
         print(f"supply rate unchanged: {prev_supply_rate}")
         print(f"supply rate after increasing deposit: {supply_rate_increase}")
         print(f"supply rate after decreasing deposit: {supply_rate_decrease}")

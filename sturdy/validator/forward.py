@@ -80,18 +80,18 @@ async def query_and_score_miners(
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
-    if request_type is REQUEST_TYPES.ORGANIC:
+    if request_type == REQUEST_TYPES.ORGANIC:
         self.simulator.initialize(timesteps=1)
     else:
+        # initialize simulator data
+        # if there is no "organic" info then generate synthetic info
         self.simulator.initialize()
 
-        if assets_and_pools is not None:
-            self.simulator.init_data(init_assets_and_pools=copy.deepcopy(assets_and_pools))
-        else:
-            self.simulator.init_data()
-            assets_and_pools = self.simulator.assets_and_pools
-    # initialize simulator data
-    # if there is no "organic" info then generate synthetic info
+    if assets_and_pools is not None:
+        self.simulator.init_data(init_assets_and_pools=copy.deepcopy(assets_and_pools))
+    else:
+        self.simulator.init_data()
+        assets_and_pools = self.simulator.assets_and_pools
 
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
@@ -117,7 +117,7 @@ async def query_and_score_miners(
     }
 
     # Log the results for monitoring purposes.
-    bt.logging.debug(f"Pools: {self.simulator.assets_and_pools['pools']}")
+    bt.logging.debug(f"Pools: {assets_and_pools['pools']}")
     bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
     # Adjust the scores based on responses from miners.

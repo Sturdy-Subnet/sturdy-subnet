@@ -138,6 +138,8 @@ class ChainBasedPoolModel(BaseModel):
     )
     contract_address: str = Field(..., description="address of contract to call")
 
+    _initted: bool = PrivateAttr(False)
+
     @root_validator
     def check_params(cls, values):
         if len(values.get("pool_id")) <= 0:
@@ -169,6 +171,8 @@ class PoolFactory:
                 return BasePool(**kwargs)
             case POOL_TYPES.AAVE_V3:
                 return AaveV3DefaultInterestRatePool(**kwargs)
+            case POOL_TYPES.STURDY_SILO:
+                return VariableInterestSturdySiloStrategy(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
@@ -190,7 +194,6 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _nextAvgStableBorrowRate = PrivateAttr()
     _variable_debt_token_contract = PrivateAttr()
     _totalVariableDebt = PrivateAttr()
-    _initted: bool = PrivateAttr(False)
     _reserveFactor = PrivateAttr()
     _decimals: int = PrivateAttr()
 
