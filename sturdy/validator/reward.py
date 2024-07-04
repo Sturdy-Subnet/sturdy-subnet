@@ -397,7 +397,6 @@ def get_rewards(
 
                 self.simulator.run()
 
-                # TODO: REWORK
                 resulting_apy = calculate_aggregate_apy(
                     allocations,
                     init_assets_and_pools,

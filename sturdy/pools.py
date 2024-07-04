@@ -456,9 +456,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
                 silo_strategy_contract, address=self.contract_address
             )
 
-            pair_abi_file_path = (
-                Path(__file__).parent / "../abi/SturdySiloStrategy.json"
-            )
+            pair_abi_file_path = Path(__file__).parent / "../abi/SturdyPair.json"
             pair_abi_file = pair_abi_file_path.open()
             pair_abi = json.load(pair_abi_file)
             pair_abi_file.close()
@@ -481,7 +479,9 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             rate_model_contract_address = retry_with_backoff(
                 self._pair_contract.functions.rateContract().call
             )
-            rate_model_contract = web3_provider.eth.contract(abi=rate_model_abi, decode_tuples=True)
+            rate_model_contract = web3_provider.eth.contract(
+                abi=rate_model_abi, decode_tuples=True
+            )
             self._rate_model_contract = retry_with_backoff(
                 rate_model_contract, address=rate_model_contract_address
             )
@@ -498,8 +498,54 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     # last 256 unique calls to this will be cached for the next 60 seconds
     # TODO: __hash__, __eq__, and ttl caching
     # @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, user_addr: str, amount: int) -> int:
+    def supply_rate(self, user_addr: str, amount: int, web3_provider: Web3) -> int:
         """Returns supply rate given new deposit amount"""
+
+        user_shares = retry_with_backoff(self._pair_contract.functions.balanceOf(user_addr).call)
+        curr_deposit_amount = retry_with_backoff(self._pair_contract.functions.convertToAssets(user_shares).call)
+        delta = amount - curr_deposit_amount
+
+        constants = retry_with_backoff(
+            self._pair_contract.functions.getConstants().call
+        )
+        util_prec = constants[2]
+        fee_prec = constants[3]
+        totalAsset = retry_with_backoff(self._pair_contract.functions.totalAsset().call)
+        totalBorrow = retry_with_backoff(
+            self._pair_contract.functions.totalBorrow().call
+        )
+
+        util_rate = (util_prec * totalBorrow.amount) // (totalAsset.amount + delta)
+        current_rate_info = retry_with_backoff(
+            self._pair_contract.functions.currentRateInfo().call
+        )
+
+        block = web3_provider.eth.get_block("latest")
+        current_timestamp = block["timestamp"]
+        last_update_timestamp = current_rate_info.lastTimestamp
+        delta_time = current_timestamp - last_update_timestamp
+
+        rate_prec = retry_with_backoff(
+            self._rate_model_contract.functions.RATE_PREC().call
+        )
+        protocol_fee = current_rate_info.feeToProtocolRate
+        (new_rate_per_sec, _) = retry_with_backoff(
+            self._rate_model_contract.functions.getNewRate(
+                delta_time, util_rate, current_rate_info.fullUtilizationRate
+            ).call
+        )
+
+        supply_apy = int(
+            new_rate_per_sec
+            * 31536000
+            * 1e18
+            * util_rate
+            // rate_prec
+            // util_prec
+            * (1 - (protocol_fee / fee_prec))
+        )  # (rate_per_sec_pct * seconds_in_year * util_rate_pct) * 1e18
+
+        return supply_apy
 
 
 # TODO: add different interest rate models in the future - we use a single simple model for now

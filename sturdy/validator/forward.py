@@ -105,7 +105,6 @@ async def query_and_score_miners(
 
     responses = await query_multiple_miners(
         self,
-        # TODO: REWORK
         AllocateAssets(
             request_type=request_type,
             assets_and_pools=self.simulator.assets_and_pools,
@@ -122,7 +121,6 @@ async def query_and_score_miners(
     bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
     # Adjust the scores based on responses from miners.
-    # TODO: REWORK
     rewards, allocs = get_rewards(
         self,
         query=self.step,

@@ -1,28 +1,201 @@
 [
     {
-        "inputs": [],
-        "name": "getConstants",
-        "outputs": [
+        "inputs": [
             {
-                "internalType": "bytes",
-                "name": "_calldata",
-                "type": "bytes"
+                "internalType": "string",
+                "name": "_suffix",
+                "type": "string"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_vertexUtilization",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_vertexRatePercentOfDelta",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_minUtil",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_maxUtil",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_zeroUtilizationRate",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_minFullUtilizationRate",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_maxFullUtilizationRate",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_rateHalfLife",
+                "type": "uint256"
             }
         ],
-        "stateMutability": "pure",
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "MAX_FULL_UTIL_RATE",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "MAX_TARGET_UTIL",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "MIN_FULL_UTIL_RATE",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "MIN_TARGET_UTIL",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "RATE_HALF_LIFE",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "RATE_PREC",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "UTIL_PREC",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERTEX_RATE_PERCENT",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERTEX_UTILIZATION",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ZERO_UTIL_RATE",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
         "inputs": [
             {
-                "internalType": "bytes",
-                "name": "_data",
-                "type": "bytes"
+                "internalType": "uint256",
+                "name": "_deltaTime",
+                "type": "uint256"
             },
             {
-                "internalType": "bytes",
-                "name": "_initData",
-                "type": "bytes"
+                "internalType": "uint256",
+                "name": "_utilization",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint64",
+                "name": "_oldFullUtilizationInterest",
+                "type": "uint64"
             }
         ],
         "name": "getNewRate",
@@ -31,9 +204,14 @@
                 "internalType": "uint64",
                 "name": "_newRatePerSec",
                 "type": "uint64"
+            },
+            {
+                "internalType": "uint64",
+                "name": "_newFullUtilizationInterest",
+                "type": "uint64"
             }
         ],
-        "stateMutability": "pure",
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -46,19 +224,42 @@
                 "type": "string"
             }
         ],
-        "stateMutability": "pure",
+        "stateMutability": "view",
         "type": "function"
     },
     {
-        "inputs": [
+        "inputs": [],
+        "name": "suffix",
+        "outputs": [
             {
-                "internalType": "bytes",
-                "name": "_initData",
-                "type": "bytes"
+                "internalType": "string",
+                "name": "",
+                "type": "string"
             }
         ],
-        "name": "requireValidInitData",
-        "outputs": [],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "version",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "_major",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_minor",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_patch",
+                "type": "uint256"
+            }
+        ],
         "stateMutability": "pure",
         "type": "function"
     }

@@ -205,7 +205,6 @@ async def allocate(body: AllocateAssetsRequest):
 
     synapse.assets_and_pools["pools"] = new_pools
 
-    # TODO: REWORK
     result = await query_and_score_miners(
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
