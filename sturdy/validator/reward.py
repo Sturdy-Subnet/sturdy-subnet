@@ -270,6 +270,7 @@ def _get_rewards(
 
 
 def calculate_apy(
+    self,
     allocations: Dict[str, int],
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
@@ -285,9 +286,15 @@ def calculate_apy(
     pct_yield = 0
     for uid, pool in pools.items():
         allocation = allocations[uid]
-        pool_yield = wei_mul(
-            allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation)
-        )
+        match pool.pool_type:
+            case POOL_TYPES.STURDY_SILO:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation, web3_provider=self.w3)
+                )
+            case _:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation)
+                )
         pct_yield += pool_yield
     pct_yield = wei_div(pct_yield, initial_balance)
 
@@ -331,6 +338,7 @@ def get_rewards(
     uids: List[str],
     responses: List,
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
+    user_address: str
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -359,8 +367,13 @@ def get_rewards(
     pools_to_scan = init_assets_and_pools["pools"]
     # update reserves given allocations
     for _, pool in pools_to_scan.items():
-        if pool.pool_type == POOL_TYPES.AAVE_V3:
-            pool.sync(self.w3)
+        match pool.pool_type:
+            case POOL_TYPES.AAVE_V3:
+                pool.sync(self.w3)
+            case POOL_TYPES.STURDY_SILO:
+                pool.sync(user_address, self.w3)
+            case _:
+                pass
 
     resulting_apy = 0
     for response_idx, response in enumerate(responses):
@@ -397,7 +410,6 @@ def get_rewards(
 
                 self.simulator.run()
 
-                # TODO: REWORK
                 resulting_apy = calculate_aggregate_apy(
                     allocations,
                     init_assets_and_pools,
@@ -407,6 +419,7 @@ def get_rewards(
 
             else:
                 resulting_apy = calculate_apy(
+                    self,
                     allocations,
                     init_assets_and_pools,
                 )

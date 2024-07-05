@@ -44,13 +44,16 @@ from sturdy.constants import *
 class POOL_TYPES(int, Enum):
     SYNTHETIC = 0
     AAVE_V3 = 1
+    STURDY_SILO = 2
 
 
 class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
 
     pool_id: str = Field(..., description="uid of pool")
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool")
+    pool_type: POOL_TYPES = Field(
+        default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool"
+    )
     base_rate: int = Field(..., description="base interest rate")
     base_slope: int = Field(..., description="base interest rate slope")
     kink_slope: int = Field(..., description="kink slope")
@@ -135,6 +138,8 @@ class ChainBasedPoolModel(BaseModel):
     )
     contract_address: str = Field(..., description="address of contract to call")
 
+    _initted: bool = PrivateAttr(False)
+
     @root_validator
     def check_params(cls, values):
         if len(values.get("pool_id")) <= 0:
@@ -166,6 +171,8 @@ class PoolFactory:
                 return BasePool(**kwargs)
             case POOL_TYPES.AAVE_V3:
                 return AaveV3DefaultInterestRatePool(**kwargs)
+            case POOL_TYPES.STURDY_SILO:
+                return VariableInterestSturdySiloStrategy(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
@@ -173,7 +180,9 @@ class PoolFactory:
 class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_V3, const=True, description="type of pool")
+    pool_type: POOL_TYPES = Field(
+        default=POOL_TYPES.AAVE_V3, const=True, description="type of pool"
+    )
 
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
@@ -185,7 +194,6 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _nextAvgStableBorrowRate = PrivateAttr()
     _variable_debt_token_contract = PrivateAttr()
     _totalVariableDebt = PrivateAttr()
-    _initted: bool = PrivateAttr(False)
     _reserveFactor = PrivateAttr()
     _decimals: int = PrivateAttr()
 
@@ -405,6 +413,159 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             bt.logging.error(e)
 
         return 0
+
+
+class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
+
+    pool_type: POOL_TYPES = Field(
+        POOL_TYPES.STURDY_SILO, const=True, description="type of pool"
+    )
+
+    _silo_strategy_contract: Contract = PrivateAttr()
+    _pair_contract: Contract = PrivateAttr()
+    _rate_model_contract: Contract = PrivateAttr()
+    _curr_deposit_amount: int = PrivateAttr()
+    _util_prec: int = PrivateAttr()
+    _fee_prec: int = PrivateAttr()
+    _totalAsset: int = PrivateAttr()
+    _totalBorrow: int = PrivateAttr()
+    _current_rate_info = PrivateAttr()
+    _rate_prec: int = PrivateAttr()
+    _block: web3.types.BlockData = PrivateAttr()
+
+    # def __hash__(self):
+    #     return hash((self._atoken_contract.address, self._underlying_asset_address))
+
+    # def __eq__(self, other):
+    #     if not isinstance(other, AaveV3DefaultInterestRatePool):
+    #         return NotImplemented
+    #     # Compare the attributes for equality
+    #     return (self._atoken_contract.address, self._underlying_asset_address) == (
+    #         other._atoken_contract.address,
+    #         other._underlying_asset_address,
+    #     )
+
+    def pool_init(self, user_addr: str, web3_provider: Web3):
+        try:
+            assert web3_provider.is_connected()
+        except Exception as err:
+            bt.logging.error("Failed to connect to Web3 instance!")
+            bt.logging.error(err)
+
+        try:
+            silo_strategy_abi_file_path = (
+                Path(__file__).parent / "../abi/SturdySiloStrategy.json"
+            )
+            silo_strategy_abi_file = silo_strategy_abi_file_path.open()
+            silo_strategy_abi = json.load(silo_strategy_abi_file)
+            silo_strategy_abi_file.close()
+
+            silo_strategy_contract = web3_provider.eth.contract(
+                abi=silo_strategy_abi, decode_tuples=True
+            )
+            self._silo_strategy_contract = retry_with_backoff(
+                silo_strategy_contract, address=self.contract_address
+            )
+
+            pair_abi_file_path = Path(__file__).parent / "../abi/SturdyPair.json"
+            pair_abi_file = pair_abi_file_path.open()
+            pair_abi = json.load(pair_abi_file)
+            pair_abi_file.close()
+
+            pair_contract_address = retry_with_backoff(
+                self._silo_strategy_contract.functions.pair().call
+            )
+            pair_contract = web3_provider.eth.contract(abi=pair_abi, decode_tuples=True)
+            self._pair_contract = retry_with_backoff(
+                pair_contract, address=pair_contract_address
+            )
+
+            rate_model_abi_file_path = (
+                Path(__file__).parent / "../abi/VariableInterestRate.json"
+            )
+            rate_model_abi_file = rate_model_abi_file_path.open()
+            rate_model_abi = json.load(rate_model_abi_file)
+            rate_model_abi_file.close()
+
+            rate_model_contract_address = retry_with_backoff(
+                self._pair_contract.functions.rateContract().call
+            )
+            rate_model_contract = web3_provider.eth.contract(
+                abi=rate_model_abi, decode_tuples=True
+            )
+            self._rate_model_contract = retry_with_backoff(
+                rate_model_contract, address=rate_model_contract_address
+            )
+
+        except Exception as e:
+            bt.logging.error(e)
+
+    def sync(self, user_addr: str, web3_provider: Web3):
+        """Syncs with chain"""
+        if not self._initted:
+            self.pool_init(user_addr, web3_provider)
+
+        user_shares = retry_with_backoff(
+            self._pair_contract.functions.balanceOf(user_addr).call
+        )
+        self._curr_deposit_amount = retry_with_backoff(
+            self._pair_contract.functions.convertToAssets(user_shares).call
+        )
+
+        constants = retry_with_backoff(
+            self._pair_contract.functions.getConstants().call
+        )
+        self._util_prec = constants[2]
+        self._fee_prec = constants[3]
+        self._totalAsset = retry_with_backoff(
+            self._pair_contract.functions.totalAsset().call
+        )
+        self._totalBorrow = retry_with_backoff(
+            self._pair_contract.functions.totalBorrow().call
+        )
+
+        self._block = web3_provider.eth.get_block("latest")
+
+        self._current_rate_info = retry_with_backoff(
+            self._pair_contract.functions.currentRateInfo().call
+        )
+
+        self._rate_prec = retry_with_backoff(
+            self._rate_model_contract.functions.RATE_PREC().call
+        )
+
+    # last 256 unique calls to this will be cached for the next 60 seconds
+    # TODO: __hash__, __eq__, and ttl caching
+    # @ttl_cache(maxsize=256, ttl=60)
+    def supply_rate(self, user_addr: str, amount: int, web3_provider: Web3) -> int:
+        delta = amount - self._curr_deposit_amount
+        """Returns supply rate given new deposit amount"""
+        util_rate = (self._util_prec * self._totalBorrow.amount) // (
+            self._totalAsset.amount + delta
+        )
+
+        last_update_timestamp = self._current_rate_info.lastTimestamp
+        current_timestamp = self._block["timestamp"]
+        delta_time = current_timestamp - last_update_timestamp
+
+        protocol_fee = self._current_rate_info.feeToProtocolRate
+        (new_rate_per_sec, _) = retry_with_backoff(
+            self._rate_model_contract.functions.getNewRate(
+                delta_time, util_rate, self._current_rate_info.fullUtilizationRate
+            ).call
+        )
+
+        supply_apy = int(
+            new_rate_per_sec
+            * 31536000
+            * 1e18
+            * util_rate
+            // self._rate_prec
+            // self._util_prec
+            * (1 - (protocol_fee / self._fee_prec))
+        )  # (rate_per_sec_pct * seconds_in_year * util_rate_pct) * 1e18
+
+        return supply_apy
 
 
 # TODO: add different interest rate models in the future - we use a single simple model for now
