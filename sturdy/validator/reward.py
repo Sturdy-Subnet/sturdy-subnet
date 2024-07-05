@@ -22,6 +22,8 @@ import torch
 from typing import List, Dict, Tuple, Any, Union
 import copy
 
+import web3
+
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
 from sturdy.utils.ethmath import wei_div, wei_mul
@@ -338,7 +340,7 @@ def get_rewards(
     uids: List[str],
     responses: List,
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
-    user_address: str
+    user_address: str = web3.constants.ADDRESS_ZERO
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
