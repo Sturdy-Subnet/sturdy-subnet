@@ -278,3 +278,5 @@ Thumbs.db
 
 # hardhat
 cache/
+reports/
+.dependencies_installed
