@@ -38,7 +38,7 @@ Replace, `NAME`, `HOTKEY`, `PORT`, `API_PORT`. with your desired values.
 If you would like to participate in the testnet replace `NETUID` with `104` and add the `--validator.min_stake -1` parameter:
 
 ```bash
-python3 neurons/miner.py --netuid NETUID --subtensor.network 104 --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --validator.min_stake -1
+python3 neurons/miner.py --netuid 104 --subtensor.network test --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT --validator.min_stake -1
 ```
 
 ## Succeeding as a miner

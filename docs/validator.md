@@ -182,104 +182,39 @@ For them to use your server, you will need to communicate:
 Just for reference - below is an example `curl` command which could be used to interact with an organic validator:
 
 ```
-curl -X POST   http://<IP_ADDRESS>:<PORT>/allocate   -H 'Content-Type: application/json'   -H 'Authorization: Bearer <API_KEY>'   -d '{
+curl -X POST \
+  http://{HOST_ADDRESS}/allocate \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer {API_KEY}' \
+  -d '{
+  "request_type": 0,
+  "user_address": "0xD8f9475A4A1A6812212FD62e80413d496038A89A",
   "assets_and_pools": {
+    "total_assets": 1000000000000000000,
     "pools": {
-      "0": {
-        "base_rate": 0.03,
-        "base_slope": 0.072,
-        "borrow_amount": 0.85,
-        "kink_slope": 0.347,
-        "optimal_util_rate": 0.9,
-        "pool_id": "0",
-        "reserve_size": 1
+      "Sturdy ETH/rsETH silo": {
+        "pool_type": 2,
+        "pool_id": "Sturdy ETH/rsETH silo",
+        "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
       },
-      "1": {
-        "base_rate": 0.01,
-        "base_slope": 0.011,
-        "borrow_amount": 0.55,
-        "kink_slope": 0.187,
-        "optimal_util_rate": 0.9,
-        "pool_id": "1",
-        "reserve_size": 1
+      "Sturdy ETH/rswETH Pendle PT silo": {
+        "pool_type": 2,
+        "pool_id": "Sturdy ETH/rswETH Pendle PT silo",
+        "contract_address": "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695"
       },
-      "2": {
-        "base_rate": 0.02,
-        "base_slope": 0.067,
-        "borrow_amount": 0.7,
-        "kink_slope": 0.662,
-        "optimal_util_rate": 0.9,
-        "pool_id": "2",
-        "reserve_size": 1
+      "Sturdy ETH/SwETH silo": {
+        "pool_type": 2,
+        "pool_id": "Sturdy ETH/SwETH silo",
+        "contract_address": "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2"
       },
-      "3": {
-        "base_rate": 0.01,
-        "base_slope": 0.044,
-        "borrow_amount": 0.7,
-        "kink_slope": 0.386,
-        "optimal_util_rate": 0.9,
-        "pool_id": "3",
-        "reserve_size": 1
-      },
-      "4": {
-        "base_rate": 0.03,
-        "base_slope": 0.044,
-        "borrow_amount": 0.75,
-        "kink_slope": 0.163,
-        "optimal_util_rate": 0.65,
-        "pool_id": "4",
-        "reserve_size": 1
-      },
-      "5": {
-        "base_rate": 0.05,
-        "base_slope": 0.021,
-        "borrow_amount": 0.85,
-        "kink_slope": 0.232,
-        "optimal_util_rate": 0.75,
-        "pool_id": "5",
-        "reserve_size": 1
-      },
-      "6": {
-        "base_rate": 0.01,
-        "base_slope": 0.062,
-        "borrow_amount": 0.7,
-        "kink_slope": 0.997,
-        "optimal_util_rate": 0.8,
-        "pool_id": "6",
-        "reserve_size": 1
-      },
-      "7": {
-        "base_rate": 0.02,
-        "base_slope": 0.098,
-        "borrow_amount": 0.9,
-        "kink_slope": 0.543,
-        "optimal_util_rate": 0.75,
-        "pool_id": "7",
-        "reserve_size": 1
-      },
-      "8": {
-        "base_rate": 0.01,
-        "base_slope": 0.028,
-        "borrow_amount": 0.55,
-        "kink_slope": 0.352,
-        "optimal_util_rate": 0.8,
-        "pool_id": "8",
-        "reserve_size": 1
-      },
-      "9": {
-        "base_rate": 0.04,
-        "base_slope": 0.066,
-        "borrow_amount": 0.7,
-        "kink_slope": 0.617,
-        "optimal_util_rate": 0.8,
-        "pool_id": "9",
-        "reserve_size": 1
+      "Sturdy ETH/Sommelier Turbo stETH silo": {
+        "pool_type": 2,
+        "pool_id": "Sturdy ETH/Sommelier Turbo stETH silo",
+        "contract_address": "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f"
       }
-    },
-    "total_assets": 1
+    }
   }
 }'
-
 ```
 
 And the corresponding response(example) format from the subnet:
@@ -287,63 +222,21 @@ And the corresponding response(example) format from the subnet:
 {
     "allocations": {
         "1": {
-            "apy": "0.0178836889",
+            "apy": 2609043057391825,
             "allocations": {
-                "0": 0.04004545,
-                "1": 0.10278418,
-                "2": 0.05335314,
-                "3": 0.29463011,
-                "4": 0.02173878,
-                "5": 0.19847374,
-                "6": 0.12387853,
-                "7": 0.01205671,
-                "8": 0.03990653,
-                "9": 0.11313283
+                "Sturdy ETH/rsETH silo": 250000000000000000,
+                "Sturdy ETH/rswETH Pendle PT silo": 250000000000000000,
+                " Sturdy ETH/SwETH silo": 250000000000000000,
+                "Sturdy ETH/Sommelier Turbo stETH silo": 250000000000000000
             }
         },
-        "10": {
-            "apy": "0.0178836889",
+        "4": {
+            "apy": 2609043057391825,
             "allocations": {
-                "0": 0.04004545,
-                "1": 0.10278418,
-                "2": 0.05335314,
-                "3": 0.29463011,
-                "4": 0.02173878,
-                "5": 0.19847374,
-                "6": 0.12387853,
-                "7": 0.01205671,
-                "8": 0.03990653,
-                "9": 0.11313283
-            }
-        },
-        "11": {
-            "apy": "0.0178836889",
-            "allocations": {
-                "0": 0.04004545,
-                "1": 0.10278418,
-                "2": 0.05335314,
-                "3": 0.29463011,
-                "4": 0.02173878,
-                "5": 0.19847374,
-                "6": 0.12387853,
-                "7": 0.01205671,
-                "8": 0.03990653,
-                "9": 0.11313283
-            }
-        },
-        "12": {
-            "apy": "0.0178836889",
-            "allocations": {
-                "0": 0.04004545,
-                "1": 0.10278418,
-                "2": 0.05335314,
-                "3": 0.29463011,
-                "4": 0.02173878,
-                "5": 0.19847374,
-                "6": 0.12387853,
-                "7": 0.01205671,
-                "8": 0.03990653,
-                "9": 0.11313283
+                "Sturdy ETH /rsETH silo": 250000000000000000,
+                "Sturdy ETH/rswETH Pendle PT silo": 250000000000000000,
+                "Sturdy ETH/SwETH silo": 250000000000000000,
+                "Sturdy ETH/Sommelier Turbo stETH silo": 250000000000000000
             }
         }
     }

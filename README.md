@@ -50,56 +50,75 @@ There are three core files.
 - Validators are responsible for distributing lists of pools (of which contain relevant parameters
   such as base interest rate, base interest rate slope, minimum borrow amount, etc), as well as a
   maximum token balance miners can allocate to pools. Below is the function present in the codebase
-  used for generating a dummy `assets_and_pools` taken from [pools.py](./sturdy/pools.py):
+  used for generating a dummy `assets_and_pools` taken from [pools.py](./sturdy/pools.py) used for
+  synthetic requests:
     ```python
-    def generate_assets_and_pools(rng_gen=np.random) -> typing.Dict:  # generate pools
+    def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
         assets_and_pools = {}
-        pools = {
-            str(x): {
-                "pool_id": str(x),
-                "base_rate": randrange_float(
-                    MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen
-                ),
-                "base_slope": randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen),
-                "kink_slope": randrange_float(
-                    MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen
-                ),  # kink rate - kicks in after pool hits optimal util rate
-                "optimal_util_rate": randrange_float(
-                    MIN_OPTIMAL_RATE, MAX_OPTIMAL_RATE, OPTIMAL_UTIL_STEP, rng_gen
-                ),  # optimal util rate - after which the kink slope kicks in
-                "borrow_amount": format_num_prec(
-                    POOL_RESERVE_SIZE
-                    * randrange_float(MIN_UTIL_RATE, MAX_UTIL_RATE, UTIL_RATE_STEP, rng_gen)
-                ),  # initial borrowed amount from pool
-                "reserve_size": POOL_RESERVE_SIZE,
-            }
-            for x in range(NUM_POOLS)
-        }
 
-        assets_and_pools["total_assets"] = TOTAL_ASSETS
+        pools = [
+            BasePool(
+                pool_id=str(x),
+                pool_type=POOL_TYPES.SYNTHETIC,
+                base_rate=randrange_float(
+                    MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen
+                ),
+                base_slope=randrange_float(
+                    MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen
+                ),
+                kink_slope=randrange_float(
+                    MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen
+                ),  # kink rate - kicks in after pool hits optimal util rate
+                optimal_util_rate=randrange_float(
+                    MIN_OPTIMAL_RATE,
+                    MAX_OPTIMAL_RATE,
+                    OPTIMAL_UTIL_STEP,
+                    rng_gen=rng_gen,
+                ),  # optimal util rate - after which the kink slope kicks in
+                borrow_amount=int(
+                    format_num_prec(
+                        wei_mul(
+                            POOL_RESERVE_SIZE,
+                            randrange_float(
+                                MIN_UTIL_RATE,
+                                MAX_UTIL_RATE,
+                                UTIL_RATE_STEP,
+                                rng_gen=rng_gen,
+                            ),
+                        )
+                    )
+                ),  # initial borrowed amount from pool
+                reserve_size=POOL_RESERVE_SIZE,
+            )
+            for x in range(NUM_POOLS)
+        ]
+
+        pools = {str(pool.pool_id): pool for pool in pools}
+
+        assets_and_pools["total_assets"] = math.floor(
+            randrange_float(
+                MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen
+            )
+        )
         assets_and_pools["pools"] = pools
 
         return assets_and_pools
     ```
     Validators can optionally run an API server and sell their bandwidth to outside users to send
-    their own pools to the subnet. For more information on this process - please read
+    their own pools (organic requests) to the subnet. For more information on this process - please read
     [docs/validator.md](docs/validator.md)
+- **NOTE: Validators use units of [wei](https://www.alchemy.com/blog/what-is-wei) for handling some
+  pool parameters and miner allocations.**
 
 - The miners, after receiving these pools from validators, must then attempt to allocate the
   `TOTAL_ASSETS` into the given pools, with the ultimate goal of trying to maximize their yield.
   This repository comes with a default asset allocation algorithm in the form of
-  `greedy_allocation_algorithm` (a greedy allocation algorithm) in
-  [misc.py](./sturdy/utils/misc.py). The greedy allocation essentially works by breaking its assets
-  into many chunks of small sizes, and allocating them into the pools by utilizing their current
-  yields to determine its allocations to each pool (it is done this way because the yields of the
-  pools are dynamic based on their various parameters - most notably it's `utilization rate =
-  borrow amount / total available tokens`). A diagram is provided below for the more visually
-  attuned: 
-
-![allocations](./assets/allocations.png)
+  `naive_algorithm` (a naive allocation algorithm) in
+  [algo.py](./sturdy/algo.py). The naive allocation essentially works by divvying assets across
+  pools evenly.
 
 - After generating allocations, miners then send their outputs to validators to be scored. In order
-  to do this, validators run a simulation which simulates borrow behaviour over a predetermined
+  to do this, validators run a simulation which simulates borrow behavior over a predetermined
   amount of timesteps. The scores of miners are determined based on their relative aggregate
   yields, and miners which have similar allocations to other miners will be penalized if they are
   not perceived as being original. If miners fail to respond in ~10 seconds after receiving the request they are scored

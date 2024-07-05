@@ -568,7 +568,6 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         return supply_apy
 
 
-# TODO: add different interest rate models in the future - we use a single simple model for now
 def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
     assets_and_pools = {}
 
