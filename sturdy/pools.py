@@ -424,6 +424,14 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _silo_strategy_contract: Contract = PrivateAttr()
     _pair_contract: Contract = PrivateAttr()
     _rate_model_contract: Contract = PrivateAttr()
+    _curr_deposit_amount: int = PrivateAttr()
+    _util_prec: int = PrivateAttr()
+    _fee_prec: int = PrivateAttr()
+    _totalAsset: int = PrivateAttr()
+    _totalBorrow: int = PrivateAttr()
+    _current_rate_info = PrivateAttr()
+    _rate_prec: int = PrivateAttr()
+    _block: web3.types.BlockData = PrivateAttr()
 
     # def __hash__(self):
     #     return hash((self._atoken_contract.address, self._underlying_asset_address))
@@ -437,7 +445,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     #         other._underlying_asset_address,
     #     )
 
-    def pool_init(self, web3_provider: Web3):
+    def pool_init(self, user_addr: str, web3_provider: Web3):
         try:
             assert web3_provider.is_connected()
         except Exception as err:
@@ -492,49 +500,58 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         except Exception as e:
             bt.logging.error(e)
 
-    def sync(self, web3_provider: Web3):
-        if not self._initted:
-            self.pool_init(web3_provider)
+    def sync(self, user_addr: str, web3_provider: Web3):
         """Syncs with chain"""
-        pass
+        if not self._initted:
+            self.pool_init(user_addr, web3_provider)
+
+        user_shares = retry_with_backoff(
+            self._pair_contract.functions.balanceOf(user_addr).call
+        )
+        self._curr_deposit_amount = retry_with_backoff(
+            self._pair_contract.functions.convertToAssets(user_shares).call
+        )
+
+        constants = retry_with_backoff(
+            self._pair_contract.functions.getConstants().call
+        )
+        self._util_prec = constants[2]
+        self._fee_prec = constants[3]
+        self._totalAsset = retry_with_backoff(
+            self._pair_contract.functions.totalAsset().call
+        )
+        self._totalBorrow = retry_with_backoff(
+            self._pair_contract.functions.totalBorrow().call
+        )
+
+        self._block = web3_provider.eth.get_block("latest")
+
+        self._current_rate_info = retry_with_backoff(
+            self._pair_contract.functions.currentRateInfo().call
+        )
+
+        self._rate_prec = retry_with_backoff(
+            self._rate_model_contract.functions.RATE_PREC().call
+        )
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     # TODO: __hash__, __eq__, and ttl caching
     # @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, user_addr: str, amount: int, web3_provider: Web3) -> int:
+        delta = amount - self._curr_deposit_amount
         """Returns supply rate given new deposit amount"""
-
-        user_shares = retry_with_backoff(self._pair_contract.functions.balanceOf(user_addr).call)
-        curr_deposit_amount = retry_with_backoff(self._pair_contract.functions.convertToAssets(user_shares).call)
-        delta = amount - curr_deposit_amount
-
-        constants = retry_with_backoff(
-            self._pair_contract.functions.getConstants().call
-        )
-        util_prec = constants[2]
-        fee_prec = constants[3]
-        totalAsset = retry_with_backoff(self._pair_contract.functions.totalAsset().call)
-        totalBorrow = retry_with_backoff(
-            self._pair_contract.functions.totalBorrow().call
+        util_rate = (self._util_prec * self._totalBorrow.amount) // (
+            self._totalAsset.amount + delta
         )
 
-        util_rate = (util_prec * totalBorrow.amount) // (totalAsset.amount + delta)
-        current_rate_info = retry_with_backoff(
-            self._pair_contract.functions.currentRateInfo().call
-        )
-
-        block = web3_provider.eth.get_block("latest")
-        current_timestamp = block["timestamp"]
-        last_update_timestamp = current_rate_info.lastTimestamp
+        last_update_timestamp = self._current_rate_info.lastTimestamp
+        current_timestamp = self._block["timestamp"]
         delta_time = current_timestamp - last_update_timestamp
 
-        rate_prec = retry_with_backoff(
-            self._rate_model_contract.functions.RATE_PREC().call
-        )
-        protocol_fee = current_rate_info.feeToProtocolRate
+        protocol_fee = self._current_rate_info.feeToProtocolRate
         (new_rate_per_sec, _) = retry_with_backoff(
             self._rate_model_contract.functions.getNewRate(
-                delta_time, util_rate, current_rate_info.fullUtilizationRate
+                delta_time, util_rate, self._current_rate_info.fullUtilizationRate
             ).call
         )
 
@@ -543,9 +560,9 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             * 31536000
             * 1e18
             * util_rate
-            // rate_prec
-            // util_prec
-            * (1 - (protocol_fee / fee_prec))
+            // self._rate_prec
+            // self._util_prec
+            * (1 - (protocol_fee / self._fee_prec))
         )  # (rate_per_sec_pct * seconds_in_year * util_rate_pct) * 1e18
 
         return supply_apy

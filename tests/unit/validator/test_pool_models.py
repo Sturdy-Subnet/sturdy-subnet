@@ -264,8 +264,9 @@ class TestSturdySiloStrategy(unittest.TestCase):
             pool_id="test",
             contract_address=self.contract_address,
         )
+        whale_addr = self.w3.to_checksum_address("0x0669091F451142b3228171aE6aD794cF98288124")
 
-        pool.pool_init(self.w3)
+        pool.sync(whale_addr, self.w3)
 
         self.assertTrue(hasattr(pool, "_silo_strategy_contract"))
         self.assertTrue(isinstance(pool._silo_strategy_contract, Contract))
@@ -279,7 +280,6 @@ class TestSturdySiloStrategy(unittest.TestCase):
         self.assertTrue(isinstance(pool._rate_model_contract, Contract))
         print(f"rate model contract: {pool._rate_model_contract.address}")
 
-        whale_addr = self.w3.to_checksum_address("0x0669091F451142b3228171aE6aD794cF98288124")
         # don't change deposit amount to pool by much
         prev_supply_rate = pool.supply_rate(whale_addr, int(630e18), self.w3)
         # increase deposit amount to pool by ~100e18 (~630 pxETH)

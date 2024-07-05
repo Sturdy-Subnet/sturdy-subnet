@@ -204,6 +204,7 @@ async def allocate(body: AllocateAssetsRequest):
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
         request_type=synapse.request_type,
+        user_address=synapse.user_address
     )
 
     ret = AllocateAssetsResponse(allocations=result)

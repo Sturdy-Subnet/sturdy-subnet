@@ -21,6 +21,8 @@ import bittensor as bt
 from typing import List, Dict, Union
 import asyncio
 
+import web3
+
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from sturdy.validator.reward import get_rewards
 from sturdy.protocol import AllocInfo
@@ -77,7 +79,8 @@ async def query_multiple_miners(
 async def query_and_score_miners(
     self,
     assets_and_pools: Dict[str, Union[Dict[str, int], int]] = None,
-    request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC
+    request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
+    user_address: str = web3.constants.ADDRESS_ZERO
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
     if request_type == REQUEST_TYPES.ORGANIC:
@@ -109,6 +112,7 @@ async def query_and_score_miners(
             request_type=request_type,
             assets_and_pools=self.simulator.assets_and_pools,
             allocations=self.simulator.allocations,
+            user_address=user_address
         ),
         active_uids,
     )
@@ -126,7 +130,8 @@ async def query_and_score_miners(
         query=self.step,
         uids=active_uids,
         responses=responses,
-        assets_and_pools=assets_and_pools
+        assets_and_pools=assets_and_pools,
+        user_address=user_address
     )
 
     bt.logging.info(f"Scored responses: {rewards}")

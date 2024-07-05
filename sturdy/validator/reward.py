@@ -338,6 +338,7 @@ def get_rewards(
     uids: List[str],
     responses: List,
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
+    user_address: str
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -366,8 +367,13 @@ def get_rewards(
     pools_to_scan = init_assets_and_pools["pools"]
     # update reserves given allocations
     for _, pool in pools_to_scan.items():
-        if pool.pool_type == POOL_TYPES.AAVE_V3 or pool.pool_type == POOL_TYPES.STURDY_SILO:
-            pool.sync(self.w3)
+        match pool.pool_type:
+            case POOL_TYPES.AAVE_V3:
+                pool.sync(self.w3)
+            case POOL_TYPES.STURDY_SILO:
+                pool.sync(user_address, self.w3)
+            case _:
+                pass
 
     resulting_apy = 0
     for response_idx, response in enumerate(responses):
