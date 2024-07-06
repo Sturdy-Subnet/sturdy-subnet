@@ -281,11 +281,11 @@ class TestSturdySiloStrategy(unittest.TestCase):
         print(f"rate model contract: {pool._rate_model_contract.address}")
 
         # don't change deposit amount to pool by much
-        prev_supply_rate = pool.supply_rate(whale_addr, int(630e18), self.w3)
+        prev_supply_rate = pool.supply_rate(int(630e18))
         # increase deposit amount to pool by ~100e18 (~630 pxETH)
-        supply_rate_increase = pool.supply_rate(whale_addr, int(730e18), self.w3)
+        supply_rate_increase = pool.supply_rate(int(730e18))
         # decrease deposit amount to pool by ~100e18 (~530 pxETH)
-        supply_rate_decrease = pool.supply_rate(whale_addr, int(530e18), self.w3)
+        supply_rate_decrease = pool.supply_rate(int(530e18))
         print(f"supply rate unchanged: {prev_supply_rate}")
         print(f"supply rate after increasing deposit: {supply_rate_increase}")
         print(f"supply rate after decreasing deposit: {supply_rate_decrease}")

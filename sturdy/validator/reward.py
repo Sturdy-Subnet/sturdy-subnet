@@ -291,7 +291,7 @@ def calculate_apy(
         match pool.pool_type:
             case POOL_TYPES.STURDY_SILO:
                 pool_yield = wei_mul(
-                    allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation, web3_provider=self.w3)
+                    allocation, pool.supply_rate(amount=allocation)
                 )
             case _:
                 pool_yield = wei_mul(

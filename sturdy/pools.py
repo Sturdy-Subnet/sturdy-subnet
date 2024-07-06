@@ -537,7 +537,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     # last 256 unique calls to this will be cached for the next 60 seconds
     # TODO: __hash__, __eq__, and ttl caching
     # @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, user_addr: str, amount: int, web3_provider: Web3) -> int:
+    def supply_rate(self, amount: int) -> int:
         delta = amount - self._curr_deposit_amount
         """Returns supply rate given new deposit amount"""
         util_rate = (self._util_prec * self._totalBorrow.amount) // (
