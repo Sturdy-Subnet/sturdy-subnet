@@ -19,6 +19,7 @@
 
 import time
 import asyncio
+import uuid
 
 # Bittensor
 import bittensor as bt
@@ -206,8 +207,9 @@ async def allocate(body: AllocateAssetsRequest):
         request_type=synapse.request_type,
         user_address=synapse.user_address
     )
+    request_uuid = uid = str(uuid.uuid4()).replace('-', '')
 
-    ret = AllocateAssetsResponse(allocations=result)
+    ret = AllocateAssetsResponse(allocations=result, request_uuid=request_uuid)
     return ret
 
 

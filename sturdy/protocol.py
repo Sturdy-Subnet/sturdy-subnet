@@ -59,6 +59,7 @@ class AllocateAssetsResponse(BaseModel):
     class Config:
         use_enum_values = True
 
+    request_uuid: str
     allocations: Dict[str, AllocInfo] = Field(
         ...,
         description="allocations produce by miners",
