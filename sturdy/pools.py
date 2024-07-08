@@ -433,17 +433,17 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _rate_prec: int = PrivateAttr()
     _block: web3.types.BlockData = PrivateAttr()
 
-    # def __hash__(self):
-    #     return hash((self._atoken_contract.address, self._underlying_asset_address))
+    def __hash__(self):
+        return hash((self._silo_strategy_contract.address, self._pair_contract))
 
-    # def __eq__(self, other):
-    #     if not isinstance(other, AaveV3DefaultInterestRatePool):
-    #         return NotImplemented
-    #     # Compare the attributes for equality
-    #     return (self._atoken_contract.address, self._underlying_asset_address) == (
-    #         other._atoken_contract.address,
-    #         other._underlying_asset_address,
-    #     )
+    def __eq__(self, other):
+        if not isinstance(other, VariableInterestSturdySiloStrategy):
+            return NotImplemented
+        # Compare the attributes for equality
+        return (self._silo_strategy_contract.address, self._pair_contract) == (
+            other._silo_strategy_contract.address,
+            other._pair_contract.address,
+        )
 
     def pool_init(self, user_addr: str, web3_provider: Web3):
         try:
@@ -497,6 +497,8 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
                 rate_model_contract, address=rate_model_contract_address
             )
 
+            self._initted = True
+
         except Exception as e:
             bt.logging.error(e)
 
@@ -535,8 +537,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         )
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    # TODO: __hash__, __eq__, and ttl caching
-    # @ttl_cache(maxsize=256, ttl=60)
+    @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: int) -> int:
         delta = amount - self._curr_deposit_amount
         """Returns supply rate given new deposit amount"""
