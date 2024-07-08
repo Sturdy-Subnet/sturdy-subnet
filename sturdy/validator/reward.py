@@ -64,7 +64,7 @@ def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, 
 def format_allocations(
     allocations: Dict[str, int],
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
 ):
     # TODO: better way to do this?
@@ -187,7 +187,7 @@ def adjust_rewards_for_plagiarism(
     rewards_apy: torch.FloatTensor,
     apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, int], int]]],
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
     uids: List,
     axon_times: Dict[str, float],
@@ -240,7 +240,7 @@ def _get_rewards(
     max_apy: float,
     apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, int], int]]],
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
     uids: List[int],
     axon_times: List[float],
@@ -275,7 +275,7 @@ def calculate_apy(
     self,
     allocations: Dict[str, int],
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
 ):
     """
@@ -306,7 +306,7 @@ def calculate_apy(
 def calculate_aggregate_apy(
     allocations: Dict[str, int],
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
     timesteps: int,
     pool_history: Dict[str, Dict[str, Any]],
@@ -370,7 +370,7 @@ def get_rewards(
     # update reserves given allocations
     for _, pool in pools_to_scan.items():
         match pool.pool_type:
-            case POOL_TYPES.AAVE_V3:
+            case POOL_TYPES.AAVE:
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
                 pool.sync(user_address, self.w3)

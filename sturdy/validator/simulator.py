@@ -31,7 +31,7 @@ class Simulator(object):
     def init_data(
         self,
         init_assets_and_pools: Dict[
-            str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
+            str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
         ] = None,
         init_allocations: Dict[str, int] = None,
     ):

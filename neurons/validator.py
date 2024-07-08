@@ -170,6 +170,48 @@ async def status():
 
 @app.post("/allocate", response_model=AllocateAssetsResponse)
 async def allocate(body: AllocateAssetsRequest):
+    """
+    Handles allocation requests by creating pools, querying and scoring miners, and returning the allocations.
+
+    Args:
+        body (AllocateAssetsRequest): The request body containing the allocation details including the type of request,
+                                      user address, and assets and pools information.
+
+    Returns:
+        AllocateAssetsResponse: The response containing the allocations and a unique request UUID.
+
+    Example Request JSON Data:
+        {
+          "request_type": "ORGANIC",
+          "user_address": "0xD8f9475A4A1A6812212FD62e80413d496038A89A",
+          "assets_and_pools": {
+            "total_assets": 1000000000000000000,
+            "pools": {
+              "Sturdy ETH/rsETH silo": {
+                "pool_type": "STURDY_SILO",
+                "pool_id": "Sturdy ETH/rsETH silo",
+                "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
+              },
+              ...
+            }
+          }
+        }
+
+    Example Response JSON Data:
+        {
+            "request_uuid": "a8af54a41fa347d7b59570c81fe35492",
+            "allocations": {
+                "1": {
+                    "apy": 2609043057391825,
+                    "allocations": {
+                        "Sturdy ETH/rsETH silo": 250000000000000000,
+                        ...
+                    }
+                },
+                ...
+            }
+        }
+    """
     synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
     bt.logging.debug(f"Synapse:\n{synapse}")
     pools = synapse.assets_and_pools["pools"]

@@ -26,9 +26,9 @@ import web3
 from sturdy.pools import BasePoolModel, ChainBasedPoolModel
 
 
-class REQUEST_TYPES(int, Enum):
-    ORGANIC = 0
-    SYNTHETIC = 1
+class REQUEST_TYPES(str, Enum):
+    ORGANIC = 'ORGANIC'
+    SYNTHETIC = 'SYNTHETIC'
 
 
 class AllocInfo(TypedDict):
@@ -44,7 +44,7 @@ class AllocateAssetsRequest(BaseModel):
         default=REQUEST_TYPES.ORGANIC, description="type of request"
     )
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
@@ -83,7 +83,7 @@ class AllocateAssetsBase(BaseModel):
         default=REQUEST_TYPES.ORGANIC, description="type of request"
     )
     assets_and_pools: Dict[
-        str, Union[Dict[str, Union[BasePoolModel, ChainBasedPoolModel]], int]
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",

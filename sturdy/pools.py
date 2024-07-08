@@ -41,10 +41,10 @@ from sturdy.utils.misc import (
 from sturdy.constants import *
 
 
-class POOL_TYPES(int, Enum):
-    SYNTHETIC = 0
-    AAVE_V3 = 1
-    STURDY_SILO = 2
+class POOL_TYPES(str, Enum):
+    STURDY_SILO = "STURDY_SILO"
+    AAVE = "AAVE"
+    SYNTHETIC = "SYNTHETIC"
 
 
 class BasePoolModel(BaseModel):
@@ -136,7 +136,9 @@ class ChainBasedPoolModel(BaseModel):
         default=web3.constants.ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls",
     )
-    contract_address: str = Field(..., description="address of contract to call")
+    contract_address: str = Field(
+        default=web3.constants.ADDRESS_ZERO, description="address of contract to call"
+    )
 
     _initted: bool = PrivateAttr(False)
 
@@ -165,11 +167,11 @@ class PoolFactory:
     @staticmethod
     def create_pool(
         pool_type: POOL_TYPES, **kwargs
-    ) -> Union[BasePoolModel, ChainBasedPoolModel]:
+    ) -> Union[ChainBasedPoolModel, BasePoolModel]:
         match pool_type:
             case POOL_TYPES.SYNTHETIC:
                 return BasePool(**kwargs)
-            case POOL_TYPES.AAVE_V3:
+            case POOL_TYPES.AAVE:
                 return AaveV3DefaultInterestRatePool(**kwargs)
             case POOL_TYPES.STURDY_SILO:
                 return VariableInterestSturdySiloStrategy(**kwargs)
@@ -181,7 +183,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
     pool_type: POOL_TYPES = Field(
-        default=POOL_TYPES.AAVE_V3, const=True, description="type of pool"
+        default=POOL_TYPES.AAVE, const=True, description="type of pool"
     )
 
     _atoken_contract: Contract = PrivateAttr()
