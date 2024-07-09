@@ -12,7 +12,7 @@ module.exports = {
   networks: {
     hardhat: {
       forking: {
-        url: process.env.MAINNET_FORKING_URL,
+        url: process.env.WEB3_PROVIDER_URL,
         blockNumber: 20233401,
       },
       accounts,

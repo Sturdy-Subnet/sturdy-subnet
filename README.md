@@ -117,16 +117,26 @@ There are three core files.
   [algo.py](./sturdy/algo.py). The naive allocation essentially works by divvying assets across
   pools evenly.
 
-- After generating allocations, miners then send their outputs to validators to be scored. In order
-  to do this, validators run a simulation which simulates borrow behavior over a predetermined
-  amount of timesteps. The scores of miners are determined based on their relative aggregate
+- After generating allocations, miners then send their outputs to validators to be scored. For
+  synthetic requests, validators run a simulation which simulates borrow behavior over a predetermined
+  amount of timesteps. For organic requests, on the other hand, validators query the relevant smart
+  contracts of user-defined pools on the Ethereum Network to calculate the miners' allocation's
+  yields. The scores of miners are determined based on their relative aggregate
   yields, and miners which have similar allocations to other miners will be penalized if they are
-  not perceived as being original. If miners fail to respond in ~10 seconds after receiving the request they are scored
+  not perceived as being original. If miners fail to respond in ~10 seconds after receiving the
+  request they are scored
   poorly.
   The best allocating miner will receive the most emissions. For more information on how
   miners are rewarded and how the simulator works- please see
   [reward.py](sturdy/validator/reward.py) and [simulator.py](sturdy/validator/simulator.py)
-  respectively.
+  respectively. A diagram is provided below highlighting the interactions that takes place within
+  the subnet when processing organic requests:
+
+ <div align="center"> 
+    <img src="./assets/organic_validator.png" />
+</div> 
+ 
+
 
 - We provide a demo which plots simulations in [plot_simulator.py](demos/plot_simulator.py). We
   provide a sample output of the script below:
@@ -251,7 +261,7 @@ inspiration from their work.
 This repository is licensed under the MIT License.
 ```text
 # The MIT License (MIT)
-# Copyright © 2023 Syeam Bin Abdullah
+# Copyright © 2024 Syeam Bin Abdullah
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation

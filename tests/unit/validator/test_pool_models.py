@@ -15,7 +15,7 @@ from sturdy.pools import AaveV3DefaultInterestRatePool, VariableInterestSturdySi
 from sturdy.utils.misc import retry_with_backoff
 
 load_dotenv()
-MAINNET_FORKING_URL = os.getenv("MAINNET_FORKING_URL")
+WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 
 
 # TODO: test pool_init seperately???
@@ -238,7 +238,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": MAINNET_FORKING_URL,
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
                         "blockNumber": 20233401,
                     },
                 },

@@ -35,6 +35,8 @@ from sturdy.utils.config import add_validator_args
 from sturdy.utils.wandb import init_wandb_validator, should_reinit_wandb, reinit_wandb
 from sturdy.constants import QUERY_RATE
 
+from dotenv import load_dotenv
+
 
 class BaseValidatorNeuron(BaseNeuron):
     """
@@ -50,6 +52,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def __init__(self, config=None):
         super().__init__(config=config)
+        load_dotenv()
 
         # init wandb
         self.wandb_run_log_count = 0
