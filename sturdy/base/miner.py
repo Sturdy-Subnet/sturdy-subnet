@@ -15,6 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import os
 import time
 import asyncio
 import threading
@@ -22,10 +23,12 @@ import argparse
 import traceback
 
 import bittensor as bt
+from web3 import Web3
 
 from sturdy.base.neuron import BaseNeuron
 from sturdy.utils.config import add_miner_args
 from sturdy.utils.wandb import init_wandb_miner
+from dotenv import load_dotenv
 
 
 class BaseMinerNeuron(BaseNeuron):
@@ -42,11 +45,20 @@ class BaseMinerNeuron(BaseNeuron):
 
     def __init__(self, config=None):
         super().__init__(config=config)
+        load_dotenv()
 
         # init wandb
         if not self.config.wandb.off:
             bt.logging.debug("loading wandb")
             init_wandb_miner(self=self)
+
+        w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
+        if w3_provider_url is None:
+            raise ValueError(
+                "You must provide a valid web3 provider url in order to handle organic requests!"
+            )
+
+        self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
 
         # Warn if allowing incoming requests from anyone.
         if not self.config.blacklist.force_validator_permit:

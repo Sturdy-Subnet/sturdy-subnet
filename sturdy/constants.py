@@ -29,7 +29,7 @@ STOCHASTICITY_STEP = 0.005
 POOL_RESERVE_SIZE = 1000e18  # 1000
 
 QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
-QUERY_TIMEOUT = 10  # timeout (seconds)
+QUERY_TIMEOUT = 30  # timeout (seconds)
 
 # The following constants are for different pool models
 # Aave

@@ -16,7 +16,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import math
-from typing import Dict, Union
+from typing import Dict, Literal, Union
 from enum import Enum
 
 import json
@@ -50,6 +50,7 @@ class POOL_TYPES(str, Enum):
 class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
 
+    pool_model_disc: Literal['SYNTHETIC'] = Field(default='SYNTHETIC', description="pool type discriminator")
     pool_id: str = Field(..., description="uid of pool")
     pool_type: POOL_TYPES = Field(
         default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool"
@@ -130,6 +131,7 @@ class ChainBasedPoolModel(BaseModel):
         contract_address: (str),
     """
 
+    pool_model_disc: Literal['CHAIN'] = Field(default='CHAIN', description="pool type discriminator")
     pool_id: str = Field(..., description="uid of pool")
     pool_type: POOL_TYPES = Field(..., description="type of pool")
     user_address: str = Field(
@@ -160,7 +162,7 @@ class ChainBasedPoolModel(BaseModel):
         raise NotImplementedError("sync() has not been implemented!")
 
     def supply_rate(self, **args):
-        raise NotImplementedError("sync() has not been implemented!")
+        raise NotImplementedError("supply_rate() has not been implemented!")
 
 
 class PoolFactory:

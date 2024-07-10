@@ -66,7 +66,7 @@ class Miner(BaseMinerNeuron):
 
         # try use default greedy alloaction algorithm to generate allocations
         try:
-            synapse.allocations = naive_algorithm(synapse)
+            synapse.allocations = naive_algorithm(self, synapse)
         except Exception as e:
             bt.logging.error(f"Error: {e}")
             # just return the auto vali generated allocations

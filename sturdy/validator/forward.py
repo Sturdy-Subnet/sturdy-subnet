@@ -106,14 +106,16 @@ async def query_and_score_miners(
 
     bt.logging.debug(f"active_uids: {active_uids}")
 
+    synapse = AllocateAssets(
+        request_type=request_type,
+        assets_and_pools=self.simulator.assets_and_pools,
+        allocations=self.simulator.allocations,
+        user_address=user_address
+    )
+
     responses = await query_multiple_miners(
         self,
-        AllocateAssets(
-            request_type=request_type,
-            assets_and_pools=self.simulator.assets_and_pools,
-            allocations=self.simulator.allocations,
-            user_address=user_address
-        ),
+        synapse,
         active_uids,
     )
     allocations = {
@@ -121,7 +123,7 @@ async def query_and_score_miners(
     }
 
     # Log the results for monitoring purposes.
-    bt.logging.debug(f"Pools: {assets_and_pools['pools']}")
+    bt.logging.debug(f"Pools: {synapse.assets_and_pools['pools']}")
     bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
     # Adjust the scores based on responses from miners.

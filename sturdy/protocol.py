@@ -17,7 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 from enum import Enum
-from typing import Dict, Optional, Union
+from typing import Annotated, Dict, Optional, Union
 from typing_extensions import TypedDict
 import bittensor as bt
 from pydantic import BaseModel, Field
@@ -27,8 +27,8 @@ from sturdy.pools import BasePoolModel, ChainBasedPoolModel
 
 
 class REQUEST_TYPES(str, Enum):
-    ORGANIC = 'ORGANIC'
-    SYNTHETIC = 'SYNTHETIC'
+    ORGANIC = "ORGANIC"
+    SYNTHETIC = "SYNTHETIC"
 
 
 class AllocInfo(TypedDict):
@@ -36,16 +36,20 @@ class AllocInfo(TypedDict):
     allocations: Union[Dict[str, int], None]
 
 
+PoolModel = Annotated[
+    Union[ChainBasedPoolModel, BasePoolModel], Field(discriminator="pool_model_disc")
+]
+
+
 class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
+        smart_union = True
 
     request_type: REQUEST_TYPES = Field(
         default=REQUEST_TYPES.ORGANIC, description="type of request"
     )
-    assets_and_pools: Dict[
-        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
-    ] = Field(
+    assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
@@ -78,13 +82,12 @@ class AllocateAssetsBase(BaseModel):
 
     class Config:
         use_enum_values = True
+        smart_union = True
 
     request_type: REQUEST_TYPES = Field(
         default=REQUEST_TYPES.ORGANIC, description="type of request"
     )
-    assets_and_pools: Dict[
-        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
-    ] = Field(
+    assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
@@ -102,7 +105,6 @@ class AllocateAssetsBase(BaseModel):
 
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
-        # TODO: figure out how to only show certain keys from pools and/or allocations
         return (
             f"AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools})"
             f"allocations={self.allocations}"
