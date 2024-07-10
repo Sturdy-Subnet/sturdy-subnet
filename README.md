@@ -115,7 +115,7 @@ There are three core files.
   This repository comes with a default asset allocation algorithm in the form of
   `naive_algorithm` (a naive allocation algorithm) in
   [algo.py](./sturdy/algo.py). The naive allocation essentially works by divvying assets across
-  pools evenly.
+  pools, and allocating more to pools which have a higher current supply rate.
 
 - After generating allocations, miners then send their outputs to validators to be scored. For
   synthetic requests, validators run a simulation which simulates borrow behavior over a predetermined

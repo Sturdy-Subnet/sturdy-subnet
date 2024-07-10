@@ -77,14 +77,14 @@ Where `ID_OR_PROCESS_NAME` is the `name` OR `id` of the process as noted per the
 ## Organic Validator 
 This is the less simple but more exciting of the two! Now you get to sell your bandwidth to whoever you want, with a very simple to use CLI!
 
-### Connecting to Ethereum
+#### Connecting to Ethereum
 Organic validators are required to have a connection to an Ethereum RPC to handle organic requests. It is required to interact with relevant smart contracts in order to perform certain operations i.e. calculate miner allocation yields.
 
-#### Preparing Environment
+##### Preparing Environment
 The next step involves interacting with an API. We've provided an [.env.example](../.env.example) file which should be copied as a `.env` file in the root of this repository before proceeding.
 
 #### Connecting to a Web3 Provider
-We recommend using a thirdy party service to connect to an RPC to perform on-chain calls such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `WEB3_PROVIDER_URL` alias.
+We recommend using a third party service to connect to an RPC to perform on-chain calls such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `WEB3_PROVIDER_URL` alias.
 
 #### Spinning Up Organic Validator
 
@@ -204,21 +204,25 @@ curl -X POST \
     "total_assets": 1000000000000000000,
     "pools": {
       "Sturdy ETH/rsETH silo": {
+        "pool_model_disc": "CHAIN",
         "pool_type": "STURDY_SILO",
         "pool_id": "Sturdy ETH/rsETH silo",
         "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
       },
       "Sturdy ETH/rswETH Pendle PT silo": {
+        "pool_model_disc": "CHAIN",
         "pool_type": "STURDY_SILO",
         "pool_id": "Sturdy ETH/rswETH Pendle PT silo",
         "contract_address": "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695"
       },
       "Sturdy ETH/SwETH silo": {
+        "pool_model_disc": "CHAIN",
         "pool_type": "STURDY_SILO",
         "pool_id": "Sturdy ETH/SwETH silo",
         "contract_address": "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2"
       },
       "Sturdy ETH/Sommelier Turbo stETH silo": {
+        "pool_model_disc": "CHAIN",
         "pool_type": "STURDY_SILO",
         "pool_id": "Sturdy ETH/Sommelier Turbo stETH silo",
         "contract_address": "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f"
