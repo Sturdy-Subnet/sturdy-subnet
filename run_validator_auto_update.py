@@ -9,7 +9,7 @@ def should_update_local(local_commit, remote_commit):
 
 
 def autoupdate_validator_steps(proc):
-    os.system(f'./autoupdate_validator_steps.sh {proc}')
+    os.system(f"./autoupdate_validator_steps.sh {proc}")
 
     time.sleep(20)
 
@@ -46,7 +46,12 @@ def run_auto_updater(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--proc", type=str, required=True, help="Name or id of validator's pm2 process \
-                        (run pm2 ls to check it)")
+    parser.add_argument(
+        "--proc",
+        type=str,
+        required=True,
+        help="Name or id of validator's pm2 process \
+                        (run pm2 ls to check it)",
+    )
     args = parser.parse_args()
     run_auto_updater(args)

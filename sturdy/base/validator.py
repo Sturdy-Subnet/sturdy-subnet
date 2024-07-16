@@ -17,11 +17,13 @@
 # DEALINGS IN THE SOFTWARE.
 
 
+import os
 import copy
 import torch
 import asyncio
 import argparse
 import threading
+from web3 import Web3
 import bittensor as bt
 
 from typing import List
@@ -32,6 +34,8 @@ from sturdy.mock import MockDendrite
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.wandb import init_wandb_validator, should_reinit_wandb, reinit_wandb
 from sturdy.constants import QUERY_RATE
+
+from dotenv import load_dotenv
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -48,6 +52,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def __init__(self, config=None):
         super().__init__(config=config)
+        load_dotenv()
 
         # init wandb
         self.wandb_run_log_count = 0
@@ -58,11 +63,21 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
+        if self.config.organic:
+            w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
+            if w3_provider_url is None:
+                raise ValueError(
+                    "You must provide a valid web3 provider url as an organic validator!"
+                )
+
+            self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
+
         # Dendrite lets us send messages to other nodes (axons) in the network.
         if self.config.mock:
             self.dendrite = MockDendrite(wallet=self.wallet)
         else:
             self.dendrite = bt.dendrite(wallet=self.wallet)
+
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
         # Set up initial scoring weights for validation

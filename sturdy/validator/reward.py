@@ -16,20 +16,22 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import sys
-
 import bittensor as bt
 import numpy as np
 import torch
 from typing import List, Dict, Tuple, Any, Union
 import copy
 
+import web3
+
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
-from sturdy.utils.misc import supply_rate, check_allocations
-from sturdy.protocol import AllocInfo
+from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
+from sturdy.utils.ethmath import wei_div, wei_mul
+from sturdy.utils.misc import check_allocations
+from sturdy.protocol import REQUEST_TYPES, AllocInfo
 
 
-def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, float]:
+def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, int]:
     """
     Returns a list of axons based on their response times.
 
@@ -60,8 +62,10 @@ def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, 
 
 
 def format_allocations(
-    allocations: Dict[str, float],
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    allocations: Dict[str, int],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
+    ],
 ):
     # TODO: better way to do this?
     if allocations is None:
@@ -72,7 +76,7 @@ def format_allocations(
     # pad the allocations
     for pool_id in pools.keys():
         if pool_id not in allocs:
-            allocs[pool_id] = 0.0
+            allocs[pool_id] = 0
 
     # sort the allocations by pool id
     formatted_allocs = {pool_id: allocs[pool_id] for pool_id in sorted(allocs.keys())}
@@ -82,23 +86,18 @@ def format_allocations(
 
 def reward_miner_apy(
     query: int,
-    max_apy: float,
-    miner_apy: float,
-) -> float:
-    # Define a small epsilon to avoid division by zero
-    epsilon = 1e-10
+    max_apy: int,
+    miner_apy: int,
+) -> int:
+    # Calculate the adjusted APY reward
+    if max_apy <= 0:
+        return 0
 
-    # Check if max_apy is very close to sys.float_info.min
-    if abs(max_apy - sys.float_info.min) < epsilon:
-        # If max_apy is too close to sys.float_info.min, return a default value
-        return 0.0
-
-    # Calculate the adjusted APY reward, avoiding division by zero
-    return (miner_apy - sys.float_info.min) / (max_apy - sys.float_info.min + epsilon)
+    return (miner_apy) / (max_apy)
 
 
 def calculate_penalties(
-    similarity_matrix: Dict[str, Dict[str, float]],
+    similarity_matrix: Dict[str, Dict[str, int]],
     axon_times: Dict[str, float],
     similarity_threshold: float = SIMILARITY_THRESHOLD,
 ):
@@ -115,7 +114,9 @@ def calculate_penalties(
 
 def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties):
     rewards = torch.zeros(len(miners))
-    max_penalty = max(penalties.values()) + 1  # Add 1 to avoid division by zero
+    max_penalty = max(penalties.values())
+    if max_penalty == 0:
+        return rewards_apy
 
     for idx, miner_id in enumerate(miners):
         # Calculate penalty adjustment
@@ -128,12 +129,69 @@ def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties):
     return rewards
 
 
+def get_similarity_matrix(
+    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, int], int]]],
+    assets_and_pools: Dict[str, Union[Dict[str, int], int]],
+):
+    """
+    Calculates the similarity matrix for the allocation strategies of miners using normalized Euclidean distance.
+
+    This function computes a similarity matrix based on the Euclidean distance between the allocation vectors of miners,
+    normalized by the maximum possible distance in the given asset space. Each miner's allocation is compared with every
+    other miner's allocation, resulting in a matrix where each element (i, j) represents the normalized Euclidean distance
+    between the allocations of miner_i and miner_j.
+
+    The similarity metric is scaled between 0 and 1, where 0 indicates identical allocations and 1 indicates the maximum
+    possible distance between the allocation 'vectors'.
+
+    Args:
+        apys_and_allocations (Dict[str, Dict[str, Union[Dict[str, int], int]]]):
+            A dictionary containing the APY and allocation strategies for each miner. The keys are miner identifiers,
+            and the values are dictionaries with their respective allocations and APYs.
+        assets_and_pools (Dict[str, Union[Dict[str, int], int]]):
+            A dictionary representing the assets available to the miner as well as the pools they can allocate to
+
+    Returns:
+        Dict[str, Dict[str, float]]:
+            A nested dictionary where each key is a miner identifier, and the value is another dictionary containing the
+            normalized Euclidean distances to every other miner. The distances are scaled between 0 and 1.
+    """
+
+    similarity_matrix = {}
+    total_assets = assets_and_pools["total_assets"]
+    for miner_a, info_a in apys_and_allocations.items():
+        _alloc_a = info_a["allocations"]
+        alloc_a = np.array(
+            list(format_allocations(_alloc_a, assets_and_pools).values()),
+            dtype=np.float32,
+        )
+        similarity_matrix[miner_a] = {}
+        for miner_b, info_b in apys_and_allocations.items():
+            if miner_a != miner_b:
+                _alloc_b = info_b["allocations"]
+                if _alloc_a is None or _alloc_b is None:
+                    similarity_matrix[miner_a][miner_b] = float("inf")
+                    continue
+                alloc_b = np.array(
+                    list(format_allocations(_alloc_b, assets_and_pools).values()),
+                    dtype=np.float32,
+                )
+                similarity_matrix[miner_a][miner_b] = np.linalg.norm(
+                    alloc_a - alloc_b
+                ) / np.sqrt(float(2 * total_assets**2))
+
+    return similarity_matrix
+
+
 def adjust_rewards_for_plagiarism(
     rewards_apy: torch.FloatTensor,
-    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, int], int]]],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
+    ],
     uids: List,
     axon_times: Dict[str, float],
+    similarity_threshold: float = SIMILARITY_THRESHOLD,
 ) -> torch.FloatTensor:
     """
     Adjusts the annual percentage yield (APY) rewards for miners based on the similarity of their allocations
@@ -146,10 +204,10 @@ def adjust_rewards_for_plagiarism(
 
     Args:
         rewards_apy (torch.FloatTensor): The initial APY rewards for the miners, before adjustments.
-        apys_and_allocations (Dict[str, Dict[str, Union[Dict[str, float], float]]]):
+        apys_and_allocations (Dict[str, Dict[str, Union[Dict[str, int], int]]]):
             A dictionary containing APY values and allocation strategies for each miner. The keys are miner identifiers,
             and the values are dictionaries that include their allocations and APYs.
-        assets_and_pools (Dict[str, Union[Dict[str, float], float]]):
+        assets_and_pools (Dict[str, Union[Dict[str, int], int]]):
             A dictionary representing the available assets and their corresponding pools.
         uids (List): A list of unique identifiers for the miners.
         axon_times (Dict[str, float]): A dictionary that tracks the arrival times of each miner, with the keys being
@@ -165,23 +223,10 @@ def adjust_rewards_for_plagiarism(
           to a consistent format suitable for comparison.
     """
     # Step 1: Calculate pairwise similarity (e.g., using Euclidean distance)
-    similarity_matrix = {}
-    for miner_a, info_a in apys_and_allocations.items():
-        _alloc_a = info_a["allocations"]
-        alloc_a = np.array(
-            list(format_allocations(_alloc_a, assets_and_pools).values())
-        )
-        similarity_matrix[miner_a] = {}
-        for miner_b, info_b in apys_and_allocations.items():
-            if miner_a != miner_b:
-                _alloc_b = info_b["allocations"]
-                alloc_b = np.array(
-                    list(format_allocations(_alloc_b, assets_and_pools).values())
-                )
-                similarity_matrix[miner_a][miner_b] = np.linalg.norm(alloc_a - alloc_b)
+    similarity_matrix = get_similarity_matrix(apys_and_allocations, assets_and_pools)
 
     # Step 2: Apply penalties considering axon times
-    penalties = calculate_penalties(similarity_matrix, axon_times)
+    penalties = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
 
     # Step 3: Calculate final rewards with adjusted penalties
     rewards = calculate_rewards_with_adjusted_penalties(uids, rewards_apy, penalties)
@@ -193,8 +238,10 @@ def _get_rewards(
     self,
     query: int,
     max_apy: float,
-    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, float], float]]],
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, int], int]]],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
+    ],
     uids: List[int],
     axon_times: List[float],
 ) -> float:
@@ -224,9 +271,43 @@ def _get_rewards(
     return adjusted_rewards
 
 
+def calculate_apy(
+    self,
+    allocations: Dict[str, int],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
+    ],
+):
+    """
+    Calculates immediate projected yields given intial assets and pools, pool history, and number of timesteps
+    """
+
+    # calculate projected yield
+    initial_balance = assets_and_pools["total_assets"]
+    pools = assets_and_pools["pools"]
+    pct_yield = 0
+    for uid, pool in pools.items():
+        allocation = allocations[uid]
+        match pool.pool_type:
+            case POOL_TYPES.STURDY_SILO:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate(amount=allocation)
+                )
+            case _:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation)
+                )
+        pct_yield += pool_yield
+    pct_yield = wei_div(pct_yield, initial_balance)
+
+    return pct_yield
+
+
 def calculate_aggregate_apy(
-    allocations: Dict[str, float],
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
+    allocations: Dict[str, int],
+    assets_and_pools: Dict[
+        str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
+    ],
     timesteps: int,
     pool_history: Dict[str, Dict[str, Any]],
 ):
@@ -241,17 +322,14 @@ def calculate_aggregate_apy(
         curr_yield = 0
         for uid, allocs in allocations.items():
             pool_data = pools[uid]
-            util_rate = pool_data["borrow_amount"] / pool_data["reserve_size"]
-            pool_yield = allocs * supply_rate(util_rate, assets_and_pools["pools"][uid])
+            pool_yield = wei_mul(allocs, pool_data.supply_rate)
             curr_yield += pool_yield
         pct_yield += curr_yield
 
-    pct_yield /= initial_balance
-    if timesteps == 0:
-        return pct_yield * 365
-    aggregate_apy = (
-        pct_yield / timesteps
-    ) * 365  # for simplicity each timestep is a day in the simulator
+    pct_yield = wei_div(pct_yield, initial_balance)
+    aggregate_apy = int(
+        pct_yield // timesteps
+    )  # for simplicity each timestep is a day in the simulator
 
     return aggregate_apy
 
@@ -261,6 +339,8 @@ def get_rewards(
     query: int,
     uids: List[str],
     responses: List,
+    assets_and_pools: Dict[str, Union[Dict[str, int], int]],
+    user_address: str = web3.constants.ADDRESS_ZERO
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -276,12 +356,28 @@ def get_rewards(
 
     # maximum yield to scale all rewards by
     # total apys of allocations per miner
-    max_apy = sys.float_info.min
+    max_apy = 0
     apys = {}
 
-    init_assets_and_pools = copy.deepcopy(self.simulator.assets_and_pools)
+    init_assets_and_pools = copy.deepcopy(assets_and_pools)
 
-    bt.logging.debug(f"Running simulator for {self.simulator.timesteps} timesteps for each allocation...")
+    bt.logging.debug(
+        f"Running simulator for {self.simulator.timesteps} timesteps for each allocation..."
+    )
+
+    # TODO: assuming that we are only getting immediate apy for organic chainbasedpool requests
+    pools_to_scan = init_assets_and_pools["pools"]
+    # update reserves given allocations
+    for _, pool in pools_to_scan.items():
+        match pool.pool_type:
+            case POOL_TYPES.AAVE:
+                pool.sync(self.w3)
+            case POOL_TYPES.STURDY_SILO:
+                pool.sync(user_address, self.w3)
+            case _:
+                pass
+
+    resulting_apy = 0
     for response_idx, response in enumerate(responses):
         # reset simulator for next run
         self.simulator.reset()
@@ -302,40 +398,44 @@ def get_rewards(
             bt.logging.warning(
                 f"CHEATER DETECTED  - MINER WITH UID {miner_uid} - PUNISHING 👊😠"
             )
-            apys[miner_uid] = sys.float_info.min
+            apys[miner_uid] = 0
             continue
 
-        # miner does not appear to be cheating - so we init simulator data
-        self.simulator.init_data(
-            init_assets_and_pools=copy.deepcopy(init_assets_and_pools),
-            init_allocations=allocations,
-        )
-
-        # update reserves given allocations
         try:
-            self.simulator.update_reserves_with_allocs()
+            if response.request_type == REQUEST_TYPES.SYNTHETIC:
+                # miner does not appear to be cheating - so we init simulator data
+                self.simulator.init_data(
+                    init_assets_and_pools=copy.deepcopy(init_assets_and_pools),
+                    init_allocations=allocations,
+                )
+                self.simulator.update_reserves_with_allocs()
+
+                self.simulator.run()
+
+                resulting_apy = calculate_aggregate_apy(
+                    allocations,
+                    init_assets_and_pools,
+                    self.simulator.timesteps,
+                    self.simulator.pool_history,
+                )
+
+            else:
+                resulting_apy = calculate_apy(
+                    self,
+                    allocations,
+                    init_assets_and_pools,
+                )
         except Exception as e:
             bt.logging.error(e)
-            bt.logging.error(
-                "Failed to update reserves with miner allocations - PENALIZING MINER"
-            )
+            bt.logging.error("Failed to calculate apy - PENALIZING MINER")
             miner_uid = uids[response_idx]
-            apys[miner_uid] = sys.float_info.min
+            apys[miner_uid] = 0
             continue
 
-        self.simulator.run()
+        if resulting_apy > max_apy:
+            max_apy = resulting_apy
 
-        aggregate_apy = calculate_aggregate_apy(
-            allocations,
-            init_assets_and_pools,
-            self.simulator.timesteps,
-            self.simulator.pool_history,
-        )
-
-        if aggregate_apy > max_apy:
-            max_apy = aggregate_apy
-
-        apys[uids[response_idx]] = aggregate_apy
+        apys[uids[response_idx]] = resulting_apy
 
     axon_times = get_response_times(
         uids=uids, responses=responses, timeout=QUERY_TIMEOUT
@@ -345,15 +445,16 @@ def get_rewards(
     # TODO: cleaner way to do this?
     for uid in uids:
         if axon_times[uid] >= QUERY_TIMEOUT:
-            apys[uid] = sys.float_info.min
+            apys[uid] = 0
 
     # TODO: should probably move some things around later down the road
     allocs = {}
+    filtered_allocs = {}
     for idx in range(len(responses)):
         # TODO: cleaner way to do this?
         if responses[idx].allocations is None or axon_times[uids[idx]] >= QUERY_TIMEOUT:
             allocs[uids[idx]] = {
-                "apy": sys.float_info.min,
+                "apy": 0,
                 "allocations": None,
             }
         else:
@@ -361,6 +462,18 @@ def get_rewards(
                 "apy": apys[uids[idx]],
                 "allocations": responses[idx].allocations,
             }
+
+            filtered_allocs[uids[idx]] = {
+                "apy": apys[uids[idx]],
+                "allocations": responses[idx].allocations,
+            }
+
+    sorted_filtered_allocs = {
+        uid: allocs
+        for uid, allocs in sorted(
+            filtered_allocs.items(), key=lambda item: item[1]["apy"], reverse=True
+        )
+    }
 
     sorted_apys = {
         k: v for k, v in sorted(apys.items(), key=lambda item: item[1], reverse=True)
@@ -372,7 +485,7 @@ def get_rewards(
 
     bt.logging.debug(f"sorted apys: {sorted_apys}")
     bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
-    bt.logging.debug(f"allocs:\n{allocs}")
+    bt.logging.debug(f"sorted filtered allocs:\n{sorted_filtered_allocs}")
 
     # Get all the reward results by iteratively calling your reward() function.
     return (
@@ -385,5 +498,5 @@ def get_rewards(
             uids=uids,
             axon_times=axon_times,
         ),
-        allocs,
+        sorted_filtered_allocs,
     )

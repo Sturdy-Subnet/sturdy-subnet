@@ -16,24 +16,46 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import typing
+from enum import Enum
+from typing import Annotated, Dict, Optional, Union
+from typing_extensions import TypedDict
 import bittensor as bt
 from pydantic import BaseModel, Field
+import web3
+
+from sturdy.pools import BasePoolModel, ChainBasedPoolModel
 
 
-class AllocInfo(typing.TypedDict):
-    apy: str
-    allocations: typing.Union[typing.Dict[str, float], None]
+class REQUEST_TYPES(str, Enum):
+    ORGANIC = "ORGANIC"
+    SYNTHETIC = "SYNTHETIC"
+
+
+class AllocInfo(TypedDict):
+    apy: int
+    allocations: Union[Dict[str, int], None]
+
+
+PoolModel = Annotated[
+    Union[ChainBasedPoolModel, BasePoolModel], Field(discriminator="pool_model_disc")
+]
 
 
 class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
+        smart_union = True
 
-    assets_and_pools: typing.Dict[str, typing.Dict | float] = Field(
+    request_type: REQUEST_TYPES = Field(
+        default=REQUEST_TYPES.ORGANIC, description="type of request"
+    )
+    assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
         ...,
-        required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
+    )
+    user_address: str = Field(
+        default=web3.constants.ADDRESS_ZERO,
+        description="address of the 'user' - used for various on-chain calls for organic requests",
     )
 
 
@@ -41,9 +63,9 @@ class AllocateAssetsResponse(BaseModel):
     class Config:
         use_enum_values = True
 
-    allocations: typing.Dict[str, AllocInfo] = Field(
+    request_uuid: str
+    allocations: Dict[str, AllocInfo] = Field(
         ...,
-        required=True,
         description="allocations produce by miners",
     )
 
@@ -58,16 +80,24 @@ class AllocateAssetsBase(BaseModel):
     - allocations: A list of pools and their respective allocations, when filled, represents the response from the miner.
     """
 
-    # Required request input, filled by sending dendrite caller.
-    # TODO: what type should this be?
-    assets_and_pools: typing.Dict[str, typing.Dict | float] = Field(
+    class Config:
+        use_enum_values = True
+        smart_union = True
+
+    request_type: REQUEST_TYPES = Field(
+        default=REQUEST_TYPES.ORGANIC, description="type of request"
+    )
+    assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
         ...,
-        required=True,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
+    )
+    user_address: str = Field(
+        default=web3.constants.ADDRESS_ZERO,
+        description="address of the 'user' - used for various on-chain calls",
     )
 
     # Optional request output, filled by recieving axon.
-    allocations: typing.Optional[typing.Dict[str, float]] = Field(
+    allocations: Optional[Dict[str, int]] = Field(
         None,
         description="allocations produce by miners",
     )
@@ -75,8 +105,7 @@ class AllocateAssetsBase(BaseModel):
 
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
-        # TODO: figure out how to only show certain keys from pools and/or allocations
         return (
-            f"AllocateAssets(assets_and_pools={self.assets_and_pools})"
+            f"AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools})"
             f"allocations={self.allocations}"
         )

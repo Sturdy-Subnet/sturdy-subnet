@@ -19,6 +19,7 @@
 
 import time
 import asyncio
+import uuid
 
 # Bittensor
 import bittensor as bt
@@ -35,9 +36,11 @@ import uvicorn
 from db import sql
 
 # Bittensor Validator Template:
+from sturdy.pools import PoolFactory
 from sturdy.validator import forward, query_and_score_miners
 from sturdy.utils.misc import get_synapse_from_body
 from sturdy.protocol import (
+    REQUEST_TYPES,
     AllocateAssets,
     AllocateAssetsRequest,
     AllocateAssetsResponse,
@@ -153,22 +156,102 @@ async def api_key_validator(request, call_next):
 core_validator = None
 
 
-@app.get("/test")
-async def test():
-    return {"Hello": "World"}
-
-
 @app.get("/vali")
 async def vali():
     ret = {"step": core_validator.step, "config": core_validator.config}
     return ret
 
 
-@app.post("/allocate")
+@app.get("/status")
+async def status():
+    ret = {"status": "OK"}
+    return ret
+
+
+@app.post("/allocate", response_model=AllocateAssetsResponse)
 async def allocate(body: AllocateAssetsRequest):
+    """
+    Handles allocation requests by creating pools, querying and scoring miners, and returning the allocations.
+
+    Args:
+        body (AllocateAssetsRequest): The request body containing the allocation details including the type of request,
+                                      user address, and assets and pools information.
+
+    Returns:
+        AllocateAssetsResponse: The response containing the allocations and a unique request UUID.
+
+    Example Request JSON Data:
+        {
+          "request_type": "ORGANIC",
+          "user_address": "0xD8f9475A4A1A6812212FD62e80413d496038A89A",
+          "assets_and_pools": {
+            "total_assets": 1000000000000000000,
+            "pools": {
+              "Sturdy ETH/rsETH silo": {
+                "pool_type": "STURDY_SILO",
+                "pool_id": "Sturdy ETH/rsETH silo",
+                "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
+              },
+              ...
+            }
+          }
+        }
+
+    Example Response JSON Data:
+        {
+            "request_uuid": "a8af54a41fa347d7b59570c81fe35492",
+            "allocations": {
+                "1": {
+                    "apy": 2609043057391825,
+                    "allocations": {
+                        "Sturdy ETH/rsETH silo": 250000000000000000,
+                        ...
+                    }
+                },
+                ...
+            }
+        }
+    """
     synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
-    result = await query_and_score_miners(core_validator, assets_and_pools=synapse.assets_and_pools, organic=True)
-    ret = AllocateAssetsResponse(allocations=result)
+    bt.logging.debug(f"Synapse:\n{synapse}")
+    pools = synapse.assets_and_pools["pools"]
+
+    new_pools = {}
+    for uid, pool in pools.items():
+        match synapse.request_type:
+            case REQUEST_TYPES.SYNTHETIC:
+                new_pool = PoolFactory.create_pool(
+                    pool_type=pool.pool_type,
+                    pool_id=pool.pool_id,
+                    base_rate=pool.base_rate,
+                    base_slope=pool.base_slope,
+                    kink_slope=pool.kink_slope,
+                    optimal_util_rate=pool.optimal_util_rate,
+                    borrow_amount=pool.borrow_amount,
+                    reserve_size=pool.reserve_size,
+                )
+                new_pools[uid] = new_pool
+            case _:  # TODO: We assume this is an "organic request"
+                new_pool = PoolFactory.create_pool(
+                    pool_type=pool.pool_type,
+                    web3_provider=core_validator.w3,
+                    pool_id=pool.pool_id,
+                    user_address=synapse.user_address,  # TODO: is there a cleaner way to do this?
+                    contract_address=pool.contract_address,
+                )
+                new_pools[uid] = new_pool
+
+    synapse.assets_and_pools["pools"] = new_pools
+
+    result = await query_and_score_miners(
+        core_validator,
+        assets_and_pools=synapse.assets_and_pools,
+        request_type=synapse.request_type,
+        user_address=synapse.user_address
+    )
+    request_uuid = uid = str(uuid.uuid4()).replace('-', '')
+
+    ret = AllocateAssetsResponse(allocations=result, request_uuid=request_uuid)
     return ret
 
 

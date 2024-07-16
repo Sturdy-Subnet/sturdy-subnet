@@ -18,14 +18,19 @@
 
 import time
 import numpy as np
-import sturdy
 from pydantic import BaseModel
 import bittensor as bt
-from sturdy.constants import CHUNK_RATIO, GREEDY_SIG_FIGS
+from sturdy.constants import (
+    SIG_FIGS,
+    RESERVE_FACTOR_MASK,
+    RESERVE_FACTOR_START_BIT_POSITION,
+)
 from math import floor
 from typing import Callable, Dict, Any, Type, Union
 from functools import lru_cache, update_wrapper
 from decimal import Decimal
+
+from sturdy.utils.ethmath import wei_div, wei_mul
 
 # TODO: cleanup functions - lay them out better across files?
 
@@ -35,13 +40,57 @@ def randrange_float(
     start,
     stop,
     step,
-    sig: int = GREEDY_SIG_FIGS,
-    max_prec: int = GREEDY_SIG_FIGS,
+    sig: int = SIG_FIGS,
+    max_prec: int = SIG_FIGS,
     rng_gen=np.random,
 ):
     num_steps = int((stop - start) / step)
     random_step = rng_gen.randint(0, num_steps + 1)
     return format_num_prec(start + random_step * step, sig=sig, max_prec=max_prec)
+
+
+def retry_with_backoff(func, *args, **kwargs):
+    """
+    Retry a function with exponential backoff and jitter when rate limited.
+    """
+    max_retries = 10  # Maximum number of retries
+    base_delay = 0.1  # Initial delay in seconds
+    max_delay = 60  # Maximum delay in seconds
+
+    retries = 0
+    while retries < max_retries:
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if "Rate limited" in str(e):
+                delay = min(base_delay * 2**retries, max_delay)
+                jitter = np.random.uniform(delay / 2, delay * 1.5)
+                time.sleep(jitter)
+                retries += 1
+            else:
+                raise e
+    raise Exception(f"Maximum retries ({max_retries}) exceeded for {func.__name__}")
+
+
+def rayMul(a: int, b: int):
+    """Multiplies two ray, rounding half up to the nearest ray
+    See:
+    https://github.com/aave/aave-v3-core/blob/724a9ef43adf139437ba87dcbab63462394d4601/contracts/protocol/libraries/math/WadRayMath.sol#L65
+    """
+    HALF_RAY = 10**27 // 2
+    RAY = 10**27
+
+    # Check for overflow
+    if b == 0 or a <= (2**256 - 1 - HALF_RAY) // b:
+        return (a * b + HALF_RAY) // RAY
+    else:
+        raise ValueError("Multiplication overflow")
+
+
+def getReserveFactor(reserve_configuration):
+    return (
+        reserve_configuration.data & ~RESERVE_FACTOR_MASK
+    ) >> RESERVE_FACTOR_START_BIT_POSITION
 
 
 def get_synapse_from_body(
@@ -53,39 +102,42 @@ def get_synapse_from_body(
     return synapse
 
 
-def format_num_prec(
-    num: float, sig: int = GREEDY_SIG_FIGS, max_prec: int = GREEDY_SIG_FIGS
-) -> float:
+def format_num_prec(num: float, sig: int = SIG_FIGS, max_prec: int = SIG_FIGS) -> float:
     return float(f"{{0:.{max_prec}f}}".format(float(format(num, f".{sig}f"))))
 
 
-def borrow_rate(util_rate: float, pool: Dict) -> float:
+def borrow_rate(util_rate, pool) -> int:
     interest_rate = (
-        pool["base_rate"] + (util_rate / pool["optimal_util_rate"]) * pool["base_slope"]
-        if util_rate < pool["optimal_util_rate"]
-        else pool["base_rate"]
-        + pool["base_slope"]
-        + ((util_rate - pool["optimal_util_rate"]) / (1 - pool["optimal_util_rate"]))
-        * pool["kink_slope"]
+        pool.base_rate
+        + wei_mul(wei_div(util_rate, pool.optimal_util_rate), pool.base_slope)
+        if util_rate < pool.optimal_util_rate
+        else pool.base_rate
+        + pool.base_slope
+        + wei_mul(
+            wei_div(
+                (util_rate - pool.optimal_util_rate), (1e18 - pool.optimal_util_rate)
+            ),
+            pool.kink_slope,
+        )
     )
 
     return interest_rate
 
 
-def supply_rate(util_rate: float, pool: Dict) -> float:
-    return util_rate * borrow_rate(util_rate, pool)
+def supply_rate(util_rate, pool):
+    return wei_mul(util_rate, pool.borrow_rate)
 
 
 def check_allocations(
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]],
-    allocations: Dict[str, float],
+    assets_and_pools: Dict[str, Union[Dict[str, int], int]],
+    allocations: Dict[str, int],
 ) -> bool:
     """
     Checks allocations from miner.
 
     Args:
-    - assets_and_pools (Dict[str, Union[Dict[str, float], float]]): The assets and pools which the allocations are for.
-    - allocations (Dict[str, float]): The allocations to validate.
+    - assets_and_pools (Dict[str, Union[Dict[str, int], int]]): The assets and pools which the allocations are for.
+    - allocations (Dict[str, int]): The allocations to validate.
 
     Returns:
     - bool: Represents if allocations are valid.
@@ -97,7 +149,7 @@ def check_allocations(
 
     # Ensure the 'total_assets' key exists in assets_and_pools and is a valid number
     to_allocate = assets_and_pools.get("total_assets")
-    if to_allocate is None or not isinstance(to_allocate, (int, float)):
+    if to_allocate is None or not isinstance(to_allocate, int):
         return False
 
     to_allocate = Decimal(str(to_allocate))
@@ -123,59 +175,6 @@ def check_allocations(
         return False
 
     return True
-
-
-def greedy_allocation_algorithm(synapse: sturdy.protocol.AllocateAssets) -> Dict:
-    max_balance = synapse.assets_and_pools["total_assets"]
-    balance = max_balance
-    pools = synapse.assets_and_pools["pools"]
-
-    # how much of our assets we have allocated
-    current_allocations = {k: 0.0 for k, _ in pools.items()}
-
-    assert balance >= 0
-
-    # run greedy algorithm to allocate assets to pools
-    while balance > 0:
-        # TODO: use np.float32 instead of format()??
-        current_supply_rates = {
-            k: format_num_prec(
-                supply_rate(
-                    util_rate=v["borrow_amount"]
-                    / (current_allocations[k] + pools[k]["reserve_size"]),
-                    pool=v,
-                )
-            )
-            for k, v in pools.items()
-        }
-
-        default_chunk_size = format_num_prec(CHUNK_RATIO * max_balance)
-        to_allocate = 0
-
-        if balance < default_chunk_size:
-            to_allocate = balance
-        else:
-            to_allocate = default_chunk_size
-
-        balance = format_num_prec(balance - to_allocate)
-        assert balance >= 0
-        max_apy = max(current_supply_rates.values())
-        min_apy = min(current_supply_rates.values())
-        apy_range = format_num_prec(max_apy - min_apy)
-
-        alloc_it = current_allocations.items()
-        for pool_id, _ in alloc_it:
-            delta = format_num_prec(
-                to_allocate * ((current_supply_rates[pool_id] - min_apy) / (apy_range)),
-            )
-            current_allocations[pool_id] = format_num_prec(
-                current_allocations[pool_id] + delta
-            )
-            to_allocate = format_num_prec(to_allocate - delta)
-
-        assert to_allocate == 0  # should allocate everything from current chunk
-
-    return current_allocations
 
 
 # LRU Cache with TTL

@@ -16,11 +16,14 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import copy
 import bittensor as bt
 from typing import List, Dict, Union
 import asyncio
 
-from sturdy.protocol import AllocateAssets
+import web3
+
+from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from sturdy.validator.reward import get_rewards
 from sturdy.protocol import AllocInfo
 from sturdy.constants import QUERY_TIMEOUT
@@ -75,20 +78,23 @@ async def query_multiple_miners(
 
 async def query_and_score_miners(
     self,
-    assets_and_pools: Dict[str, Union[Dict[str, float], float]] = None,
-    organic: bool = False,
+    assets_and_pools: Dict[str, Union[Dict[str, int], int]] = None,
+    request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
+    user_address: str = web3.constants.ADDRESS_ZERO
 ) -> Dict[int, AllocInfo]:
     # intialize simulator
-    if organic:
-        self.simulator.initialize(timesteps=0)
+    if request_type == REQUEST_TYPES.ORGANIC:
+        self.simulator.initialize(timesteps=1)
     else:
+        # initialize simulator data
+        # if there is no "organic" info then generate synthetic info
         self.simulator.initialize()
-    # initialize simulator data
-    # if there is no "organic" info then generate synthetic info
+
     if assets_and_pools is not None:
-        self.simulator.init_data(init_assets_and_pools=assets_and_pools)
+        self.simulator.init_data(init_assets_and_pools=copy.deepcopy(assets_and_pools))
     else:
         self.simulator.init_data()
+        assets_and_pools = self.simulator.assets_and_pools
 
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
@@ -100,12 +106,16 @@ async def query_and_score_miners(
 
     bt.logging.debug(f"active_uids: {active_uids}")
 
+    synapse = AllocateAssets(
+        request_type=request_type,
+        assets_and_pools=self.simulator.assets_and_pools,
+        allocations=self.simulator.allocations,
+        user_address=user_address
+    )
+
     responses = await query_multiple_miners(
         self,
-        AllocateAssets(
-            assets_and_pools=self.simulator.assets_and_pools,
-            allocations=self.simulator.allocations,
-        ),
+        synapse,
         active_uids,
     )
     allocations = {
@@ -113,7 +123,7 @@ async def query_and_score_miners(
     }
 
     # Log the results for monitoring purposes.
-    bt.logging.debug(f"Pools: {self.simulator.assets_and_pools['pools']}")
+    bt.logging.debug(f"Pools: {synapse.assets_and_pools['pools']}")
     bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
     # Adjust the scores based on responses from miners.
@@ -122,6 +132,8 @@ async def query_and_score_miners(
         query=self.step,
         uids=active_uids,
         responses=responses,
+        assets_and_pools=assets_and_pools,
+        user_address=user_address
     )
 
     bt.logging.info(f"Scored responses: {rewards}")

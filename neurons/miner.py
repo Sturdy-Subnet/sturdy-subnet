@@ -25,7 +25,7 @@ import sturdy
 
 # import base miner class which takes care of most of the boilerplate
 from sturdy.base.miner import BaseMinerNeuron
-from sturdy.utils.misc import greedy_allocation_algorithm
+from sturdy.algo import naive_algorithm
 
 
 class Miner(BaseMinerNeuron):
@@ -64,11 +64,13 @@ class Miner(BaseMinerNeuron):
         """
         bt.logging.debug("forward()")
 
-        # use default greedy alloaction algorithm to generate allocations
+        # try use default greedy alloaction algorithm to generate allocations
         try:
-            synapse.allocations = greedy_allocation_algorithm(synapse)
+            synapse.allocations = naive_algorithm(self, synapse)
         except Exception as e:
             bt.logging.error(f"Error: {e}")
+            # just return the auto vali generated allocations
+            synapse.allocations = synapse.allocations
 
         bt.logging.info(f"sending allocations: {synapse.allocations}")
         return synapse
