@@ -147,7 +147,7 @@ class Simulator(object):
             0, self.stochasticity * 1e18, len(curr_borrow_rates)
         )  # Add some random noise
         rate_changes = (
-            -self.reversion_speed * ((curr_borrow_rates - median_rate) // 1e18) + noise
+            (-self.reversion_speed * (curr_borrow_rates - median_rate)) + noise
         )  # Mean reversion principle
         new_borrow_amounts = curr_borrow_amounts + wei_mul_arrays(
             rate_changes, curr_borrow_amounts
