@@ -293,6 +293,10 @@ def calculate_apy(
                 pool_yield = wei_mul(
                     allocation, pool.supply_rate(amount=allocation)
                 )
+            case POOL_TYPES.DAI_SAVINGS:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate()
+                )
             case _:
                 pool_yield = wei_mul(
                     allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation)
@@ -374,6 +378,8 @@ def get_rewards(
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
                 pool.sync(user_address, self.w3)
+            case POOL_TYPES.DAI_SAVINGS:
+                pool.sync(self.w3)
             case _:
                 pass
 

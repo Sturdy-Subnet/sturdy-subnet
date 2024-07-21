@@ -45,6 +45,8 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
                 pool.sync(synapse.user_address, self.w3)
+            case POOL_TYPES.DAI_SAVINGS:
+                pool.sync(self.w3)
             case _:
                 pass
 
@@ -58,6 +60,10 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
                 supply_rate_sum += apy
             case POOL_TYPES.STURDY_SILO:
                 apy = pool.supply_rate(0)
+                supply_rates[pool.pool_id] = apy
+                supply_rate_sum += apy
+            case POOL_TYPES.DAI_SAVINGS:
+                apy = pool.supply_rate()
                 supply_rates[pool.pool_id] = apy
                 supply_rate_sum += apy
             case POOL_TYPES.SYNTHETIC:

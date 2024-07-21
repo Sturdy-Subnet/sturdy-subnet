@@ -348,11 +348,8 @@ class TestDaiSavingsRate(unittest.TestCase):
             pool_id="sDai",
             contract_address=self.contract_address,
         )
-        vault_address = self.w3.to_checksum_address(
-            "0x028eC7330ff87667b6dfb0D94b954c820195336c"
-        )
 
-        pool.sync(vault_address, self.w3)
+        pool.sync(self.w3)
 
         self.assertTrue(hasattr(pool, "_sdai_contract"))
         self.assertTrue(isinstance(pool._sdai_contract, Contract))
@@ -364,7 +361,7 @@ class TestDaiSavingsRate(unittest.TestCase):
         print(f"pot contract: {pool._pot_contract.address}")
 
         # get supply rate
-        supply_rate = pool.supply_rate(self.w3)
+        supply_rate = pool.supply_rate()
         print(f"supply rate: {supply_rate}")
 
 
