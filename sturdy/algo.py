@@ -5,6 +5,7 @@ from sturdy.pools import (
     POOL_TYPES,
     AaveV3DefaultInterestRatePool,
     BasePool,
+    DaiSavingsRate,
     VariableInterestSturdySiloStrategy,
 )
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
@@ -23,6 +24,10 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
                         pools[uid] = AaveV3DefaultInterestRatePool(**pools[uid].dict())
                     case POOL_TYPES.STURDY_SILO:
                         pools[uid] = VariableInterestSturdySiloStrategy(
+                            **pools[uid].dict()
+                        )
+                    case POOL_TYPES.DAI_SAVINGS:
+                        pools[uid] = DaiSavingsRate(
                             **pools[uid].dict()
                         )
                     case _:
