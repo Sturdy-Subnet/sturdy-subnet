@@ -11,7 +11,11 @@ from eth_account import Account
 import os
 from dotenv import load_dotenv
 
-from sturdy.pools import AaveV3DefaultInterestRatePool, VariableInterestSturdySiloStrategy
+from sturdy.pools import (
+    AaveV3DefaultInterestRatePool,
+    DaiSavingsRate,
+    VariableInterestSturdySiloStrategy,
+)
 from sturdy.utils.misc import retry_with_backoff
 
 load_dotenv()
@@ -264,7 +268,9 @@ class TestSturdySiloStrategy(unittest.TestCase):
             pool_id="test",
             contract_address=self.contract_address,
         )
-        whale_addr = self.w3.to_checksum_address("0x0669091F451142b3228171aE6aD794cF98288124")
+        whale_addr = self.w3.to_checksum_address(
+            "0x0669091F451142b3228171aE6aD794cF98288124"
+        )
 
         pool.sync(whale_addr, self.w3)
 
@@ -291,6 +297,75 @@ class TestSturdySiloStrategy(unittest.TestCase):
         print(f"supply rate after decreasing deposit: {supply_rate_decrease}")
         self.assertLess(supply_rate_increase, prev_supply_rate)
         self.assertGreater(supply_rate_decrease, prev_supply_rate)
+
+
+class TestDaiSavingsRate(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # runs tests on local mainnet fork at block: 20225081
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.contract_address = cls.w3.to_checksum_address("0x83f20f44975d03b1b09e64809b757c47f942beea")
+        # Create a funded account for testing
+        cls.account = Account.create()
+        cls.w3.eth.send_transaction(
+            {
+                "to": cls.account.address,
+                "from": cls.w3.eth.accounts[0],
+                "value": cls.w3.to_wei(200000, "ether"),
+            }
+        )
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20233401,
+                    },
+                },
+            ],
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])
+        print(f"snapshot id: {cls.snapshot_id}")
+
+    def setUp(self):
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])
+        print(f"snapshot id: {self.snapshot_id}")
+
+    def tearDown(self):
+        # Optional: Revert to the original snapshot after each test
+        print("reverting to original evm snapshot")
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)
+
+    def test_dai_savings_rate_contract(self):
+        print("----==== test_dai_savings_rate_contract ====----")
+        # we call the aave3 weth atoken proxy contract in this example
+        pool = DaiSavingsRate(
+            pool_id="sDai",
+            contract_address=self.contract_address,
+        )
+        vault_address = self.w3.to_checksum_address(
+            "0x028eC7330ff87667b6dfb0D94b954c820195336c"
+        )
+
+        pool.sync(vault_address, self.w3)
+
+        self.assertTrue(hasattr(pool, "_sdai_contract"))
+        self.assertTrue(isinstance(pool._sdai_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_pot_contract"))
+        self.assertTrue(isinstance(pool._pot_contract, Contract))
+
+        print(f"sdai contract: {pool._sdai_contract.address}")
+        print(f"pot contract: {pool._pot_contract.address}")
+
+        # get supply rate
+        supply_rate = pool.supply_rate(self.w3)
+        print(f"supply rate: {supply_rate}")
 
 
 if __name__ == "__main__":

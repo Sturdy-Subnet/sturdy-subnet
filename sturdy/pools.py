@@ -45,12 +45,15 @@ class POOL_TYPES(str, Enum):
     STURDY_SILO = "STURDY_SILO"
     AAVE = "AAVE"
     SYNTHETIC = "SYNTHETIC"
+    DAI_SAVINGS = "DAI_SAVINGS"
 
 
 class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
 
-    pool_model_disc: Literal['SYNTHETIC'] = Field(default='SYNTHETIC', description="pool type discriminator")
+    pool_model_disc: Literal["SYNTHETIC"] = Field(
+        default="SYNTHETIC", description="pool type discriminator"
+    )
     pool_id: str = Field(..., description="uid of pool")
     pool_type: POOL_TYPES = Field(
         default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool"
@@ -131,7 +134,9 @@ class ChainBasedPoolModel(BaseModel):
         contract_address: (str),
     """
 
-    pool_model_disc: Literal['CHAIN'] = Field(default='CHAIN', description="pool type discriminator")
+    pool_model_disc: Literal["CHAIN"] = Field(
+        default="CHAIN", description="pool type discriminator"
+    )
     pool_id: str = Field(..., description="uid of pool")
     pool_type: POOL_TYPES = Field(..., description="type of pool")
     user_address: str = Field(
@@ -625,12 +630,59 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
     return assets_and_pools
 
 
-# generate intial allocations for pools
-def generate_initial_allocations_for_pools(
-    assets_and_pools: Dict, rng_gen=np.random
-) -> Dict:
-    pools = assets_and_pools["pools"]
-    alloc = assets_and_pools["total_assets"] / len(pools)
-    allocations = {str(uid): alloc for uid in pools}
+class DaiSavingsRate(ChainBasedPoolModel):
+    """Model for DAI Savings Rate"""
 
-    return allocations
+    pool_type: POOL_TYPES = Field(
+        POOL_TYPES.DAI_SAVINGS, const=True, description="type of pool"
+    )
+
+    _sdai_contract: Contract = PrivateAttr()
+    _pot_contract: Contract = PrivateAttr()
+
+    def __hash__(self):
+        return hash(self._sdai_contract.address)
+
+    def __eq__(self, other):
+        if not isinstance(other, VariableInterestSturdySiloStrategy):
+            return NotImplemented
+        # Compare the attributes for equality
+        return self._sdai_contract.address == other._sdai_contract.address
+
+    def pool_init(self, web3_provider: Web3):
+        sdai_abi_file_path = Path(__file__).parent / "../abi/SavingsDai.json"
+        sdai_abi_file = sdai_abi_file_path.open()
+        sdai_abi = json.load(sdai_abi_file)
+        sdai_abi_file.close()
+
+        sdai_contract = web3_provider.eth.contract(abi=sdai_abi, decode_tuples=True)
+        self._sdai_contract = retry_with_backoff(
+            sdai_contract, address=self.contract_address
+        )
+
+        pot_abi_file_path = Path(__file__).parent / "../abi/Pot.json"
+        pot_abi_file = pot_abi_file_path.open()
+        pot_abi = json.load(pot_abi_file)
+        pot_abi_file.close()
+
+        pot_address = retry_with_backoff(self._sdai_contract.functions.pot().call)
+
+        pot_contract = web3_provider.eth.contract(abi=pot_abi, decode_tuples=True)
+        self._pot_contract = retry_with_backoff(pot_contract, address=pot_address)
+
+        self._initted = True
+
+    def sync(self, user_address: str, web3_provider: Web3):
+        if not self._initted:
+            self.pool_init(web3_provider)
+
+    # last 256 unique calls to this will be cached for the next 60 seconds
+    @ttl_cache(maxsize=256, ttl=60)
+    def supply_rate(self, web3_provider: Web3):
+        RAY = 1e27
+        dsr = retry_with_backoff(self._pot_contract.functions.dsr().call)
+        seconds_per_year = 31536000
+        x = (dsr / RAY) ** seconds_per_year
+        apy = int(math.floor((x - 1) * 1e18))
+
+        return apy
