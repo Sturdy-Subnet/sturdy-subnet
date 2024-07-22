@@ -31,6 +31,8 @@ from starlette.status import (
     HTTP_429_TOO_MANY_REQUESTS,
 )
 import uvicorn
+import web3
+import web3.constants
 
 # api key db
 from db import sql
@@ -236,7 +238,11 @@ async def allocate(body: AllocateAssetsRequest):
                     pool_type=pool.pool_type,
                     web3_provider=core_validator.w3,
                     pool_id=pool.pool_id,
-                    user_address=synapse.user_address,  # TODO: is there a cleaner way to do this?
+                    user_address=(
+                        pool.user_address
+                        if pool.user_address != web3.constants.ADDRESS_ZERO
+                        else synapse.user_address
+                    ),  # TODO: is there a cleaner way to do this?
                     contract_address=pool.contract_address,
                 )
                 new_pools[uid] = new_pool
@@ -247,9 +253,9 @@ async def allocate(body: AllocateAssetsRequest):
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
         request_type=synapse.request_type,
-        user_address=synapse.user_address
+        user_address=synapse.user_address,
     )
-    request_uuid = uid = str(uuid.uuid4()).replace('-', '')
+    request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
     ret = AllocateAssetsResponse(allocations=result, request_uuid=request_uuid)
     return ret
