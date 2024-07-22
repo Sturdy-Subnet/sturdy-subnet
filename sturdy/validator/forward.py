@@ -133,7 +133,6 @@ async def query_and_score_miners(
         uids=active_uids,
         responses=responses,
         assets_and_pools=assets_and_pools,
-        user_address=user_address
     )
 
     bt.logging.info(f"Scored responses: {rewards}")

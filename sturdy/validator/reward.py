@@ -344,7 +344,6 @@ def get_rewards(
     uids: List[str],
     responses: List,
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
-    user_address: str = web3.constants.ADDRESS_ZERO
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -377,7 +376,7 @@ def get_rewards(
             case POOL_TYPES.AAVE:
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
-                pool.sync(user_address, self.w3)
+                pool.sync(pool.user_address, self.w3)
             case POOL_TYPES.DAI_SAVINGS:
                 pool.sync(self.w3)
             case _:

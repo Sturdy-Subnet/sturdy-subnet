@@ -106,6 +106,5 @@ class AllocateAssetsBase(BaseModel):
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
         return (
-            f"AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools})"
-            f"allocations={self.allocations}"
+            f"AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools}, user_address={self.user_address}, allocations={self.allocations})"
         )
