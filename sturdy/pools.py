@@ -185,6 +185,8 @@ class PoolFactory:
                 return VariableInterestSturdySiloStrategy(**kwargs)
             case POOL_TYPES.DAI_SAVINGS:
                 return DaiSavingsRate(**kwargs)
+            case POOL_TYPES.COMPOUND_V3:
+                return CompoundV3Pool(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
