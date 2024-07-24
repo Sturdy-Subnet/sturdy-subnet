@@ -42,7 +42,7 @@ class TestAavePool(unittest.TestCase):
             }
         )
 
-        weth_abi_file_path = Path(__file__).parent / "../../../abi/IWETH.json"
+        weth_abi_file_path = Path(__file__).parent / "../../../sturdy/abi/IWETH.json"
         weth_abi_file = weth_abi_file_path.open()
         weth_abi = json.load(weth_abi_file)
         weth_abi_file.close()

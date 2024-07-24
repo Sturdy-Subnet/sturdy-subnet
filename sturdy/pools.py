@@ -234,7 +234,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             bt.logging.error(err)
 
         try:
-            atoken_abi_file_path = Path(__file__).parent / "../abi/AToken.json"
+            atoken_abi_file_path = Path(__file__).parent / "abi/AToken.json"
             atoken_abi_file = atoken_abi_file_path.open()
             atoken_abi = json.load(atoken_abi_file)
             atoken_abi_file.close()
@@ -246,7 +246,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 address=self.contract_address,
             )
 
-            pool_abi_file_path = Path(__file__).parent / "../abi/Pool.json"
+            pool_abi_file_path = Path(__file__).parent / "abi/Pool.json"
             pool_abi_file = pool_abi_file_path.open()
             pool_abi = json.load(pool_abi_file)
             pool_abi_file.close()
@@ -263,7 +263,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call
             )
 
-            erc20_abi_file_path = Path(__file__).parent / "../abi/IERC20.json"
+            erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
             erc20_abi_file = erc20_abi_file_path.open()
             erc20_abi = json.load(erc20_abi_file)
             erc20_abi_file.close()
@@ -288,7 +288,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
         if not self._initted:
             self.pool_init(web3_provider)
         try:
-            pool_abi_file_path = Path(__file__).parent / "../abi/Pool.json"
+            pool_abi_file_path = Path(__file__).parent / "abi/Pool.json"
             pool_abi_file = pool_abi_file_path.open()
             pool_abi = json.load(pool_abi_file)
             pool_abi_file.close()
@@ -314,7 +314,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             )
 
             reserve_strat_abi_file_path = (
-                Path(__file__).parent / "../abi/IReserveInterestRateStrategy.json"
+                Path(__file__).parent / "abi/IReserveInterestRateStrategy.json"
             )
             reserve_strat_abi_file = reserve_strat_abi_file_path.open()
             reserve_strat_abi = json.load(reserve_strat_abi_file)
@@ -326,9 +326,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 address=self._reserve_data.interestRateStrategyAddress,
             )
 
-            stable_debt_token_abi_file_path = (
-                Path(__file__).parent / "../abi/IStableDebtToken.json"
-            )
+            stable_debt_token_abi_file_path = Path(__file__).parent / "abi/IStableDebtToken.json"
             stable_debt_token_abi_file = stable_debt_token_abi_file_path.open()
             stable_debt_token_abi = json.load(stable_debt_token_abi_file)
             stable_debt_token_abi_file.close()
@@ -351,7 +349,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             )
 
             variable_debt_token_abi_file_path = (
-                Path(__file__).parent / "../abi/IVariableDebtToken.json"
+                Path(__file__).parent / "abi/IVariableDebtToken.json"
             )
             variable_debt_token_abi_file = variable_debt_token_abi_file_path.open()
             variable_debt_token_abi = json.load(variable_debt_token_abi_file)
@@ -468,7 +466,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
 
         try:
             silo_strategy_abi_file_path = (
-                Path(__file__).parent / "../abi/SturdySiloStrategy.json"
+                Path(__file__).parent / "abi/SturdySiloStrategy.json"
             )
             silo_strategy_abi_file = silo_strategy_abi_file_path.open()
             silo_strategy_abi = json.load(silo_strategy_abi_file)
@@ -481,7 +479,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
                 silo_strategy_contract, address=self.contract_address
             )
 
-            pair_abi_file_path = Path(__file__).parent / "../abi/SturdyPair.json"
+            pair_abi_file_path = Path(__file__).parent / "abi/SturdyPair.json"
             pair_abi_file = pair_abi_file_path.open()
             pair_abi = json.load(pair_abi_file)
             pair_abi_file.close()
@@ -494,9 +492,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
                 pair_contract, address=pair_contract_address
             )
 
-            rate_model_abi_file_path = (
-                Path(__file__).parent / "../abi/VariableInterestRate.json"
-            )
+            rate_model_abi_file_path = Path(__file__).parent / "abi/VariableInterestRate.json"
             rate_model_abi_file = rate_model_abi_file_path.open()
             rate_model_abi = json.load(rate_model_abi_file)
             rate_model_abi_file.close()
