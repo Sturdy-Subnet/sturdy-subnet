@@ -599,7 +599,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
     }
 
     def pool_init(self, web3_provider: Web3):
-        comet_abi_file_path = Path(__file__).parent / "../abi/Comet.json"
+        comet_abi_file_path = Path(__file__).parent / "abi/Comet.json"
         comet_abi_file = comet_abi_file_path.open()
         comet_abi = json.load(comet_abi_file)
         comet_abi_file.close()
@@ -610,12 +610,12 @@ class CompoundV3Pool(ChainBasedPoolModel):
             ctoken_contract, address=self.contract_address
         )
 
-        oracle_abi_file_path = Path(__file__).parent / "../abi/EACAggregatorProxy.json"
+        oracle_abi_file_path = Path(__file__).parent / "abi/EACAggregatorProxy.json"
         oracle_abi_file = oracle_abi_file_path.open()
         oracle_abi = json.load(oracle_abi_file)
         oracle_abi_file.close()
 
-        feed_registry_abi_file_path = Path(__file__).parent / "../abi/FeedRegistry.json"
+        feed_registry_abi_file_path = Path(__file__).parent / "abi/FeedRegistry.json"
         feed_registry_abi_file = feed_registry_abi_file_path.open()
         feed_registry_abi = json.load(feed_registry_abi_file)
         feed_registry_abi_file.close()
@@ -755,7 +755,7 @@ class DaiSavingsRate(ChainBasedPoolModel):
         return self._sdai_contract.address == other._sdai_contract.address
 
     def pool_init(self, web3_provider: Web3):
-        sdai_abi_file_path = Path(__file__).parent / "../abi/SavingsDai.json"
+        sdai_abi_file_path = Path(__file__).parent / "abi/SavingsDai.json"
         sdai_abi_file = sdai_abi_file_path.open()
         sdai_abi = json.load(sdai_abi_file)
         sdai_abi_file.close()
@@ -765,7 +765,7 @@ class DaiSavingsRate(ChainBasedPoolModel):
             sdai_contract, address=self.contract_address
         )
 
-        pot_abi_file_path = Path(__file__).parent / "../abi/Pot.json"
+        pot_abi_file_path = Path(__file__).parent / "abi/Pot.json"
         pot_abi_file = pot_abi_file_path.open()
         pot_abi = json.load(pot_abi_file)
         pot_abi_file.close()
