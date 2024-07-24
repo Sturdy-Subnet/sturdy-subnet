@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from sturdy.pools import (
     AaveV3DefaultInterestRatePool,
+    CompoundV3Pool,
     DaiSavingsRate,
     VariableInterestSturdySiloStrategy,
 )
@@ -299,14 +300,127 @@ class TestSturdySiloStrategy(unittest.TestCase):
         self.assertGreater(supply_rate_decrease, prev_supply_rate)
 
 
+class TestCompoundV3Pool(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # runs tests on local mainnet fork at block: 20233401
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.ctoken_address = "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+        cls.user_address = "0x2b2E894f08F1BF8C93a82297c347EbdC8717d99a"
+        # Create a funded account for testing
+        cls.account = Account.create()
+        cls.w3.eth.send_transaction(
+            {
+                "to": cls.account.address,
+                "from": cls.w3.eth.accounts[0],
+                "value": cls.w3.to_wei(200000, "ether"),
+            }
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])
+        print(f"snapshot id: {cls.snapshot_id}")
+
+    def setUp(self):
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])
+        print(f"snapshot id: {self.snapshot_id}")
+
+    def tearDown(self):
+        # Optional: Revert to the original snapshot after each test
+        print("reverting to original evm snapshot")
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)
+
+    def test_compound_pool_model(self):
+        print("----==== test_compound_pool_model ====----")
+        pool = CompoundV3Pool(
+            pool_id="test",
+            contract_address=self.ctoken_address,
+            user_address=self.user_address,
+        )
+
+        pool.sync(self.w3)
+
+        self.assertTrue(hasattr(pool, "_ctoken_contract"))
+        self.assertTrue(isinstance(pool._ctoken_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_base_oracle_contract"))
+        self.assertTrue(isinstance(pool._base_oracle_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_reward_oracle_contract"))
+        self.assertTrue(isinstance(pool._reward_oracle_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_base_token_price"))
+        self.assertTrue(isinstance(pool._base_token_price, float))
+
+        self.assertTrue(hasattr(pool, "_reward_token_price"))
+        self.assertTrue(isinstance(pool._reward_token_price, float))
+
+        # check pool supply_rate
+        pool.supply_rate(0)
+
+    def test_supply_rate_increase_alloc(self):
+        print("----==== test_supply_rate_increase_alloc ====----")
+
+        pool = CompoundV3Pool(
+            pool_id="test",
+            contract_address=self.ctoken_address,
+            user_address=self.user_address,
+        )
+
+        pool.sync(self.w3)
+
+        # get current balance of the user
+        current_balance = pool._ctoken_contract.functions.balanceOf(
+            self.user_address
+        ).call()
+        new_balance = current_balance + int(1000000e6)
+
+        apy_before = pool.supply_rate(current_balance)
+        print(f"apy before supplying: {apy_before}")
+
+        # calculate predicted future supply rate after supplying 1000000 USDC
+        apy_after = pool.supply_rate(new_balance)
+        print(f"apy after supplying 1000000 USDC: {apy_after}")
+        self.assertNotEqual(apy_after, 0)
+        self.assertLess(apy_after, apy_before)
+
+    def test_supply_rate_decrease_alloc(self):
+        print("----==== test_supply_rate_decrease_alloc ====----")
+
+        pool = CompoundV3Pool(
+            pool_id="test",
+            contract_address=self.ctoken_address,
+            user_address=self.user_address,
+        )
+
+        pool.sync(self.w3)
+
+        # get current balance of the user
+        current_balance = pool._ctoken_contract.functions.balanceOf(
+            self.user_address
+        ).call()
+        new_balance = current_balance - int(1000000e6)
+
+        apy_before = pool.supply_rate(current_balance)
+        print(f"apy before supplying: {apy_before}")
+
+        # calculate predicted future supply rate after removing 1000000 USDC
+        apy_after = pool.supply_rate(new_balance)
+        print(f"apy after removing 1000000 USDC: {apy_after}")
+        self.assertNotEqual(apy_after, 0)
+        self.assertGreater(apy_after, apy_before)
+
+
 class TestDaiSavingsRate(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # runs tests on local mainnet fork at block: 20225081
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
-
-        cls.contract_address = cls.w3.to_checksum_address("0x83f20f44975d03b1b09e64809b757c47f942beea")
+        cls.contract_address = cls.w3.to_checksum_address(
+            "0x83f20f44975d03b1b09e64809b757c47f942beea"
+        )
         # Create a funded account for testing
         cls.account = Account.create()
         cls.w3.eth.send_transaction(
