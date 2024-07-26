@@ -105,6 +105,18 @@ class AllocateAssetsBase(BaseModel):
 
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self):
-        return (
-            f"AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools}, user_address={self.user_address}, allocations={self.allocations})"
-        )
+        return f"""AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools},
+            user_address={self.user_address}, allocations={self.allocations})"""
+
+
+class GetAllocationResponse(BaseModel):
+    request_uid: str
+    miner_uid: str
+    allocation: str
+    created_at: str
+
+
+class RequestInfoResponse(BaseModel):
+    request_uid: str
+    assets_and_pools: str
+    created_at: str

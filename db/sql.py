@@ -3,6 +3,12 @@
 import sqlite3
 from datetime import datetime, timedelta
 from contextlib import contextmanager
+from typing import Dict, List, Optional, Union
+import json
+
+from fastapi.encoders import jsonable_encoder
+
+from sturdy.protocol import AllocInfo, PoolModel
 
 
 BALANCE = "balance"
@@ -14,6 +20,14 @@ API_KEYS_TABLE = "api_keys"
 LOGS_TABLE = "logs"
 ENDPOINT = "endpoint"
 CREATED_AT = "created_at"
+
+# allocations table
+ALLOCATION_REQUESTS_TABLE = "allocation_requests"
+ALLOCATIONS_TABLE = "allocations"
+REQUEST_UID = "request_uid"
+MINER_UID = "miner_uid"
+USER_ADDRESS = "user_address"
+ALLOCATION = "allocation"
 
 
 @contextmanager
@@ -125,3 +139,121 @@ def rate_limit_exceeded(conn: sqlite3.Connection, api_key_info: sqlite3.Row) -> 
     recent_logs = cur.fetchall()
 
     return len(recent_logs) >= api_key_info[RATE_LIMIT_PER_MINUTE]
+
+
+def to_json_string(input_data):
+    """
+    Convert a dictionary or a string to a valid JSON string.
+
+    :param input_data: dict or str - The input data to be converted to JSON.
+    :return: str - The JSON string representation of the input data.
+    :raises: ValueError - If the input_data is not a valid dict or JSON string.
+    """
+    if isinstance(input_data, dict):
+        return json.dumps(input_data)
+    elif isinstance(input_data, str):
+        try:
+            # Check if the string is already a valid JSON string
+            json.loads(input_data)
+            return input_data
+        except json.JSONDecodeError:
+            raise ValueError("Invalid JSON string provided.")
+    else:
+        raise ValueError("Input must be a dictionary or a valid JSON string.")
+
+
+def log_allocations(
+    conn: sqlite3.Connection,
+    request_uid: str,
+    assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]],
+    allocations: Dict[str, AllocInfo],
+) -> bool:
+    ts_now = datetime.utcnow().timestamp()
+    conn.execute(
+        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?)",
+        (
+            request_uid,
+            json.dumps(jsonable_encoder(assets_and_pools)),
+            datetime.fromtimestamp(ts_now),
+        ),
+    )
+
+    to_insert = []
+    ts_now = datetime.utcnow().timestamp()
+    for miner_uid, miner_allocation in allocations.items():
+        row = (
+            request_uid,
+            miner_uid,
+            to_json_string(miner_allocation),
+            datetime.fromtimestamp(ts_now),
+        )
+        to_insert.append(row)
+
+    conn.executemany(
+        f"INSERT INTO {ALLOCATIONS_TABLE} VALUES (?, ?, json(?), ?)", to_insert
+    )
+
+    conn.commit()
+
+
+def get_filtered_allocations(
+    conn: sqlite3.Connection,
+    request_uid: Optional[str],
+    miner_uid: Optional[str],
+    from_ts: Optional[int],
+    to_ts: Optional[int],
+) -> List[Dict]:
+    query = f"""
+    SELECT * FROM {ALLOCATIONS_TABLE}
+    WHERE 1=1
+    """
+    params = []
+
+    if request_uid:
+        query += " AND request_uid = ?"
+        params.append(request_uid)
+
+    if miner_uid:
+        query += " AND miner_uid = ?"
+        params.append(miner_uid)
+
+    if from_ts:
+        query += " AND created_at >= ?"
+        params.append(datetime.fromtimestamp(from_ts / 1000))
+
+    if to_ts:
+        query += " AND created_at <= ?"
+        params.append(datetime.fromtimestamp(to_ts / 1000))
+
+    cur = conn.execute(query, params)
+    rows = cur.fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_request_info(
+    conn: sqlite3.Connection,
+    request_uid: Optional[str],
+    from_ts: Optional[int],
+    to_ts: Optional[int],
+) -> List[Dict]:
+    query = f"""
+    SELECT * FROM {ALLOCATION_REQUESTS_TABLE}
+    WHERE 1=1
+    """
+    params = []
+
+    if request_uid:
+        query += " AND request_uid = ?"
+        params.append(request_uid)
+
+    if from_ts:
+        query += " AND created_at >= ?"
+        params.append(datetime.fromtimestamp(from_ts / 1000))
+
+    if to_ts:
+        query += " AND created_at <= ?"
+        params.append(datetime.fromtimestamp(to_ts / 1000))
+
+    cur = conn.execute(query, params)
+    rows = cur.fetchall()
+    return [dict(row) for row in rows]
