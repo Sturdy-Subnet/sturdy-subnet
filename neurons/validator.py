@@ -19,11 +19,12 @@
 
 import time
 import asyncio
+from typing import List, Optional
 import uuid
 
 # Bittensor
 import bittensor as bt
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
@@ -31,6 +32,8 @@ from starlette.status import (
     HTTP_429_TOO_MANY_REQUESTS,
 )
 import uvicorn
+import web3
+import web3.constants
 
 # api key db
 from db import sql
@@ -44,6 +47,8 @@ from sturdy.protocol import (
     AllocateAssets,
     AllocateAssetsRequest,
     AllocateAssetsResponse,
+    GetAllocationResponse,
+    RequestInfoResponse,
 )
 from sturdy.validator.simulator import Simulator
 
@@ -153,7 +158,7 @@ async def api_key_validator(request, call_next):
 
 
 # Initialize core_validator outside of the event loop
-core_validator = None
+core_validator = None  # type: ignore[attr-defined]
 
 
 @app.get("/vali")
@@ -236,7 +241,11 @@ async def allocate(body: AllocateAssetsRequest):
                     pool_type=pool.pool_type,
                     web3_provider=core_validator.w3,
                     pool_id=pool.pool_id,
-                    user_address=synapse.user_address,  # TODO: is there a cleaner way to do this?
+                    user_address=(
+                        pool.user_address
+                        if pool.user_address != web3.constants.ADDRESS_ZERO
+                        else synapse.user_address
+                    ),  # TODO: is there a cleaner way to do this?
                     contract_address=pool.contract_address,
                 )
                 new_pools[uid] = new_pool
@@ -247,12 +256,48 @@ async def allocate(body: AllocateAssetsRequest):
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
         request_type=synapse.request_type,
-        user_address=synapse.user_address
+        user_address=synapse.user_address,
     )
-    request_uuid = uid = str(uuid.uuid4()).replace('-', '')
+    request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
     ret = AllocateAssetsResponse(allocations=result, request_uuid=request_uuid)
+    with sql.get_db_connection() as conn:
+        sql.log_allocations(
+            conn, ret.request_uuid, synapse.assets_and_pools, ret.allocations
+        )
+
     return ret
+
+
+@app.get("/get_allocation/", response_model=List[GetAllocationResponse])
+async def get_allocations(
+    request_uid: Optional[str] = None,
+    miner_uid: Optional[str] = None,
+    from_ts: Optional[int] = None,
+    to_ts: Optional[int] = None,
+):
+    with sql.get_db_connection() as conn:
+        allocations = sql.get_filtered_allocations(
+            conn, request_uid, miner_uid, from_ts, to_ts
+        )
+    if not allocations:
+        raise HTTPException(status_code=404, detail="No allocations found")
+    return allocations
+
+
+@app.get("/request_info/", response_model=List[RequestInfoResponse])
+async def request_info(
+    request_uid: Optional[str] = None,
+    from_ts: Optional[int] = None,
+    to_ts: Optional[int] = None,
+):
+    with sql.get_db_connection() as conn:
+        info = sql.get_request_info(
+            conn, request_uid, from_ts, to_ts
+        )
+    if not info:
+        raise HTTPException(status_code=404, detail="No request info found")
+    return info
 
 
 # Function to run the main loop

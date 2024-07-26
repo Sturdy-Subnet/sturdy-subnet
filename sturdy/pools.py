@@ -45,12 +45,16 @@ class POOL_TYPES(str, Enum):
     STURDY_SILO = "STURDY_SILO"
     AAVE = "AAVE"
     SYNTHETIC = "SYNTHETIC"
+    DAI_SAVINGS = "DAI_SAVINGS"
+    COMPOUND_V3 = "COMPOUND_V3"
 
 
 class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
 
-    pool_model_disc: Literal['SYNTHETIC'] = Field(default='SYNTHETIC', description="pool type discriminator")
+    pool_model_disc: Literal["SYNTHETIC"] = Field(
+        default="SYNTHETIC", description="pool type discriminator"
+    )
     pool_id: str = Field(..., description="uid of pool")
     pool_type: POOL_TYPES = Field(
         default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool"
@@ -131,7 +135,9 @@ class ChainBasedPoolModel(BaseModel):
         contract_address: (str),
     """
 
-    pool_model_disc: Literal['CHAIN'] = Field(default='CHAIN', description="pool type discriminator")
+    pool_model_disc: Literal["CHAIN"] = Field(
+        default="CHAIN", description="pool type discriminator"
+    )
     pool_id: str = Field(..., description="uid of pool")
     pool_type: POOL_TYPES = Field(..., description="type of pool")
     user_address: str = Field(
@@ -177,6 +183,10 @@ class PoolFactory:
                 return AaveV3DefaultInterestRatePool(**kwargs)
             case POOL_TYPES.STURDY_SILO:
                 return VariableInterestSturdySiloStrategy(**kwargs)
+            case POOL_TYPES.DAI_SAVINGS:
+                return DaiSavingsRate(**kwargs)
+            case POOL_TYPES.COMPOUND_V3:
+                return CompoundV3Pool(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
@@ -224,7 +234,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             bt.logging.error(err)
 
         try:
-            atoken_abi_file_path = Path(__file__).parent / "../abi/AToken.json"
+            atoken_abi_file_path = Path(__file__).parent / "abi/AToken.json"
             atoken_abi_file = atoken_abi_file_path.open()
             atoken_abi = json.load(atoken_abi_file)
             atoken_abi_file.close()
@@ -236,7 +246,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 address=self.contract_address,
             )
 
-            pool_abi_file_path = Path(__file__).parent / "../abi/Pool.json"
+            pool_abi_file_path = Path(__file__).parent / "abi/Pool.json"
             pool_abi_file = pool_abi_file_path.open()
             pool_abi = json.load(pool_abi_file)
             pool_abi_file.close()
@@ -253,7 +263,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call
             )
 
-            erc20_abi_file_path = Path(__file__).parent / "../abi/IERC20.json"
+            erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
             erc20_abi_file = erc20_abi_file_path.open()
             erc20_abi = json.load(erc20_abi_file)
             erc20_abi_file.close()
@@ -278,7 +288,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
         if not self._initted:
             self.pool_init(web3_provider)
         try:
-            pool_abi_file_path = Path(__file__).parent / "../abi/Pool.json"
+            pool_abi_file_path = Path(__file__).parent / "abi/Pool.json"
             pool_abi_file = pool_abi_file_path.open()
             pool_abi = json.load(pool_abi_file)
             pool_abi_file.close()
@@ -304,7 +314,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             )
 
             reserve_strat_abi_file_path = (
-                Path(__file__).parent / "../abi/IReserveInterestRateStrategy.json"
+                Path(__file__).parent / "abi/IReserveInterestRateStrategy.json"
             )
             reserve_strat_abi_file = reserve_strat_abi_file_path.open()
             reserve_strat_abi = json.load(reserve_strat_abi_file)
@@ -316,9 +326,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 address=self._reserve_data.interestRateStrategyAddress,
             )
 
-            stable_debt_token_abi_file_path = (
-                Path(__file__).parent / "../abi/IStableDebtToken.json"
-            )
+            stable_debt_token_abi_file_path = Path(__file__).parent / "abi/IStableDebtToken.json"
             stable_debt_token_abi_file = stable_debt_token_abi_file_path.open()
             stable_debt_token_abi = json.load(stable_debt_token_abi_file)
             stable_debt_token_abi_file.close()
@@ -341,7 +349,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             )
 
             variable_debt_token_abi_file_path = (
-                Path(__file__).parent / "../abi/IVariableDebtToken.json"
+                Path(__file__).parent / "abi/IVariableDebtToken.json"
             )
             variable_debt_token_abi_file = variable_debt_token_abi_file_path.open()
             variable_debt_token_abi = json.load(variable_debt_token_abi_file)
@@ -458,7 +466,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
 
         try:
             silo_strategy_abi_file_path = (
-                Path(__file__).parent / "../abi/SturdySiloStrategy.json"
+                Path(__file__).parent / "abi/SturdySiloStrategy.json"
             )
             silo_strategy_abi_file = silo_strategy_abi_file_path.open()
             silo_strategy_abi = json.load(silo_strategy_abi_file)
@@ -471,7 +479,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
                 silo_strategy_contract, address=self.contract_address
             )
 
-            pair_abi_file_path = Path(__file__).parent / "../abi/SturdyPair.json"
+            pair_abi_file_path = Path(__file__).parent / "abi/SturdyPair.json"
             pair_abi_file = pair_abi_file_path.open()
             pair_abi = json.load(pair_abi_file)
             pair_abi_file.close()
@@ -484,9 +492,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
                 pair_contract, address=pair_contract_address
             )
 
-            rate_model_abi_file_path = (
-                Path(__file__).parent / "../abi/VariableInterestRate.json"
-            )
+            rate_model_abi_file_path = Path(__file__).parent / "abi/VariableInterestRate.json"
             rate_model_abi_file = rate_model_abi_file_path.open()
             rate_model_abi = json.load(rate_model_abi_file)
             rate_model_abi_file.close()
@@ -571,6 +577,220 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         )  # (rate_per_sec_pct * seconds_in_year * util_rate_pct) * 1e18
 
         return supply_apy
+
+
+class CompoundV3Pool(ChainBasedPoolModel):
+    """Model for Compound V3 Pools"""
+
+    pool_type: POOL_TYPES = Field(
+        POOL_TYPES.COMPOUND_V3, const=True, description="type of pool"
+    )
+
+    _ctoken_contract: Contract = PrivateAttr()
+    _base_oracle_contract: Contract = PrivateAttr()
+    _reward_oracle_contract: Contract = PrivateAttr()
+    _base_token_contract: Contract = PrivateAttr()
+    _reward_token_contract: Contract = PrivateAttr()
+    _base_token_price: float = PrivateAttr()
+    _reward_token_price: float = PrivateAttr()
+
+    _CompoundTokenMap: Dict = {
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"  # WETH -> ETH
+    }
+
+    def pool_init(self, web3_provider: Web3):
+        comet_abi_file_path = Path(__file__).parent / "abi/Comet.json"
+        comet_abi_file = comet_abi_file_path.open()
+        comet_abi = json.load(comet_abi_file)
+        comet_abi_file.close()
+
+        # ctoken contract
+        ctoken_contract = web3_provider.eth.contract(abi=comet_abi, decode_tuples=True)
+        self._ctoken_contract = retry_with_backoff(
+            ctoken_contract, address=self.contract_address
+        )
+
+        oracle_abi_file_path = Path(__file__).parent / "abi/EACAggregatorProxy.json"
+        oracle_abi_file = oracle_abi_file_path.open()
+        oracle_abi = json.load(oracle_abi_file)
+        oracle_abi_file.close()
+
+        feed_registry_abi_file_path = Path(__file__).parent / "abi/FeedRegistry.json"
+        feed_registry_abi_file = feed_registry_abi_file_path.open()
+        feed_registry_abi = json.load(feed_registry_abi_file)
+        feed_registry_abi_file.close()
+
+        chainlink_registry_address = "0x47Fb2585D2C56Fe188D0E6ec628a38b74fCeeeDf"  # chainlink registry address on eth mainnet
+        usd_address = "0x0000000000000000000000000000000000000348"  # follows: https://en.wikipedia.org/wiki/ISO_4217
+        chainlink_registry = web3_provider.eth.contract(
+            abi=feed_registry_abi, decode_tuples=True
+        )
+
+        chainlink_registry_contract = retry_with_backoff(
+            chainlink_registry, address=chainlink_registry_address
+        )
+
+        base_token_address = retry_with_backoff(
+            self._ctoken_contract.functions.baseToken().call
+        )
+        asset_address = self._CompoundTokenMap.get(
+            base_token_address, base_token_address
+        )
+
+        base_oracle_address = retry_with_backoff(
+            chainlink_registry_contract.functions.getFeed(
+                asset_address, usd_address
+            ).call
+        )
+        base_oracle_contract = web3_provider.eth.contract(
+            abi=oracle_abi, decode_tuples=True
+        )
+        self._base_oracle_contract = retry_with_backoff(
+            base_oracle_contract, address=base_oracle_address
+        )
+
+        reward_oracle_address = "0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5"  # TODO: COMP price feed address
+        reward_oracle_contract = web3_provider.eth.contract(
+            abi=oracle_abi, decode_tuples=True
+        )
+        self._reward_oracle_contract = retry_with_backoff(
+            reward_oracle_contract, address=reward_oracle_address
+        )
+
+        self._initted = True
+
+    def sync(self, web3_provider: Web3):
+        if not self._initted:
+            self.pool_init(web3_provider)
+
+        # get token prices - in wei
+        base_decimals = retry_with_backoff(
+            self._base_oracle_contract.functions.decimals().call
+        )
+        reward_decimals = retry_with_backoff(
+            self._reward_oracle_contract.functions.decimals().call
+        )
+
+        self._base_token_price = (
+            retry_with_backoff(self._base_oracle_contract.functions.latestAnswer().call)
+            / 10**base_decimals
+        )
+        self._reward_token_price = (
+            retry_with_backoff(
+                self._reward_oracle_contract.functions.latestAnswer().call
+            )
+            / 10**reward_decimals
+        )
+
+    def supply_rate(self, amount: int) -> int:
+        # get pool supply rate (base token)
+        current_supply = retry_with_backoff(
+            self._ctoken_contract.functions.totalSupply().call
+        )
+        already_in_pool = retry_with_backoff(
+            self._ctoken_contract.functions.balanceOf(self.user_address).call
+        )
+
+        delta = amount - already_in_pool
+        new_supply = current_supply + delta
+        current_borrows = retry_with_backoff(
+            self._ctoken_contract.functions.totalBorrow().call
+        )
+
+        utilization = wei_div(current_borrows, new_supply)
+        seconds_per_year = 31536000
+        seconds_per_day = 86400
+
+        pool_rate = (
+            retry_with_backoff(
+                self._ctoken_contract.functions.getSupplyRate(utilization).call
+            )
+            * seconds_per_year
+        )
+
+        base_scale = retry_with_backoff(
+            self._ctoken_contract.functions.baseScale().call
+        )
+        conv_total_supply = new_supply / base_scale
+
+        base_index_scale = retry_with_backoff(
+            self._ctoken_contract.functions.baseIndexScale().call
+        )
+        base_tracking_supply_speed = retry_with_backoff(
+            self._ctoken_contract.functions.baseTrackingSupplySpeed().call
+        )
+        reward_per_day = base_tracking_supply_speed / base_index_scale * seconds_per_day
+        comp_rate = 0
+
+        if conv_total_supply * self._base_token_price > 0:
+            comp_rate = Web3.to_wei(
+                self._reward_token_price
+                * reward_per_day
+                / (conv_total_supply * self._base_token_price)
+                * 365,
+                "ether",
+            )
+
+        total_rate = int(pool_rate + comp_rate)
+        return total_rate
+
+
+class DaiSavingsRate(ChainBasedPoolModel):
+    """Model for DAI Savings Rate"""
+
+    pool_type: POOL_TYPES = Field(
+        POOL_TYPES.DAI_SAVINGS, const=True, description="type of pool"
+    )
+
+    _sdai_contract: Contract = PrivateAttr()
+    _pot_contract: Contract = PrivateAttr()
+
+    def __hash__(self):
+        return hash(self._sdai_contract.address)
+
+    def __eq__(self, other):
+        if not isinstance(other, VariableInterestSturdySiloStrategy):
+            return NotImplemented
+        # Compare the attributes for equality
+        return self._sdai_contract.address == other._sdai_contract.address
+
+    def pool_init(self, web3_provider: Web3):
+        sdai_abi_file_path = Path(__file__).parent / "abi/SavingsDai.json"
+        sdai_abi_file = sdai_abi_file_path.open()
+        sdai_abi = json.load(sdai_abi_file)
+        sdai_abi_file.close()
+
+        sdai_contract = web3_provider.eth.contract(abi=sdai_abi, decode_tuples=True)
+        self._sdai_contract = retry_with_backoff(
+            sdai_contract, address=self.contract_address
+        )
+
+        pot_abi_file_path = Path(__file__).parent / "abi/Pot.json"
+        pot_abi_file = pot_abi_file_path.open()
+        pot_abi = json.load(pot_abi_file)
+        pot_abi_file.close()
+
+        pot_address = retry_with_backoff(self._sdai_contract.functions.pot().call)
+
+        pot_contract = web3_provider.eth.contract(abi=pot_abi, decode_tuples=True)
+        self._pot_contract = retry_with_backoff(pot_contract, address=pot_address)
+
+        self._initted = True
+
+    def sync(self, web3_provider: Web3):
+        if not self._initted:
+            self.pool_init(web3_provider)
+
+    # last 256 unique calls to this will be cached for the next 60 seconds
+    @ttl_cache(maxsize=256, ttl=60)
+    def supply_rate(self):
+        RAY = 1e27
+        dsr = retry_with_backoff(self._pot_contract.functions.dsr().call)
+        seconds_per_year = 31536000
+        x = (dsr / RAY) ** seconds_per_year
+        apy = int(math.floor((x - 1) * 1e18))
+
+        return apy
 
 
 def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools

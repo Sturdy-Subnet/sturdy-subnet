@@ -5,6 +5,8 @@ from sturdy.pools import (
     POOL_TYPES,
     AaveV3DefaultInterestRatePool,
     BasePool,
+    CompoundV3Pool,
+    DaiSavingsRate,
     VariableInterestSturdySiloStrategy,
 )
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
@@ -25,6 +27,10 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
                         pools[uid] = VariableInterestSturdySiloStrategy(
                             **pools[uid].dict()
                         )
+                    case POOL_TYPES.DAI_SAVINGS:
+                        pools[uid] = DaiSavingsRate(**pools[uid].dict())
+                    case POOL_TYPES.COMPOUND_V3:
+                        pools[uid] = CompoundV3Pool(**pools[uid].dict())
                     case _:
                         pass
 
@@ -45,6 +51,8 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
                 pool.sync(synapse.user_address, self.w3)
+            case T if T in (POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3):
+                pool.sync(self.w3)
             case _:
                 pass
 
@@ -53,11 +61,15 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
     for _uid, pool in pools.items():
         match pool.pool_type:
             case POOL_TYPES.AAVE:
-                apy = pool.supply_rate(synapse.user_address, 0)
+                apy = pool.supply_rate(synapse.user_address, balance // len(pools))
                 supply_rates[pool.pool_id] = apy
                 supply_rate_sum += apy
-            case POOL_TYPES.STURDY_SILO:
-                apy = pool.supply_rate(0)
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.COMPOUND_V3):
+                apy = pool.supply_rate(balance // len(pools))
+                supply_rates[pool.pool_id] = apy
+                supply_rate_sum += apy
+            case POOL_TYPES.DAI_SAVINGS:
+                apy = pool.supply_rate()
                 supply_rates[pool.pool_id] = apy
                 supply_rate_sum += apy
             case POOL_TYPES.SYNTHETIC:

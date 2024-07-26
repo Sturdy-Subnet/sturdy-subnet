@@ -22,8 +22,6 @@ import torch
 from typing import List, Dict, Tuple, Any, Union
 import copy
 
-import web3
-
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
 from sturdy.utils.ethmath import wei_div, wei_mul
@@ -293,6 +291,14 @@ def calculate_apy(
                 pool_yield = wei_mul(
                     allocation, pool.supply_rate(amount=allocation)
                 )
+            case POOL_TYPES.DAI_SAVINGS:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate()
+                )
+            case POOL_TYPES.COMPOUND_V3:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate(amount=allocation)
+                )
             case _:
                 pool_yield = wei_mul(
                     allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation)
@@ -340,7 +346,6 @@ def get_rewards(
     uids: List[str],
     responses: List,
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
-    user_address: str = web3.constants.ADDRESS_ZERO
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -370,10 +375,10 @@ def get_rewards(
     # update reserves given allocations
     for _, pool in pools_to_scan.items():
         match pool.pool_type:
-            case POOL_TYPES.AAVE:
+            case T if T in (POOL_TYPES.AAVE, POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3):
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
-                pool.sync(user_address, self.w3)
+                pool.sync(pool.user_address, self.w3)
             case _:
                 pass
 
