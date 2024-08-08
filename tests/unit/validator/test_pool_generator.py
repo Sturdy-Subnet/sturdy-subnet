@@ -26,7 +26,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             self.assertEqual(len(result["pools"]), NUM_POOLS)
 
             # Assert properties of each pool
-            for pool_id, pool_info in result["pools"].items():
+            for _, pool_info in result["pools"].items():
                 self.assertTrue(hasattr(pool_info, "base_rate"))
                 self.assertTrue(
                     MIN_BASE_RATE <= pool_info.base_rate <= MAX_BASE_RATE

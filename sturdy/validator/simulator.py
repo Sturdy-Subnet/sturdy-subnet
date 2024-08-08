@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Dict, Union
 
+from sturdy.protocol import AllocationsDict
 from sturdy.utils.ethmath import wei_mul_arrays
 from sturdy.utils.misc import check_allocations
 from sturdy.pools import (
@@ -33,7 +34,7 @@ class Simulator(object):
         init_assets_and_pools: Dict[
             str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
         ] = None,
-        init_allocations: Dict[str, int] = None,
+        init_allocations: AllocationsDict = None,
     ):
         if self.rng_state_container is None or self.init_rng is None:
             raise RuntimeError(

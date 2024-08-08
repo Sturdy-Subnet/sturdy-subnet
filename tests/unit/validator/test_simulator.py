@@ -56,8 +56,11 @@ class TestSimulator(unittest.TestCase):
 
         init_pools = copy.deepcopy(self.simulator.assets_and_pools["pools"])
 
+        contract_addresses = [addr for addr in self.simulator.assets_and_pools["pools"]]
+
         allocations = {
-            str(i): self.simulator.assets_and_pools["total_assets"] / len(init_pools)
+            contract_addresses[i]: self.simulator.assets_and_pools["total_assets"]
+            / len(init_pools)
             for i in range(len(init_pools))
         }
 
@@ -90,7 +93,11 @@ class TestSimulator(unittest.TestCase):
         init_pools = copy.deepcopy(self.simulator.assets_and_pools["pools"])
         total_assets = self.simulator.assets_and_pools["total_assets"]
 
-        allocs = {"0": total_assets / 10}  # should be 0.1 if total assets is 1
+        contract_addresses = [addr for addr in self.simulator.assets_and_pools["pools"]]
+
+        allocs = {
+            contract_addresses[0]: total_assets / 10
+        }  # should be 0.1 if total assets is 1
 
         self.simulator.update_reserves_with_allocs(allocs)
 
@@ -188,7 +195,7 @@ class TestSimulator(unittest.TestCase):
             pool_data = self.simulator.pool_history[t]
             self.assertEqual(len(pool_data), NUM_POOLS)
 
-            for pool_id, pool in pool_data.items():
+            for contract_addr, pool in pool_data.items():
                 self.assertTrue(hasattr(pool, "borrow_amount"))
                 self.assertTrue(hasattr(pool, "reserve_size"))
                 self.assertTrue(hasattr(pool, "borrow_rate"))
@@ -196,17 +203,19 @@ class TestSimulator(unittest.TestCase):
                 self.assertGreaterEqual(pool.reserve_size, pool.borrow_amount)
                 self.assertGreaterEqual(pool.borrow_rate, 0)
 
-        for pool_id, _ in self.simulator.assets_and_pools["pools"].items():
+        for contract_addr, _ in self.simulator.assets_and_pools["pools"].items():
             borrow_amounts = [
-                self.simulator.pool_history[T][pool_id].borrow_amount
+                self.simulator.pool_history[T][contract_addr].borrow_amount
                 for T in range(1, self.simulator.timesteps)
             ]
             borrow_rates = [
-                self.simulator.pool_history[T][pool_id].borrow_rate
+                self.simulator.pool_history[T][contract_addr].borrow_rate
                 for T in range(1, self.simulator.timesteps)
             ]
 
-            self.assertTrue(borrow_amounts.count(borrow_amounts[0]) < len(borrow_amounts))
+            self.assertTrue(
+                borrow_amounts.count(borrow_amounts[0]) < len(borrow_amounts)
+            )
             self.assertTrue(borrow_rates.count(borrow_rates[0]) < len(borrow_rates))
 
         # check if simulation runs the same across "reset()s"

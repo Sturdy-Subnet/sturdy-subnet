@@ -71,7 +71,6 @@ class TestAavePool(unittest.TestCase):
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
         pool = AaveV3DefaultInterestRatePool(
-            pool_id="test",
             contract_address=self.atoken_address,
         )
 
@@ -86,7 +85,6 @@ class TestAavePool(unittest.TestCase):
     def test_sync(self):
         print("----==== test_sync ====----")
         pool = AaveV3DefaultInterestRatePool(
-            pool_id="test",
             contract_address=self.atoken_address,
         )
 
@@ -103,7 +101,6 @@ class TestAavePool(unittest.TestCase):
     def test_supply_rate_alloc(self):
         print("----==== test_supply_rate_increase_alloc ====----")
         pool = AaveV3DefaultInterestRatePool(
-            pool_id="test",
             contract_address=self.atoken_address,
         )
 
@@ -128,7 +125,6 @@ class TestAavePool(unittest.TestCase):
     def test_supply_rate_decrease_alloc(self):
         print("----==== test_supply_rate_decrease_alloc ====----")
         pool = AaveV3DefaultInterestRatePool(
-            pool_id="test",
             contract_address=self.atoken_address,
         )
 
@@ -266,7 +262,6 @@ class TestSturdySiloStrategy(unittest.TestCase):
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
         pool = VariableInterestSturdySiloStrategy(
-            pool_id="test",
             contract_address=self.contract_address,
         )
         whale_addr = self.w3.to_checksum_address(
@@ -334,7 +329,6 @@ class TestCompoundV3Pool(unittest.TestCase):
     def test_compound_pool_model(self):
         print("----==== test_compound_pool_model ====----")
         pool = CompoundV3Pool(
-            pool_id="test",
             contract_address=self.ctoken_address,
             user_address=self.user_address,
         )
@@ -363,7 +357,6 @@ class TestCompoundV3Pool(unittest.TestCase):
         print("----==== test_supply_rate_increase_alloc ====----")
 
         pool = CompoundV3Pool(
-            pool_id="test",
             contract_address=self.ctoken_address,
             user_address=self.user_address,
         )
@@ -389,7 +382,6 @@ class TestCompoundV3Pool(unittest.TestCase):
         print("----==== test_supply_rate_decrease_alloc ====----")
 
         pool = CompoundV3Pool(
-            pool_id="test",
             contract_address=self.ctoken_address,
             user_address=self.user_address,
         )
@@ -459,7 +451,6 @@ class TestDaiSavingsRate(unittest.TestCase):
         print("----==== test_dai_savings_rate_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
         pool = DaiSavingsRate(
-            pool_id="sDai",
             contract_address=self.contract_address,
         )
 

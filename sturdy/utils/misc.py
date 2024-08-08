@@ -130,7 +130,9 @@ def supply_rate(util_rate, pool):
 
 def check_allocations(
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
-    allocations: Dict[str, int],
+    allocations: Dict[
+        str, int
+    ],  # TODO: fix circular import so we can type this with AllocationsDict?
 ) -> bool:
     """
     Checks allocations from miner.

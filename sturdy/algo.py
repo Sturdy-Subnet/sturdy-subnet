@@ -62,19 +62,19 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
         match pool.pool_type:
             case POOL_TYPES.AAVE:
                 apy = pool.supply_rate(synapse.user_address, balance // len(pools))
-                supply_rates[pool.pool_id] = apy
+                supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy
             case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.COMPOUND_V3):
                 apy = pool.supply_rate(balance // len(pools))
-                supply_rates[pool.pool_id] = apy
+                supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy
             case POOL_TYPES.DAI_SAVINGS:
                 apy = pool.supply_rate()
-                supply_rates[pool.pool_id] = apy
+                supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy
             case POOL_TYPES.SYNTHETIC:
                 apy = pool.supply_rate
-                supply_rates[pool.pool_id] = apy
+                supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy
             case _:
                 pass

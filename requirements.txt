@@ -7,3 +7,5 @@ starlette==0.27.0
 web3==6.19.0
 numpy==1.26.4
 python-dotenv==1.0.1
+pandas==2.2.2
+matplotlib==3.9.0
