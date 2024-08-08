@@ -20,8 +20,9 @@ from enum import Enum
 from typing import Annotated, Dict, Optional, Union
 from typing_extensions import TypedDict
 import bittensor as bt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 import web3
+from web3 import Web3
 
 from sturdy.pools import BasePoolModel, ChainBasedPoolModel
 
@@ -31,9 +32,12 @@ class REQUEST_TYPES(str, Enum):
     SYNTHETIC = "SYNTHETIC"
 
 
+AllocationsDict = Dict[str, int]
+
+
 class AllocInfo(TypedDict):
     apy: int
-    allocations: Union[Dict[str, int], None]
+    allocations: Union[AllocationsDict, None]
 
 
 PoolModel = Annotated[
@@ -97,10 +101,20 @@ class AllocateAssetsBase(BaseModel):
     )
 
     # Optional request output, filled by recieving axon.
-    allocations: Optional[Dict[str, int]] = Field(
+    allocations: Optional[AllocationsDict] = Field(
         None,
         description="allocations produce by miners",
     )
+
+    @root_validator
+    def check_params(cls, values):
+        allocs = values.get("allocations")
+        if allocs is not None:
+            for alloc_dict_key in allocs.keys():
+                if not Web3.is_address(alloc_dict_key):
+                    raise ValueError("contract address is invalid!")
+
+        return values
 
 
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):

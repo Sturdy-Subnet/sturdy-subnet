@@ -192,9 +192,9 @@ async def allocate(body: AllocateAssetsRequest):
           "assets_and_pools": {
             "total_assets": 1000000000000000000,
             "pools": {
+              ...
               "Sturdy ETH/rsETH silo": {
                 "pool_type": "STURDY_SILO",
-                "pool_id": "Sturdy ETH/rsETH silo",
                 "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
               },
               ...
@@ -206,10 +206,12 @@ async def allocate(body: AllocateAssetsRequest):
         {
             "request_uuid": "a8af54a41fa347d7b59570c81fe35492",
             "allocations": {
+                ...
                 "1": {
                     "apy": 2609043057391825,
                     "allocations": {
-                        "Sturdy ETH/rsETH silo": 250000000000000000,
+                        ...
+                        "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": 250000000000000000,
                         ...
                     }
                 },
@@ -227,7 +229,7 @@ async def allocate(body: AllocateAssetsRequest):
             case REQUEST_TYPES.SYNTHETIC:
                 new_pool = PoolFactory.create_pool(
                     pool_type=pool.pool_type,
-                    pool_id=pool.pool_id,
+                    contract_address=pool.contract_address,
                     base_rate=pool.base_rate,
                     base_slope=pool.base_slope,
                     kink_slope=pool.kink_slope,
@@ -240,7 +242,6 @@ async def allocate(body: AllocateAssetsRequest):
                 new_pool = PoolFactory.create_pool(
                     pool_type=pool.pool_type,
                     web3_provider=core_validator.w3,
-                    pool_id=pool.pool_id,
                     user_address=(
                         pool.user_address
                         if pool.user_address != web3.constants.ADDRESS_ZERO

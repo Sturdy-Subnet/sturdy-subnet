@@ -53,56 +53,64 @@ There are three core files.
   used for generating a dummy `assets_and_pools` taken from [pools.py](./sturdy/pools.py) used for
   synthetic requests:
     ```python
-    def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
-        assets_and_pools = {}
+  def generate_eth_public_key(rng_gen=np.random) -> str:
+      private_key_bytes = rng_gen.bytes(32)
+      account = Account.from_key(private_key_bytes)
+      eth_address = account.address
 
-        pools = [
-            BasePool(
-                pool_id=str(x),
-                pool_type=POOL_TYPES.SYNTHETIC,
-                base_rate=randrange_float(
-                    MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen
-                ),
-                base_slope=randrange_float(
-                    MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen
-                ),
-                kink_slope=randrange_float(
-                    MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen
-                ),  # kink rate - kicks in after pool hits optimal util rate
-                optimal_util_rate=randrange_float(
-                    MIN_OPTIMAL_RATE,
-                    MAX_OPTIMAL_RATE,
-                    OPTIMAL_UTIL_STEP,
-                    rng_gen=rng_gen,
-                ),  # optimal util rate - after which the kink slope kicks in
-                borrow_amount=int(
-                    format_num_prec(
-                        wei_mul(
-                            POOL_RESERVE_SIZE,
-                            randrange_float(
-                                MIN_UTIL_RATE,
-                                MAX_UTIL_RATE,
-                                UTIL_RATE_STEP,
-                                rng_gen=rng_gen,
-                            ),
-                        )
-                    )
-                ),  # initial borrowed amount from pool
-                reserve_size=POOL_RESERVE_SIZE,
-            )
-            for x in range(NUM_POOLS)
-        ]
+      return eth_address
 
-        pools = {str(pool.pool_id): pool for pool in pools}
 
-        assets_and_pools["total_assets"] = math.floor(
-            randrange_float(
-                MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen
-            )
-        )
-        assets_and_pools["pools"] = pools
+  def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
+      assets_and_pools = {}
 
-        return assets_and_pools
+      pools = [
+          BasePool(
+              contract_address=generate_eth_public_key(rng_gen=rng_gen),
+              pool_type=POOL_TYPES.SYNTHETIC,
+              base_rate=randrange_float(
+                  MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen
+              ),
+              base_slope=randrange_float(
+                  MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen
+              ),
+              kink_slope=randrange_float(
+                  MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen
+              ),  # kink rate - kicks in after pool hits optimal util rate
+              optimal_util_rate=randrange_float(
+                  MIN_OPTIMAL_RATE,
+                  MAX_OPTIMAL_RATE,
+                  OPTIMAL_UTIL_STEP,
+                  rng_gen=rng_gen,
+              ),  # optimal util rate - after which the kink slope kicks in
+              borrow_amount=int(
+                  format_num_prec(
+                      wei_mul(
+                          POOL_RESERVE_SIZE,
+                          randrange_float(
+                              MIN_UTIL_RATE,
+                              MAX_UTIL_RATE,
+                              UTIL_RATE_STEP,
+                              rng_gen=rng_gen,
+                          ),
+                      )
+                  )
+              ),  # initial borrowed amount from pool
+              reserve_size=POOL_RESERVE_SIZE,
+          )
+          for _ in range(NUM_POOLS)
+      ]
+
+      pools = {str(pool.contract_address): pool for pool in pools}
+
+      assets_and_pools["total_assets"] = math.floor(
+          randrange_float(
+              MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen
+          )
+      )
+      assets_and_pools["pools"] = pools
+
+      return assets_and_pools
     ```
     Validators can optionally run an API server and sell their bandwidth to outside users to send
     their own pools (organic requests) to the subnet. For more information on this process - please read

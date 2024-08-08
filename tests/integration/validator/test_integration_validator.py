@@ -2,8 +2,10 @@ import unittest
 from unittest import IsolatedAsyncioTestCase
 import copy
 
+import numpy as np
+
 from neurons.validator import Validator
-from sturdy.pools import BasePool
+from sturdy.pools import generate_assets_and_pools
 from sturdy.validator.simulator import Simulator
 
 from sturdy.validator.forward import query_and_score_miners
@@ -26,113 +28,26 @@ class TestValidator(IsolatedAsyncioTestCase):
         # simulator with preset seed
         cls.validator.simulator = Simulator(seed=69)
 
+        assets_and_pools = generate_assets_and_pools(np.random.RandomState(seed=420))
+
         cls.assets_and_pools = {
-            "pools": {
-                "0": BasePool(
-                    base_rate=int(0.03e18),
-                    base_slope=int(0.072e18),
-                    borrow_amount=int(385e18),
-                    kink_slope=int(0.347e18),
-                    optimal_util_rate=int(0.9e18),
-                    pool_id="0",
-                    reserve_size=500e18,
-                ),
-                "1": BasePool(
-                    base_rate=int(0.01e18),
-                    base_slope=int(0.011e18),
-                    borrow_amount=int(55e18),
-                    kink_slope=int(0.187e18),
-                    optimal_util_rate=int(0.9e18),
-                    pool_id="1",
-                    reserve_size=500e18,
-                ),
-                "2": BasePool(
-                    base_rate=int(0.02e18),
-                    base_slope=int(0.067e18),
-                    borrow_amount=int(270e18),
-                    kink_slope=int(0.662e18),
-                    optimal_util_rate=int(0.9e18),
-                    pool_id="2",
-                    reserve_size=500e18,
-                ),
-                "3": BasePool(
-                    base_rate=int(0.01e18),
-                    base_slope=int(0.044e18),
-                    borrow_amount=int(70e18),
-                    kink_slope=int(0.386e18),
-                    optimal_util_rate=int(0.9e18),
-                    pool_id="3",
-                    reserve_size=500e18,
-                ),
-                "4": BasePool(
-                    base_rate=int(0.03e18),
-                    base_slope=int(0.044e18),
-                    borrow_amount=int(75e18),
-                    kink_slope=int(0.163e18),
-                    optimal_util_rate=int(0.65e18),
-                    pool_id="4",
-                    reserve_size=500e18,
-                ),
-                "5": BasePool(
-                    base_rate=int(0.05e18),
-                    base_slope=int(0.021e18),
-                    borrow_amount=int(185e18),
-                    kink_slope=int(0.232e18),
-                    optimal_util_rate=int(0.75e18),
-                    pool_id="5",
-                    reserve_size=500e18,
-                ),
-                "6": BasePool(
-                    base_rate=int(0.01e18),
-                    base_slope=int(0.062e18),
-                    borrow_amount=int(170e18),
-                    kink_slope=int(0.997e18),
-                    optimal_util_rate=int(0.8e18),
-                    pool_id="6",
-                    reserve_size=500e18,
-                ),
-                "7": BasePool(
-                    base_rate=int(0.02e18),
-                    base_slope=int(0.098e18),
-                    borrow_amount=int(290e18),
-                    kink_slope=int(0.543e18),
-                    optimal_util_rate=int(0.75e18),
-                    pool_id="7",
-                    reserve_size=500e18,
-                ),
-                "8": BasePool(
-                    base_rate=int(0.01e18),
-                    base_slope=int(0.028e18),
-                    borrow_amount=int(355e18),
-                    kink_slope=int(0.352e18),
-                    optimal_util_rate=int(0.8e18),
-                    pool_id="8",
-                    reserve_size=500e18,
-                ),
-                "9": BasePool(
-                    base_rate=int(0.04e18),
-                    base_slope=int(0.066e18),
-                    borrow_amount=int(170e18),
-                    kink_slope=int(0.617e18),
-                    optimal_util_rate=int(0.8e18),
-                    pool_id="9",
-                    reserve_size=500e18,
-                ),
-            },
+            "pools": assets_and_pools["pools"],
             "total_assets": int(1000e18),
         }
 
+        cls.contract_addresses = list(assets_and_pools["pools"].keys())
+
         cls.allocations = {
-            "0": 100e18,
-            "1": 100e18,
-            "2": 200e18,
-            "3": 50e18,
-            "4": 200e18,
-            "5": 25e18,
-            "6": 25e18,
-            "7": 50e18,
-            "8": 50e18,
-            "9": 200e18,
+            cls.contract_addresses[0]: 100e18,
+            cls.contract_addresses[1]: 100e18,
+            cls.contract_addresses[2]: 200e18,
+            cls.contract_addresses[3]: 50e18,
+            cls.contract_addresses[4]: 200e18,
+            cls.contract_addresses[5]: 25e18,
+            cls.contract_addresses[6]: 25e18,
+            cls.contract_addresses[7]: 50e18,
+            cls.contract_addresses[8]: 50e18,
+            cls.contract_addresses[9]: 200e18,
         }
 
     async def test_query_and_score_miners(self):
