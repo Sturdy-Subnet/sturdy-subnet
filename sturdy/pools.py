@@ -17,11 +17,11 @@
 
 import math
 from typing import Dict, Literal, Union
-from enum import Enum
+from enum import IntEnum
 
 import json
 from eth_account import Account
-from pydantic import BaseModel, Field, PrivateAttr, root_validator
+from pydantic import BaseModel, Field, PrivateAttr, root_validator, validator
 from web3 import Web3
 import web3
 import web3.constants
@@ -42,16 +42,22 @@ from sturdy.utils.misc import (
 from sturdy.constants import *
 
 
-class POOL_TYPES(str, Enum):
-    STURDY_SILO = "STURDY_SILO"
-    AAVE = "AAVE"
-    SYNTHETIC = "SYNTHETIC"
-    DAI_SAVINGS = "DAI_SAVINGS"
-    COMPOUND_V3 = "COMPOUND_V3"
+class POOL_TYPES(IntEnum):
+    SYNTHETIC = 0
+    STURDY_SILO = 1
+    AAVE = 2
+    DAI_SAVINGS = 3
+    COMPOUND_V3 = 4
 
 
 class BasePoolModel(BaseModel):
     """This model will primarily be used for synthetic requests"""
+
+    class Config:
+        use_enum_values = (
+            True  # This will use the enum's value instead of the enum itself
+        )
+        smart_union = True
 
     pool_model_disc: Literal["SYNTHETIC"] = Field(
         default="SYNTHETIC", description="pool type discriminator"
@@ -59,7 +65,7 @@ class BasePoolModel(BaseModel):
     contract_address: str = Field(
         ..., description='the "contract address" of the pool - used here as a uid'
     )
-    pool_type: POOL_TYPES = Field(
+    pool_type: Union[POOL_TYPES, int, str] = Field(
         default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool"
     )
     base_rate: int = Field(..., description="base interest rate")
@@ -68,6 +74,19 @@ class BasePoolModel(BaseModel):
     optimal_util_rate: int = Field(..., description="optimal utilisation rate")
     borrow_amount: int = Field(..., description="borrow amount in wei")
     reserve_size: int = Field(..., description="pool reserve size in wei")
+
+    @validator("pool_type", pre=True)
+    def validator_pool_type(cls, value):
+        if isinstance(value, POOL_TYPES):
+            return value
+        elif isinstance(value, int):
+            return POOL_TYPES(value)
+        elif isinstance(value, str):
+            try:
+                return POOL_TYPES[value]
+            except KeyError:
+                raise ValueError(f"Invalid enum name: {value}")
+        raise ValueError(f"Invalid value: {value}")
 
     @root_validator
     def check_params(cls, values):
@@ -137,10 +156,16 @@ class ChainBasedPoolModel(BaseModel):
         contract_address: (str),
     """
 
+    class Config:
+        use_enum_values = (
+            True  # This will use the enum's value instead of the enum itself
+        )
+        smart_union = True
+
     pool_model_disc: Literal["CHAIN"] = Field(
         default="CHAIN", description="pool type discriminator"
     )
-    pool_type: POOL_TYPES = Field(..., description="type of pool")
+    pool_type: Union[POOL_TYPES, int, str] = Field(..., description="type of pool")
     user_address: str = Field(
         default=web3.constants.ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls",
@@ -150,6 +175,19 @@ class ChainBasedPoolModel(BaseModel):
     )
 
     _initted: bool = PrivateAttr(False)
+
+    @validator("pool_type", pre=True)
+    def validator_pool_type(cls, value):
+        if isinstance(value, POOL_TYPES):
+            return value
+        elif isinstance(value, int):
+            return POOL_TYPES(value)
+        elif isinstance(value, str):
+            try:
+                return POOL_TYPES[value]
+            except KeyError:
+                raise ValueError(f"Invalid enum name: {value}")
+        raise ValueError(f"Invalid value: {value}")
 
     @root_validator
     def check_params(cls, values):

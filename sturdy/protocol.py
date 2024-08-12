@@ -16,20 +16,20 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from enum import Enum
+from enum import IntEnum
 from typing import Annotated, Dict, Optional, Union
 from typing_extensions import TypedDict
 import bittensor as bt
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, root_validator, validator
 import web3
 from web3 import Web3
 
 from sturdy.pools import BasePoolModel, ChainBasedPoolModel
 
 
-class REQUEST_TYPES(str, Enum):
-    ORGANIC = "ORGANIC"
-    SYNTHETIC = "SYNTHETIC"
+class REQUEST_TYPES(IntEnum):
+    ORGANIC = 0
+    SYNTHETIC = 1
 
 
 AllocationsDict = Dict[str, int]
@@ -50,7 +50,7 @@ class AllocateAssetsRequest(BaseModel):
         use_enum_values = True
         smart_union = True
 
-    request_type: REQUEST_TYPES = Field(
+    request_type: Union[REQUEST_TYPES, int, str] = Field(
         default=REQUEST_TYPES.ORGANIC, description="type of request"
     )
     assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
@@ -61,6 +61,27 @@ class AllocateAssetsRequest(BaseModel):
         default=web3.constants.ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls for organic requests",
     )
+
+    @validator("request_type", pre=True)
+    def validator_pool_type(cls, value):
+        if isinstance(value, REQUEST_TYPES):
+            return value
+        elif isinstance(value, int):
+            return REQUEST_TYPES(value)
+        elif isinstance(value, str):
+            try:
+                return REQUEST_TYPES[value]
+            except KeyError:
+                raise ValueError(f"Invalid enum name: {value}")
+        raise ValueError(f"Invalid value: {value}")
+
+    @root_validator
+    def check_params(cls, values):
+        user_addr = values.get("user_address")
+        if not Web3.is_address(user_addr):
+            raise ValueError("user address is invalid!")
+
+        return values
 
 
 class AllocateAssetsResponse(BaseModel):
@@ -88,7 +109,7 @@ class AllocateAssetsBase(BaseModel):
         use_enum_values = True
         smart_union = True
 
-    request_type: REQUEST_TYPES = Field(
+    request_type: Union[REQUEST_TYPES, int, str] = Field(
         default=REQUEST_TYPES.ORGANIC, description="type of request"
     )
     assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
@@ -106,8 +127,25 @@ class AllocateAssetsBase(BaseModel):
         description="allocations produce by miners",
     )
 
+    @validator("request_type", pre=True)
+    def validator_pool_type(cls, value):
+        if isinstance(value, REQUEST_TYPES):
+            return value
+        elif isinstance(value, int):
+            return REQUEST_TYPES(value)
+        elif isinstance(value, str):
+            try:
+                return REQUEST_TYPES[value]
+            except KeyError:
+                raise ValueError(f"Invalid enum name: {value}")
+        raise ValueError(f"Invalid value: {value}")
+
     @root_validator
     def check_params(cls, values):
+        user_addr = values.get("user_address")
+        if not Web3.is_address(user_addr):
+            raise ValueError("user address is invalid!")
+
         allocs = values.get("allocations")
         if allocs is not None:
             for alloc_dict_key in allocs.keys():
