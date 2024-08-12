@@ -20,6 +20,7 @@ from typing import Dict, Literal, Union
 from enum import Enum
 
 import json
+from eth_account import Account
 from pydantic import BaseModel, Field, PrivateAttr, root_validator
 from web3 import Web3
 import web3
@@ -55,7 +56,9 @@ class BasePoolModel(BaseModel):
     pool_model_disc: Literal["SYNTHETIC"] = Field(
         default="SYNTHETIC", description="pool type discriminator"
     )
-    pool_id: str = Field(..., description="uid of pool")
+    contract_address: str = Field(
+        ..., description='the "contract address" of the pool - used here as a uid'
+    )
     pool_type: POOL_TYPES = Field(
         default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool"
     )
@@ -68,8 +71,8 @@ class BasePoolModel(BaseModel):
 
     @root_validator
     def check_params(cls, values):
-        if len(values.get("pool_id")) <= 0:
-            raise ValueError("pool id is empty")
+        if not Web3.is_address(values.get("contract_address")):
+            raise ValueError("pool address is invalid!")
         if values.get("base_rate") < 0:
             raise ValueError("base rate is negative")
         if values.get("base_slope") < 0:
@@ -89,7 +92,7 @@ class BasePool(BasePoolModel):
     """This class defines the base pool type
 
     Args:
-        pool_id: (str),
+        contract_address: (str),
         base_rate: (float),
         base_slope: (float),
         kink_slope: (float),
@@ -131,14 +134,12 @@ class ChainBasedPoolModel(BaseModel):
     """This serves as the base model of pools which need to pull data from on-chain
 
     Args:
-        pool_id: (str),
         contract_address: (str),
     """
 
     pool_model_disc: Literal["CHAIN"] = Field(
         default="CHAIN", description="pool type discriminator"
     )
-    pool_id: str = Field(..., description="uid of pool")
     pool_type: POOL_TYPES = Field(..., description="type of pool")
     user_address: str = Field(
         default=web3.constants.ADDRESS_ZERO,
@@ -152,8 +153,6 @@ class ChainBasedPoolModel(BaseModel):
 
     @root_validator
     def check_params(cls, values):
-        if len(values.get("pool_id")) <= 0:
-            raise ValueError("pool id is empty")
         if not Web3.is_address(values.get("contract_address")):
             raise ValueError("pool address is invalid!")
         if not Web3.is_address(values.get("user_address")):
@@ -326,7 +325,9 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 address=self._reserve_data.interestRateStrategyAddress,
             )
 
-            stable_debt_token_abi_file_path = Path(__file__).parent / "abi/IStableDebtToken.json"
+            stable_debt_token_abi_file_path = (
+                Path(__file__).parent / "abi/IStableDebtToken.json"
+            )
             stable_debt_token_abi_file = stable_debt_token_abi_file_path.open()
             stable_debt_token_abi = json.load(stable_debt_token_abi_file)
             stable_debt_token_abi_file.close()
@@ -492,7 +493,9 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
                 pair_contract, address=pair_contract_address
             )
 
-            rate_model_abi_file_path = Path(__file__).parent / "abi/VariableInterestRate.json"
+            rate_model_abi_file_path = (
+                Path(__file__).parent / "abi/VariableInterestRate.json"
+            )
             rate_model_abi_file = rate_model_abi_file_path.open()
             rate_model_abi = json.load(rate_model_abi_file)
             rate_model_abi_file.close()
@@ -793,12 +796,20 @@ class DaiSavingsRate(ChainBasedPoolModel):
         return apy
 
 
+def generate_eth_public_key(rng_gen=np.random) -> str:
+    private_key_bytes = rng_gen.bytes(32)
+    account = Account.from_key(private_key_bytes)
+    eth_address = account.address
+
+    return eth_address
+
+
 def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
     assets_and_pools = {}
 
     pools = [
         BasePool(
-            pool_id=str(x),
+            contract_address=generate_eth_public_key(rng_gen=rng_gen),
             pool_type=POOL_TYPES.SYNTHETIC,
             base_rate=randrange_float(
                 MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen
@@ -830,10 +841,10 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
             ),  # initial borrowed amount from pool
             reserve_size=POOL_RESERVE_SIZE,
         )
-        for x in range(NUM_POOLS)
+        for _ in range(NUM_POOLS)
     ]
 
-    pools = {str(pool.pool_id): pool for pool in pools}
+    pools = {str(pool.contract_address): pool for pool in pools}
 
     assets_and_pools["total_assets"] = math.floor(
         randrange_float(
@@ -851,6 +862,6 @@ def generate_initial_allocations_for_pools(
 ) -> Dict:
     pools = assets_and_pools["pools"]
     alloc = assets_and_pools["total_assets"] / len(pools)
-    allocations = {str(uid): alloc for uid in pools}
+    allocations = {str(contract_address): alloc for contract_address in pools}
 
     return allocations
