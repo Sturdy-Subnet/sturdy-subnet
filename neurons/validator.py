@@ -120,18 +120,13 @@ async def api_key_validator(request, call_next):
         api_key_info = sql.get_api_key_info(conn, api_key)
 
     if api_key_info is None:
-        return JSONResponse(
-            status_code=HTTP_401_UNAUTHORIZED, content={"detail": "Invalid API key"}
-        )
+        return JSONResponse(status_code=HTTP_401_UNAUTHORIZED, content={"detail": "Invalid API key"})
     # endpoint = request.url.path.split("/")[-1]
     # credits_required = ENDPOINT_TO_CREDITS_USED.get(endpoint, 1)
     credits_required = 1  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
 
     # Now check credits
-    if (
-        api_key_info[sql.BALANCE] is not None
-        and api_key_info[sql.BALANCE] <= credits_required
-    ):
+    if api_key_info[sql.BALANCE] is not None and api_key_info[sql.BALANCE] <= credits_required:
         return JSONResponse(
             status_code=HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": "Insufficient credits - sorry!"},
@@ -243,9 +238,7 @@ async def allocate(body: AllocateAssetsRequest):
                     pool_type=pool.pool_type,
                     web3_provider=core_validator.w3,
                     user_address=(
-                        pool.user_address
-                        if pool.user_address != web3.constants.ADDRESS_ZERO
-                        else synapse.user_address
+                        pool.user_address if pool.user_address != web3.constants.ADDRESS_ZERO else synapse.user_address
                     ),  # TODO: is there a cleaner way to do this?
                     contract_address=pool.contract_address,
                 )
@@ -263,9 +256,7 @@ async def allocate(body: AllocateAssetsRequest):
 
     ret = AllocateAssetsResponse(allocations=result, request_uuid=request_uuid)
     with sql.get_db_connection() as conn:
-        sql.log_allocations(
-            conn, ret.request_uuid, synapse.assets_and_pools, ret.allocations
-        )
+        sql.log_allocations(conn, ret.request_uuid, synapse.assets_and_pools, ret.allocations)
 
     return ret
 
@@ -278,9 +269,7 @@ async def get_allocations(
     to_ts: Optional[int] = None,
 ):
     with sql.get_db_connection() as conn:
-        allocations = sql.get_filtered_allocations(
-            conn, request_uid, miner_uid, from_ts, to_ts
-        )
+        allocations = sql.get_filtered_allocations(conn, request_uid, miner_uid, from_ts, to_ts)
     if not allocations:
         raise HTTPException(status_code=404, detail="No allocations found")
     return allocations
@@ -293,9 +282,7 @@ async def request_info(
     to_ts: Optional[int] = None,
 ):
     with sql.get_db_connection() as conn:
-        info = sql.get_request_info(
-            conn, request_uid, from_ts, to_ts
-        )
+        info = sql.get_request_info(conn, request_uid, from_ts, to_ts)
     if not info:
         raise HTTPException(status_code=404, detail="No request info found")
     return info
@@ -311,9 +298,7 @@ async def run_main_loop():
 
 # Function to run the Uvicorn server
 async def run_uvicorn_server():
-    config = uvicorn.Config(
-        app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio"
-    )
+    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")
     server = uvicorn.Server(config)
     await server.serve()
 

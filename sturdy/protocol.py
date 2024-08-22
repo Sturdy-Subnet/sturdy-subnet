@@ -40,9 +40,7 @@ class AllocInfo(TypedDict):
     allocations: Union[AllocationsDict, None]
 
 
-PoolModel = Annotated[
-    Union[ChainBasedPoolModel, BasePoolModel], Field(discriminator="pool_model_disc")
-]
+PoolModel = Annotated[Union[ChainBasedPoolModel, BasePoolModel], Field(discriminator="pool_model_disc")]
 
 
 class AllocateAssetsRequest(BaseModel):
@@ -50,9 +48,7 @@ class AllocateAssetsRequest(BaseModel):
         use_enum_values = True
         smart_union = True
 
-    request_type: Union[REQUEST_TYPES, int, str] = Field(
-        default=REQUEST_TYPES.ORGANIC, description="type of request"
-    )
+    request_type: Union[REQUEST_TYPES, int, str] = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
     assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
@@ -109,9 +105,7 @@ class AllocateAssetsBase(BaseModel):
         use_enum_values = True
         smart_union = True
 
-    request_type: Union[REQUEST_TYPES, int, str] = Field(
-        default=REQUEST_TYPES.ORGANIC, description="type of request"
-    )
+    request_type: Union[REQUEST_TYPES, int, str] = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
     assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",

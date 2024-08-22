@@ -21,21 +21,11 @@ def plot_simulation_results(simulator):
     median_borrow_rate_history = []
 
     for t in range(simulator.timesteps):
-        borrow_amounts = [
-            pool.borrow_amount for pool in simulator.pool_history[t].values()
-        ]
-        reserve_sizes = [
-            pool.reserve_size for pool in simulator.pool_history[t].values()
-        ]
-        borrow_rates = [
-            pool.borrow_rate for pool in simulator.pool_history[t].values()
-        ]
-        utilization_rates = [
-            wei_div(borrow_amounts[i], reserve_sizes[i]) for i in range(len(borrow_amounts))
-        ]
-        supply_rates = [
-            wei_mul(utilization_rates[i], borrow_rates[i]) for i in range(len(borrow_amounts))
-        ]
+        borrow_amounts = [pool.borrow_amount for pool in simulator.pool_history[t].values()]
+        reserve_sizes = [pool.reserve_size for pool in simulator.pool_history[t].values()]
+        borrow_rates = [pool.borrow_rate for pool in simulator.pool_history[t].values()]
+        utilization_rates = [wei_div(borrow_amounts[i], reserve_sizes[i]) for i in range(len(borrow_amounts))]
+        supply_rates = [wei_mul(utilization_rates[i], borrow_rates[i]) for i in range(len(borrow_amounts))]
 
         borrow_amount_history.append(borrow_amounts)
         borrow_rate_history.append(borrow_rates)
@@ -44,22 +34,27 @@ def plot_simulation_results(simulator):
         median_borrow_rate_history.append(np.median(borrow_rates))
 
     # Convert data to more manageable format
-    borrow_amount_history_df = pd.DataFrame(
-        borrow_amount_history, columns=[f"Pool_{i}" for i in range(len(borrow_amounts))]
-    ).apply(pd.to_numeric) / 1e18
-    borrow_rate_history_df = pd.DataFrame(
-        borrow_rate_history, columns=[f"Pool_{i}" for i in range(len(borrow_rates))]
-    ).apply(pd.to_numeric) / 1e18
-    utilization_rate_history_df = pd.DataFrame(
-        utilization_rate_history,
-        columns=[f"Pool_{i}" for i in range(len(borrow_rates))],
-    ).apply(pd.to_numeric) / 1e18
-    supply_rate_history_df = pd.DataFrame(
-        supply_rate_history, columns=[f"Pool_{i}" for i in range(len(borrow_amounts))]
-    ).apply(pd.to_numeric) / 1e18
-    median_borrow_rate_history_df = pd.Series(
-        median_borrow_rate_history, name="Median Borrow Rate"
-    ).apply(pd.to_numeric) / 1e18
+    borrow_amount_history_df = (
+        pd.DataFrame(borrow_amount_history, columns=[f"Pool_{i}" for i in range(len(borrow_amounts))]).apply(pd.to_numeric)
+        / 1e18
+    )
+    borrow_rate_history_df = (
+        pd.DataFrame(borrow_rate_history, columns=[f"Pool_{i}" for i in range(len(borrow_rates))]).apply(pd.to_numeric) / 1e18
+    )
+    utilization_rate_history_df = (
+        pd.DataFrame(
+            utilization_rate_history,
+            columns=[f"Pool_{i}" for i in range(len(borrow_rates))],
+        ).apply(pd.to_numeric)
+        / 1e18
+    )
+    supply_rate_history_df = (
+        pd.DataFrame(supply_rate_history, columns=[f"Pool_{i}" for i in range(len(borrow_amounts))]).apply(pd.to_numeric)
+        / 1e18
+    )
+    median_borrow_rate_history_df = (
+        pd.Series(median_borrow_rate_history, name="Median Borrow Rate").apply(pd.to_numeric) / 1e18
+    )
 
     plt.style.use("dark_background")
     fig, axs = plt.subplots(3, 2, figsize=(15, 15))
@@ -121,10 +116,7 @@ def plot_simulation_results(simulator):
     # Plot interest rate curves for the pools
     utilization_range = np.linspace(0, 1, 100)
     for i in range(NUM_POOLS):
-        interest_rates = [
-            borrow_rate(u * 1e18, simulator.assets_and_pools["pools"][str(i)]) / 1e18
-            for u in utilization_range
-        ]
+        interest_rates = [borrow_rate(u * 1e18, simulator.assets_and_pools["pools"][str(i)]) / 1e18 for u in utilization_range]
         ax_interest_rates.plot(utilization_range, interest_rates, label=f"Pool_{i}")
 
     ax_interest_rates.set_title("Interest Rate Curves for the Pools")

@@ -24,9 +24,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
                     case POOL_TYPES.AAVE:
                         pools[uid] = AaveV3DefaultInterestRatePool(**pools[uid].dict())
                     case POOL_TYPES.STURDY_SILO:
-                        pools[uid] = VariableInterestSturdySiloStrategy(
-                            **pools[uid].dict()
-                        )
+                        pools[uid] = VariableInterestSturdySiloStrategy(**pools[uid].dict())
                     case POOL_TYPES.DAI_SAVINGS:
                         pools[uid] = DaiSavingsRate(**pools[uid].dict())
                     case POOL_TYPES.COMPOUND_V3:
@@ -80,8 +78,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> Dict:
                 pass
 
     current_allocations = {
-        pool_uid: math.floor((supply_rates[pool_uid] / supply_rate_sum) * balance)
-        for pool_uid, _ in pools.items()
+        pool_uid: math.floor((supply_rates[pool_uid] / supply_rate_sum) * balance) for pool_uid, _ in pools.items()
     }
 
     return current_allocations

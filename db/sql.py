@@ -42,9 +42,7 @@ def get_db_connection():
 
 
 def get_api_key_info(conn: sqlite3.Connection, api_key: str) -> sqlite3.Row:
-    row = conn.execute(
-        f"SELECT * FROM {API_KEYS_TABLE} WHERE {KEY} = ?", (api_key,)
-    ).fetchone()
+    row = conn.execute(f"SELECT * FROM {API_KEYS_TABLE} WHERE {KEY} = ?", (api_key,)).fetchone()
     return dict(row) if row else None
 
 
@@ -53,9 +51,7 @@ def get_all_api_keys(conn: sqlite3.Connection):
 
 
 def get_all_logs_for_key(conn: sqlite3.Connection, api_key: str):
-    return conn.execute(
-        f"SELECT * FROM {LOGS_TABLE} WHERE {KEY} = ?", (api_key,)
-    ).fetchall()
+    return conn.execute(f"SELECT * FROM {LOGS_TABLE} WHERE {KEY} = ?", (api_key,)).fetchall()
 
 
 def get_all_logs(conn: sqlite3.Connection):
@@ -77,9 +73,7 @@ def add_api_key(
 
 
 def update_api_key_balance(conn: sqlite3.Connection, key: str, balance: float):
-    conn.execute(
-        f"UPDATE {API_KEYS_TABLE} SET {BALANCE} = ? WHERE {KEY} = ?", (balance, key)
-    )
+    conn.execute(f"UPDATE {API_KEYS_TABLE} SET {BALANCE} = ? WHERE {KEY} = ?", (balance, key))
     conn.commit()
 
 
@@ -101,19 +95,14 @@ def delete_api_key(conn: sqlite3.Connection, api_key: str) -> None:
     conn.commit()
 
 
-def update_requests_and_credits(
-    conn: sqlite3.Connection, api_key_info: sqlite3.Row, cost: float
-) -> float:
-
+def update_requests_and_credits(conn: sqlite3.Connection, api_key_info: sqlite3.Row, cost: float) -> float:
     conn.execute(
         f"UPDATE api_keys SET {BALANCE} = {BALANCE} - {cost} WHERE {KEY} = ?",
         (api_key_info[KEY],),
     )
 
 
-def log_request(
-    conn: sqlite3.Connection, api_key_info: sqlite3.Row, path: str, cost: float
-) -> None:
+def log_request(conn: sqlite3.Connection, api_key_info: sqlite3.Row, path: str, cost: float) -> None:
     api_key_info = get_api_key_info(conn, api_key_info[KEY])
     balance = api_key_info[BALANCE]
 
@@ -133,9 +122,7 @@ def rate_limit_exceeded(conn: sqlite3.Connection, api_key_info: sqlite3.Row) -> 
         WHERE {KEY} = ? AND {CREATED_AT} >= ?
     """
 
-    cur = conn.execute(
-        query, (api_key_info[KEY], one_minute_ago.strftime("%Y-%m-%d %H:%M:%S"))
-    )
+    cur = conn.execute(query, (api_key_info[KEY], one_minute_ago.strftime("%Y-%m-%d %H:%M:%S")))
     recent_logs = cur.fetchall()
 
     return len(recent_logs) >= api_key_info[RATE_LIMIT_PER_MINUTE]
@@ -189,9 +176,7 @@ def log_allocations(
         )
         to_insert.append(row)
 
-    conn.executemany(
-        f"INSERT INTO {ALLOCATIONS_TABLE} VALUES (?, ?, json(?), ?)", to_insert
-    )
+    conn.executemany(f"INSERT INTO {ALLOCATIONS_TABLE} VALUES (?, ?, json(?), ?)", to_insert)
 
     conn.commit()
 

@@ -27,9 +27,7 @@ def create_key(
     """
 
     if balance is None:
-        balance = float(
-            input("Please enter initial balance for the key (1 credit = 1 image): ")
-        )
+        balance = float(input("Please enter initial balance for the key (1 credit = 1 image): "))
 
     if rate_limit_per_minute is None:
         rate_limit_per_minute = int(input("Please enter rate limit per minute: "))
