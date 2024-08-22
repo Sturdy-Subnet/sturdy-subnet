@@ -35,21 +35,29 @@ def plot_simulation_results(simulator):
 
     # Convert data to more manageable format
     borrow_amount_history_df = (
-        pd.DataFrame(borrow_amount_history, columns=[f"Pool_{i}" for i in range(len(borrow_amounts))]).apply(pd.to_numeric)
+        pd.DataFrame(borrow_amount_history, columns=[
+            f"Pool_{name[:6]}" for name in simulator.assets_and_pools["pools"]
+            ]).apply(pd.to_numeric)
         / 1e18
     )
     borrow_rate_history_df = (
-        pd.DataFrame(borrow_rate_history, columns=[f"Pool_{i}" for i in range(len(borrow_rates))]).apply(pd.to_numeric) / 1e18
+        pd.DataFrame(borrow_rate_history, columns=[
+            f"Pool_{name[:6]}" for name in simulator.assets_and_pools["pools"]
+            ]).apply(pd.to_numeric) / 1e18
     )
     utilization_rate_history_df = (
         pd.DataFrame(
             utilization_rate_history,
-            columns=[f"Pool_{i}" for i in range(len(borrow_rates))],
+            columns=[
+            f"Pool_{name[:6]}" for name in simulator.assets_and_pools["pools"]
+            ],
         ).apply(pd.to_numeric)
         / 1e18
     )
     supply_rate_history_df = (
-        pd.DataFrame(supply_rate_history, columns=[f"Pool_{i}" for i in range(len(borrow_amounts))]).apply(pd.to_numeric)
+        pd.DataFrame(supply_rate_history, columns=[
+            f"Pool_{name[:6]}" for name in simulator.assets_and_pools["pools"]
+            ]).apply(pd.to_numeric)
         / 1e18
     )
     median_borrow_rate_history_df = (
@@ -115,9 +123,9 @@ def plot_simulation_results(simulator):
 
     # Plot interest rate curves for the pools
     utilization_range = np.linspace(0, 1, 100)
-    for i in range(NUM_POOLS):
-        interest_rates = [borrow_rate(u * 1e18, simulator.assets_and_pools["pools"][str(i)]) / 1e18 for u in utilization_range]
-        ax_interest_rates.plot(utilization_range, interest_rates, label=f"Pool_{i}")
+    for pool_addr, pool in simulator.assets_and_pools["pools"].items():
+        interest_rates = [borrow_rate(u * 1e18, pool) / 1e18 for u in utilization_range]
+        ax_interest_rates.plot(utilization_range, interest_rates, label=f"Pool_{pool_addr[:6]}")
 
     ax_interest_rates.set_title("Interest Rate Curves for the Pools")
     ax_interest_rates.set_xlabel("Utilization Rate")

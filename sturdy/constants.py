@@ -24,7 +24,7 @@ MAX_TIMESTEPS = 200
 TIMESTEPS_STEP = 5
 # some randomness to sprinkle into the simulation
 MIN_STOCHASTICITY = 0.02  # min stochasticity
-MAX_STOCHASTICITY = 0.05  # max stochasticity
+MAX_STOCHASTICITY = 0.1  # max stochasticity
 STOCHASTICITY_STEP = 0.005
 POOL_RESERVE_SIZE = 1000e18  # 1000
 
