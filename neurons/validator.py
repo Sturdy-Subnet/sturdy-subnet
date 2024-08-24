@@ -19,11 +19,12 @@
 
 import time
 import asyncio
+from typing import List, Optional
 import uuid
 
 # Bittensor
 import bittensor as bt
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
@@ -31,6 +32,8 @@ from starlette.status import (
     HTTP_429_TOO_MANY_REQUESTS,
 )
 import uvicorn
+import web3
+import web3.constants
 
 # api key db
 from db import sql
@@ -44,6 +47,8 @@ from sturdy.protocol import (
     AllocateAssets,
     AllocateAssetsRequest,
     AllocateAssetsResponse,
+    GetAllocationResponse,
+    RequestInfoResponse,
 )
 from sturdy.validator.simulator import Simulator
 
@@ -115,18 +120,13 @@ async def api_key_validator(request, call_next):
         api_key_info = sql.get_api_key_info(conn, api_key)
 
     if api_key_info is None:
-        return JSONResponse(
-            status_code=HTTP_401_UNAUTHORIZED, content={"detail": "Invalid API key"}
-        )
+        return JSONResponse(status_code=HTTP_401_UNAUTHORIZED, content={"detail": "Invalid API key"})
     # endpoint = request.url.path.split("/")[-1]
     # credits_required = ENDPOINT_TO_CREDITS_USED.get(endpoint, 1)
     credits_required = 1  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
 
     # Now check credits
-    if (
-        api_key_info[sql.BALANCE] is not None
-        and api_key_info[sql.BALANCE] <= credits_required
-    ):
+    if api_key_info[sql.BALANCE] is not None and api_key_info[sql.BALANCE] <= credits_required:
         return JSONResponse(
             status_code=HTTP_429_TOO_MANY_REQUESTS,
             content={"detail": "Insufficient credits - sorry!"},
@@ -153,7 +153,7 @@ async def api_key_validator(request, call_next):
 
 
 # Initialize core_validator outside of the event loop
-core_validator = None
+core_validator = None  # type: ignore[attr-defined]
 
 
 @app.get("/vali")
@@ -187,9 +187,9 @@ async def allocate(body: AllocateAssetsRequest):
           "assets_and_pools": {
             "total_assets": 1000000000000000000,
             "pools": {
+              ...
               "Sturdy ETH/rsETH silo": {
                 "pool_type": "STURDY_SILO",
-                "pool_id": "Sturdy ETH/rsETH silo",
                 "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
               },
               ...
@@ -201,10 +201,12 @@ async def allocate(body: AllocateAssetsRequest):
         {
             "request_uuid": "a8af54a41fa347d7b59570c81fe35492",
             "allocations": {
+                ...
                 "1": {
                     "apy": 2609043057391825,
                     "allocations": {
-                        "Sturdy ETH/rsETH silo": 250000000000000000,
+                        ...
+                        "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": 250000000000000000,
                         ...
                     }
                 },
@@ -222,7 +224,7 @@ async def allocate(body: AllocateAssetsRequest):
             case REQUEST_TYPES.SYNTHETIC:
                 new_pool = PoolFactory.create_pool(
                     pool_type=pool.pool_type,
-                    pool_id=pool.pool_id,
+                    contract_address=pool.contract_address,
                     base_rate=pool.base_rate,
                     base_slope=pool.base_slope,
                     kink_slope=pool.kink_slope,
@@ -235,8 +237,9 @@ async def allocate(body: AllocateAssetsRequest):
                 new_pool = PoolFactory.create_pool(
                     pool_type=pool.pool_type,
                     web3_provider=core_validator.w3,
-                    pool_id=pool.pool_id,
-                    user_address=synapse.user_address,  # TODO: is there a cleaner way to do this?
+                    user_address=(
+                        pool.user_address if pool.user_address != web3.constants.ADDRESS_ZERO else synapse.user_address
+                    ),  # TODO: is there a cleaner way to do this?
                     contract_address=pool.contract_address,
                 )
                 new_pools[uid] = new_pool
@@ -247,12 +250,42 @@ async def allocate(body: AllocateAssetsRequest):
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
         request_type=synapse.request_type,
-        user_address=synapse.user_address
+        user_address=synapse.user_address,
     )
-    request_uuid = uid = str(uuid.uuid4()).replace('-', '')
+    request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
     ret = AllocateAssetsResponse(allocations=result, request_uuid=request_uuid)
+    with sql.get_db_connection() as conn:
+        sql.log_allocations(conn, ret.request_uuid, synapse.assets_and_pools, ret.allocations)
+
     return ret
+
+
+@app.get("/get_allocation/", response_model=List[GetAllocationResponse])
+async def get_allocations(
+    request_uid: Optional[str] = None,
+    miner_uid: Optional[str] = None,
+    from_ts: Optional[int] = None,
+    to_ts: Optional[int] = None,
+):
+    with sql.get_db_connection() as conn:
+        allocations = sql.get_filtered_allocations(conn, request_uid, miner_uid, from_ts, to_ts)
+    if not allocations:
+        raise HTTPException(status_code=404, detail="No allocations found")
+    return allocations
+
+
+@app.get("/request_info/", response_model=List[RequestInfoResponse])
+async def request_info(
+    request_uid: Optional[str] = None,
+    from_ts: Optional[int] = None,
+    to_ts: Optional[int] = None,
+):
+    with sql.get_db_connection() as conn:
+        info = sql.get_request_info(conn, request_uid, from_ts, to_ts)
+    if not info:
+        raise HTTPException(status_code=404, detail="No request info found")
+    return info
 
 
 # Function to run the main loop
@@ -265,9 +298,7 @@ async def run_main_loop():
 
 # Function to run the Uvicorn server
 async def run_uvicorn_server():
-    config = uvicorn.Config(
-        app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio"
-    )
+    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")
     server = uvicorn.Server(config)
     await server.serve()
 

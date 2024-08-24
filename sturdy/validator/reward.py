@@ -22,13 +22,11 @@ import torch
 from typing import List, Dict, Tuple, Any, Union
 import copy
 
-import web3
-
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
 from sturdy.utils.ethmath import wei_div, wei_mul
 from sturdy.utils.misc import check_allocations
-from sturdy.protocol import REQUEST_TYPES, AllocInfo
+from sturdy.protocol import REQUEST_TYPES, AllocInfo, AllocationsDict
 
 
 def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, int]:
@@ -62,7 +60,7 @@ def get_response_times(uids: List[int], responses, timeout: float) -> Dict[str, 
 
 
 def format_allocations(
-    allocations: Dict[str, int],
+    allocations: AllocationsDict,
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
@@ -74,12 +72,12 @@ def format_allocations(
     pools = assets_and_pools["pools"]
 
     # pad the allocations
-    for pool_id in pools.keys():
-        if pool_id not in allocs:
-            allocs[pool_id] = 0
+    for contract_addr in pools.keys():
+        if contract_addr not in allocs:
+            allocs[contract_addr] = 0
 
-    # sort the allocations by pool id
-    formatted_allocs = {pool_id: allocs[pool_id] for pool_id in sorted(allocs.keys())}
+    # sort the allocations by contract address
+    formatted_allocs = {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
     return formatted_allocs
 
@@ -130,7 +128,7 @@ def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties):
 
 
 def get_similarity_matrix(
-    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, int], int]]],
+    apys_and_allocations: Dict[str, Dict[str, Union[AllocationsDict, int]]],
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
 ):
     """
@@ -145,10 +143,10 @@ def get_similarity_matrix(
     possible distance between the allocation 'vectors'.
 
     Args:
-        apys_and_allocations (Dict[str, Dict[str, Union[Dict[str, int], int]]]):
+        apys_and_allocations (Dict[str, Dict[str, Union[AllocationsDict, int]]]):
             A dictionary containing the APY and allocation strategies for each miner. The keys are miner identifiers,
             and the values are dictionaries with their respective allocations and APYs.
-        assets_and_pools (Dict[str, Union[Dict[str, int], int]]):
+        assets_and_pools (Dict[str, Union[AllocationsDict, int]]):
             A dictionary representing the assets available to the miner as well as the pools they can allocate to
 
     Returns:
@@ -185,7 +183,7 @@ def get_similarity_matrix(
 
 def adjust_rewards_for_plagiarism(
     rewards_apy: torch.FloatTensor,
-    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, int], int]]],
+    apys_and_allocations: Dict[str, Dict[str, Union[AllocationsDict, int]]],
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
@@ -204,7 +202,7 @@ def adjust_rewards_for_plagiarism(
 
     Args:
         rewards_apy (torch.FloatTensor): The initial APY rewards for the miners, before adjustments.
-        apys_and_allocations (Dict[str, Dict[str, Union[Dict[str, int], int]]]):
+        apys_and_allocations (Dict[str, Dict[str, Union[AllocationsDict, int]]]):
             A dictionary containing APY values and allocation strategies for each miner. The keys are miner identifiers,
             and the values are dictionaries that include their allocations and APYs.
         assets_and_pools (Dict[str, Union[Dict[str, int], int]]):
@@ -238,7 +236,7 @@ def _get_rewards(
     self,
     query: int,
     max_apy: float,
-    apys_and_allocations: Dict[str, Dict[str, Union[Dict[str, int], int]]],
+    apys_and_allocations: Dict[str, Dict[str, Union[AllocationsDict, int]]],
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
@@ -273,7 +271,7 @@ def _get_rewards(
 
 def calculate_apy(
     self,
-    allocations: Dict[str, int],
+    allocations: AllocationsDict,
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
@@ -293,6 +291,14 @@ def calculate_apy(
                 pool_yield = wei_mul(
                     allocation, pool.supply_rate(amount=allocation)
                 )
+            case POOL_TYPES.DAI_SAVINGS:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate()
+                )
+            case POOL_TYPES.COMPOUND_V3:
+                pool_yield = wei_mul(
+                    allocation, pool.supply_rate(amount=allocation)
+                )
             case _:
                 pool_yield = wei_mul(
                     allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation)
@@ -304,7 +310,7 @@ def calculate_apy(
 
 
 def calculate_aggregate_apy(
-    allocations: Dict[str, int],
+    allocations: AllocationsDict,
     assets_and_pools: Dict[
         str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
     ],
@@ -340,7 +346,6 @@ def get_rewards(
     uids: List[str],
     responses: List,
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
-    user_address: str = web3.constants.ADDRESS_ZERO
 ) -> Tuple[torch.FloatTensor, Dict[int, AllocInfo]]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -370,10 +375,10 @@ def get_rewards(
     # update reserves given allocations
     for _, pool in pools_to_scan.items():
         match pool.pool_type:
-            case POOL_TYPES.AAVE:
+            case T if T in (POOL_TYPES.AAVE, POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3):
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
-                pool.sync(user_address, self.w3)
+                pool.sync(pool.user_address, self.w3)
             case _:
                 pass
 

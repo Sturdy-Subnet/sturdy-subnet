@@ -53,7 +53,7 @@ def retry_with_backoff(func, *args, **kwargs):
     """
     Retry a function with exponential backoff and jitter when rate limited.
     """
-    max_retries = 10  # Maximum number of retries
+    max_retries = 5  # Maximum number of retries
     base_delay = 0.1  # Initial delay in seconds
     max_delay = 60  # Maximum delay in seconds
 
@@ -130,7 +130,9 @@ def supply_rate(util_rate, pool):
 
 def check_allocations(
     assets_and_pools: Dict[str, Union[Dict[str, int], int]],
-    allocations: Dict[str, int],
+    allocations: Dict[
+        str, int
+    ],  # TODO: fix circular import so we can type this with AllocationsDict?
 ) -> bool:
     """
     Checks allocations from miner.

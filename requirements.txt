@@ -1,9 +1,11 @@
 wandb==0.17.0
 loguru==0.7.0
-bittensor==6.11.0
+bittensor @ git+https://github.com/opentensor/bittensor@release/6.11.1
 torch==2.0.1
 typer==0.9.0
 starlette==0.27.0
 web3==6.19.0
 numpy==1.26.4
 python-dotenv==1.0.1
+pandas==2.2.2
+matplotlib==3.9.0

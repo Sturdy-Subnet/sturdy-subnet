@@ -45,9 +45,7 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
 
-    async def forward(
-        self, synapse: sturdy.protocol.AllocateAssets
-    ) -> sturdy.protocol.AllocateAssets:
+    async def forward(self, synapse: sturdy.protocol.AllocateAssets) -> sturdy.protocol.AllocateAssets:
         """
         Processes the incoming 'AllocateAssets' synapse by performing a predefined operation on the input data.
         This method should be replaced with actual logic relevant to the miner's purpose.
@@ -75,9 +73,7 @@ class Miner(BaseMinerNeuron):
         bt.logging.info(f"sending allocations: {synapse.allocations}")
         return synapse
 
-    async def blacklist(
-        self, synapse: sturdy.protocol.AllocateAssets
-    ) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: sturdy.protocol.AllocateAssets) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -151,15 +147,9 @@ class Miner(BaseMinerNeuron):
         Example priority logic:
         - A higher stake results in a higher priority value.
         """
-        caller_uid = self.metagraph.hotkeys.index(
-            synapse.dendrite.hotkey
-        )  # Get the caller index.
-        prirority = float(
-            self.metagraph.S[caller_uid]
-        )  # Return the stake as the priority.
-        bt.logging.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority
-        )
+        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)  # Get the caller index.
+        prirority = float(self.metagraph.S[caller_uid])  # Return the stake as the priority.
+        bt.logging.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority)
         return prirority
 
 

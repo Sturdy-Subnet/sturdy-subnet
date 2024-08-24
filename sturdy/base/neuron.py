@@ -130,7 +130,6 @@ class BaseNeuron(ABC):
         self.check_registered()
 
         if self.should_sync_metagraph():
-            # TODO: sometimes this throws "ssl.SSLEOFError: EOF occurred in violation of protocol" on some valis - investigate
             try:
                 self.resync_metagraph()
             except Exception as e:

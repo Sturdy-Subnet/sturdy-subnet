@@ -3,6 +3,9 @@
 junk/
 pyrightconfig.json
 
+# zed
+.zed
+
 # vscode
 .vscode
 

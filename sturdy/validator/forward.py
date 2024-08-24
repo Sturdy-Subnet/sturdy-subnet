@@ -81,7 +81,7 @@ async def query_and_score_miners(
     assets_and_pools: Dict[str, Union[Dict[str, int], int]] = None,
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
     user_address: str = web3.constants.ADDRESS_ZERO
-) -> Dict[int, AllocInfo]:
+) -> Dict[str, AllocInfo]:
     # intialize simulator
     if request_type == REQUEST_TYPES.ORGANIC:
         self.simulator.initialize(timesteps=1)
@@ -133,7 +133,6 @@ async def query_and_score_miners(
         uids=active_uids,
         responses=responses,
         assets_and_pools=assets_and_pools,
-        user_address=user_address
     )
 
     bt.logging.info(f"Scored responses: {rewards}")

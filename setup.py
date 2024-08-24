@@ -55,12 +55,8 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 # loading version from setup.py
-with codecs.open(
-    os.path.join(here, "sturdy/__init__.py"), encoding="utf-8"
-) as init_file:
-    version_match = re.search(
-        r"^__version__ = ['\"]([^'\"]*)['\"]", init_file.read(), re.M
-    )
+with codecs.open(os.path.join(here, "sturdy/__init__.py"), encoding="utf-8") as init_file:
+    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", init_file.read(), re.M)
     version_string = version_match.group(1)
 
 setup(
@@ -74,6 +70,7 @@ setup(
     author="Syeam Bin Abdullah",
     packages=find_packages(),
     include_package_data=True,
+    package_data={"sturdy": ["abi/*.json"]},
     author_email="syeamtechdemon@gmail.com",
     license="MIT",
     python_requires=">=3.10,<3.11",
