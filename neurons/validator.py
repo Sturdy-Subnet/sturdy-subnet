@@ -36,7 +36,7 @@ import web3
 import web3.constants
 
 # api key db
-from db import sql
+from sturdy.validator import sql
 
 # Bittensor Validator Template:
 from sturdy.pools import PoolFactory
