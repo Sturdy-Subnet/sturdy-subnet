@@ -17,19 +17,21 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
+from collections.abc import Callable
+from decimal import Decimal
+from functools import lru_cache, update_wrapper
+from math import floor
+from typing import Any
+
+import bittensor as bt
 import numpy as np
 from pydantic import BaseModel
-import bittensor as bt
+
 from sturdy.constants import (
-    SIG_FIGS,
     RESERVE_FACTOR_MASK,
     RESERVE_FACTOR_START_BIT_POSITION,
+    SIG_FIGS,
 )
-from math import floor
-from typing import Callable, Dict, Any, Type, Union
-from functools import lru_cache, update_wrapper
-from decimal import Decimal
-
 from sturdy.utils.ethmath import wei_div, wei_mul
 
 # TODO: cleanup functions - lay them out better across files?
@@ -42,14 +44,14 @@ def randrange_float(
     step,
     sig: int = SIG_FIGS,
     max_prec: int = SIG_FIGS,
-    rng_gen=np.random,
-):
+    rng_gen: Any = np.random.RandomState,
+) -> float:
     num_steps = int((stop - start) / step)
     random_step = rng_gen.randint(0, num_steps + 1)
     return format_num_prec(start + random_step * step, sig=sig, max_prec=max_prec)
 
 
-def retry_with_backoff(func, *args, **kwargs):
+def retry_with_backoff(func, *args: Any, **kwargs: Any) -> Any:
     """
     Retry a function with exponential backoff and jitter when rate limited.
     """
@@ -64,15 +66,15 @@ def retry_with_backoff(func, *args, **kwargs):
         except Exception as e:
             if "Rate limited" in str(e):
                 delay = min(base_delay * 2**retries, max_delay)
-                jitter = np.random.uniform(delay / 2, delay * 1.5)
+                jitter = np.random.uniform(delay / 2, delay * 1.5)  # noqa: NPY002
                 time.sleep(jitter)
                 retries += 1
             else:
-                raise e
-    raise Exception(f"Maximum retries ({max_retries}) exceeded for {func.__name__}")
+                raise
+    raise Exception(f"Maximum retries ({max_retries}) exceeded for {func.__name__}")  # noqa: TRY002
 
 
-def rayMul(a: int, b: int):
+def rayMul(a: int, b: int) -> int:  # noqa: N802
     """Multiplies two ray, rounding half up to the nearest ray
     See:
     https://github.com/aave/aave-v3-core/blob/724a9ef43adf139437ba87dcbab63462394d4601/contracts/protocol/libraries/math/WadRayMath.sol#L65
@@ -83,23 +85,19 @@ def rayMul(a: int, b: int):
     # Check for overflow
     if b == 0 or a <= (2**256 - 1 - HALF_RAY) // b:
         return (a * b + HALF_RAY) // RAY
-    else:
-        raise ValueError("Multiplication overflow")
+    raise ValueError("Multiplication overflow")
 
 
-def getReserveFactor(reserve_configuration):
-    return (
-        reserve_configuration.data & ~RESERVE_FACTOR_MASK
-    ) >> RESERVE_FACTOR_START_BIT_POSITION
+def getReserveFactor(reserve_configuration) -> int:  # noqa: N802
+    return (reserve_configuration.data & ~RESERVE_FACTOR_MASK) >> RESERVE_FACTOR_START_BIT_POSITION
 
 
 def get_synapse_from_body(
     body: BaseModel,
-    synapse_model: Type[bt.Synapse],
+    synapse_model: type[bt.Synapse],
 ) -> bt.Synapse:
     body_dict = body.dict()
-    synapse = synapse_model(**body_dict)
-    return synapse
+    return synapse_model(**body_dict)
 
 
 def format_num_prec(num: float, sig: int = SIG_FIGS, max_prec: int = SIG_FIGS) -> float:
@@ -107,46 +105,40 @@ def format_num_prec(num: float, sig: int = SIG_FIGS, max_prec: int = SIG_FIGS) -
 
 
 def borrow_rate(util_rate, pool) -> int:
-    interest_rate = (
-        pool.base_rate
-        + wei_mul(wei_div(util_rate, pool.optimal_util_rate), pool.base_slope)
+    return (
+        pool.base_rate + wei_mul(wei_div(util_rate, pool.optimal_util_rate), pool.base_slope)
         if util_rate < pool.optimal_util_rate
         else pool.base_rate
         + pool.base_slope
         + wei_mul(
-            wei_div(
-                (util_rate - pool.optimal_util_rate), (1e18 - pool.optimal_util_rate)
-            ),
+            wei_div((util_rate - pool.optimal_util_rate), (1e18 - pool.optimal_util_rate)),
             pool.kink_slope,
         )
     )
 
-    return interest_rate
 
 
-def supply_rate(util_rate, pool):
+def supply_rate(util_rate, pool) -> int:
     return wei_mul(util_rate, pool.borrow_rate)
 
 
 def check_allocations(
-    assets_and_pools: Dict[str, Union[Dict[str, int], int]],
-    allocations: Dict[
-        str, int
-    ],  # TODO: fix circular import so we can type this with AllocationsDict?
+    assets_and_pools: dict,
+    allocations: dict[str, int],  # TODO: fix circular import so we can type this with AllocationsDict?
 ) -> bool:
     """
     Checks allocations from miner.
 
     Args:
-    - assets_and_pools (Dict[str, Union[Dict[str, int], int]]): The assets and pools which the allocations are for.
-    - allocations (Dict[str, int]): The allocations to validate.
+    - assets_and_pools (dict[str, Union[dict[str, int], int]]): The assets and pools which the allocations are for.
+    - allocations (dict[str, int]): The allocations to validate.
 
     Returns:
     - bool: Represents if allocations are valid.
     """
 
     # Ensure the allocations are provided and valid
-    if not allocations or not isinstance(allocations, Dict):
+    if not allocations or not isinstance(allocations, dict):
         return False
 
     # Ensure the 'total_assets' key exists in assets_and_pools and is a valid number
@@ -158,7 +150,7 @@ def check_allocations(
     total_allocated = Decimal(0)
 
     # Check allocations
-    for _, allocation in allocations.items():
+    for allocation in allocations.values():
         try:
             allocation_value = Decimal(str(allocation))
         except (ValueError, TypeError):
@@ -173,14 +165,11 @@ def check_allocations(
             return False
 
     # Ensure total allocated does not exceed the total assets
-    if total_allocated > to_allocate:
-        return False
-
-    return True
+    return not total_allocated > to_allocate
 
 
 # LRU Cache with TTL
-def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1):
+def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1) -> Any:
     """
     Decorator that creates a cache of the most recently used function calls with a time-to-live (TTL) feature.
     The cache evicts the least recently used entries if the cache exceeds the `maxsize` or if an entry has
@@ -213,10 +202,10 @@ def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1):
 
     def wrapper(func: Callable) -> Callable:
         @lru_cache(maxsize, typed)
-        def ttl_func(ttl_hash, *args, **kwargs):
+        def ttl_func(ttl_hash, *args, **kwargs) -> Any:  # noqa: ANN002, ANN003, ARG001
             return func(*args, **kwargs)
 
-        def wrapped(*args, **kwargs) -> Any:
+        def wrapped(*args, **kwargs) -> Any:  # noqa: ANN002, ANN003
             th = next(hash_gen)
             return ttl_func(th, *args, **kwargs)
 
@@ -225,7 +214,7 @@ def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1):
     return wrapper
 
 
-def _ttl_hash_gen(seconds: int):
+def _ttl_hash_gen(seconds: int):  # noqa: ANN202
     """
     Internal generator function used by the `ttl_cache` decorator to generate a new hash value at regular
     time intervals specified by `seconds`.

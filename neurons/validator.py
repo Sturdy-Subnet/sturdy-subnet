@@ -17,13 +17,14 @@
 # DEALINGS IN THE SOFTWARE.
 
 
-import time
 import asyncio
-from typing import List, Optional
+import time
 import uuid
+from typing import Any
 
 # Bittensor
 import bittensor as bt
+import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from starlette.status import (
@@ -31,17 +32,13 @@ from starlette.status import (
     HTTP_401_UNAUTHORIZED,
     HTTP_429_TOO_MANY_REQUESTS,
 )
-import uvicorn
-import web3
-import web3.constants
+from web3.constants import ADDRESS_ZERO
 
-# api key db
-from sturdy.validator import sql
+# import base validator class which takes care of most of the boilerplate
+from sturdy.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
 from sturdy.pools import PoolFactory
-from sturdy.validator import forward, query_and_score_miners
-from sturdy.utils.misc import get_synapse_from_body
 from sturdy.protocol import (
     REQUEST_TYPES,
     AllocateAssets,
@@ -50,10 +47,11 @@ from sturdy.protocol import (
     GetAllocationResponse,
     RequestInfoResponse,
 )
-from sturdy.validator.simulator import Simulator
+from sturdy.utils.misc import get_synapse_from_body
 
-# import base validator class which takes care of most of the boilerplate
-from sturdy.base.validator import BaseValidatorNeuron
+# api key db
+from sturdy.validator import forward, query_and_score_miners, sql
+from sturdy.validator.simulator import Simulator
 
 
 class Validator(BaseValidatorNeuron):
@@ -70,14 +68,14 @@ class Validator(BaseValidatorNeuron):
     end of each epoch.
     """
 
-    def __init__(self, config=None):
-        super(Validator, self).__init__(config=config)
+    def __init__(self, config=None) -> None:
+        super().__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
         self.uid_to_response = {}
         self.simulator = Simulator()
 
-    async def forward(self):
+    async def forward(self) -> Any:
         """
         Validator forward pass. Consists of:
         - Generating the query.
@@ -94,18 +92,18 @@ class Validator(BaseValidatorNeuron):
 app = FastAPI(debug=False)
 
 
-def _get_api_key(request: Request):
+def _get_api_key(request: Request) -> Any:
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         return None
     if auth_header.startswith("Bearer "):
         return auth_header.split(" ")[1]
-    else:
-        return auth_header
+
+    return auth_header
 
 
 @app.middleware("http")
-async def api_key_validator(request, call_next):
+async def api_key_validator(request, call_next) -> Response:
     if request.url.path in ["/docs", "/openapi.json", "/favicon.ico", "/redoc"]:
         return await call_next(request)
 
@@ -121,8 +119,7 @@ async def api_key_validator(request, call_next):
 
     if api_key_info is None:
         return JSONResponse(status_code=HTTP_401_UNAUTHORIZED, content={"detail": "Invalid API key"})
-    # endpoint = request.url.path.split("/")[-1]
-    # credits_required = ENDPOINT_TO_CREDITS_USED.get(endpoint, 1)
+
     credits_required = 1  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
 
     # Now check credits
@@ -153,23 +150,21 @@ async def api_key_validator(request, call_next):
 
 
 # Initialize core_validator outside of the event loop
-core_validator = None  # type: ignore[attr-defined]
+core_validator = None  # type: ignore[]
 
 
 @app.get("/vali")
-async def vali():
-    ret = {"step": core_validator.step, "config": core_validator.config}
-    return ret
+async def vali() -> dict:
+    return {"step": core_validator.step, "config": core_validator.config}  # type: ignore[]
 
 
 @app.get("/status")
-async def status():
-    ret = {"status": "OK"}
-    return ret
+async def status() -> dict:
+    return {"status": "OK"}
 
 
 @app.post("/allocate", response_model=AllocateAssetsResponse)
-async def allocate(body: AllocateAssetsRequest):
+async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None:
     """
     Handles allocation requests by creating pools, querying and scoring miners, and returning the allocations.
 
@@ -214,9 +209,9 @@ async def allocate(body: AllocateAssetsRequest):
             }
         }
     """
-    synapse = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
+    synapse: Any = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
     bt.logging.debug(f"Synapse:\n{synapse}")
-    pools = synapse.assets_and_pools["pools"]
+    pools: Any = synapse.assets_and_pools["pools"]
 
     new_pools = {}
     for uid, pool in pools.items():
@@ -236,9 +231,9 @@ async def allocate(body: AllocateAssetsRequest):
             case _:  # TODO: We assume this is an "organic request"
                 new_pool = PoolFactory.create_pool(
                     pool_type=pool.pool_type,
-                    web3_provider=core_validator.w3,
+                    web3_provider=core_validator.w3,  # type: ignore[]
                     user_address=(
-                        pool.user_address if pool.user_address != web3.constants.ADDRESS_ZERO else synapse.user_address
+                        pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
                     ),  # TODO: is there a cleaner way to do this?
                     contract_address=pool.contract_address,
                 )
@@ -261,13 +256,13 @@ async def allocate(body: AllocateAssetsRequest):
     return ret
 
 
-@app.get("/get_allocation/", response_model=List[GetAllocationResponse])
+@app.get("/get_allocation/", response_model=list[GetAllocationResponse])
 async def get_allocations(
-    request_uid: Optional[str] = None,
-    miner_uid: Optional[str] = None,
-    from_ts: Optional[int] = None,
-    to_ts: Optional[int] = None,
-):
+    request_uid: str | None = None,
+    miner_uid: str | None = None,
+    from_ts: int | None = None,
+    to_ts: int | None = None,
+) -> list[dict]:
     with sql.get_db_connection() as conn:
         allocations = sql.get_filtered_allocations(conn, request_uid, miner_uid, from_ts, to_ts)
     if not allocations:
@@ -275,12 +270,12 @@ async def get_allocations(
     return allocations
 
 
-@app.get("/request_info/", response_model=List[RequestInfoResponse])
+@app.get("/request_info/", response_model=list[RequestInfoResponse])
 async def request_info(
-    request_uid: Optional[str] = None,
-    from_ts: Optional[int] = None,
-    to_ts: Optional[int] = None,
-):
+    request_uid: str | None = None,
+    from_ts: int | None = None,
+    to_ts: int | None = None,
+) -> list[dict]:
     with sql.get_db_connection() as conn:
         info = sql.get_request_info(conn, request_uid, from_ts, to_ts)
     if not info:
@@ -289,27 +284,27 @@ async def request_info(
 
 
 # Function to run the main loop
-async def run_main_loop():
+async def run_main_loop() -> None:
     try:
-        core_validator.run_in_background_thread()
+        core_validator.run_in_background_thread()  # type: ignore[]
     except KeyboardInterrupt:
-        print("Keyboard interrupt received, exiting...")
+        bt.logging.info("Keyboard interrupt received, exiting...")
 
 
 # Function to run the Uvicorn server
-async def run_uvicorn_server():
-    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")
+async def run_uvicorn_server() -> None:
+    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")  # noqa: S104 # type: ignore[]
     server = uvicorn.Server(config)
     await server.serve()
 
 
-async def main():
-    global core_validator
+async def main() -> None:
+    global core_validator  # noqa: PLW0603
     core_validator = Validator()
     if not (core_validator.config.synthetic or core_validator.config.organic):
         bt.logging.error(
             "You did not select a validator type to run! Ensure you select to run either a synthetic or organic validator. \
-             Shutting down..."
+             Shutting down...",
         )
         return
 
@@ -318,14 +313,13 @@ async def main():
     if core_validator.config.organic:
         await asyncio.gather(run_uvicorn_server(), run_main_loop())
     else:
-        # await run_main_loop()
         with core_validator:
             while True:
                 bt.logging.debug("Running synthetic vali...")
-                time.sleep(10)
+                time.sleep(10)  # noqa: ASYNC251
 
 
-def start():
+def start() -> None:
     asyncio.run(main())
 
 

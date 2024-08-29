@@ -15,31 +15,31 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import math
-from typing import Dict, Literal, Union
-from enum import IntEnum
-
 import json
+import math
+from enum import IntEnum
+from pathlib import Path
+from typing import Any, Literal
+
+import bittensor as bt
+import numpy as np
 from eth_account import Account
 from pydantic import BaseModel, Field, PrivateAttr, root_validator, validator
 from web3 import Web3
-import web3
-import web3.constants
-from web3.contract import Contract
-import numpy as np
-import bittensor as bt
-from pathlib import Path
+from web3.constants import ADDRESS_ZERO
+from web3.contract.contract import Contract
+from web3.types import BlockData
 
+from sturdy.constants import *
 from sturdy.utils.ethmath import wei_div, wei_mul
 from sturdy.utils.misc import (
-    randrange_float,
     format_num_prec,
-    retry_with_backoff,
-    rayMul,
     getReserveFactor,
+    randrange_float,
+    rayMul,
+    retry_with_backoff,
     ttl_cache,
 )
-from sturdy.constants import *
 
 
 class POOL_TYPES(IntEnum):
@@ -59,7 +59,7 @@ class BasePoolModel(BaseModel):
 
     pool_model_disc: Literal["SYNTHETIC"] = Field(default="SYNTHETIC", description="pool type discriminator")
     contract_address: str = Field(..., description='the "contract address" of the pool - used here as a uid')
-    pool_type: Union[POOL_TYPES, int, str] = Field(default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool")
+    pool_type: POOL_TYPES | int | str = Field(default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool")
     base_rate: int = Field(..., description="base interest rate")
     base_slope: int = Field(..., description="base interest rate slope")
     kink_slope: int = Field(..., description="kink slope")
@@ -68,20 +68,20 @@ class BasePoolModel(BaseModel):
     reserve_size: int = Field(..., description="pool reserve size in wei")
 
     @validator("pool_type", pre=True)
-    def validator_pool_type(cls, value):
+    def validator_pool_type(cls, value) -> POOL_TYPES | int | str:
         if isinstance(value, POOL_TYPES):
             return value
-        elif isinstance(value, int):
+        if isinstance(value, int):
             return POOL_TYPES(value)
-        elif isinstance(value, str):
+        if isinstance(value, str):
             try:
                 return POOL_TYPES[value]
             except KeyError:
-                raise ValueError(f"Invalid enum name: {value}")
+                raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
         raise ValueError(f"Invalid value: {value}")
 
     @root_validator
-    def check_params(cls, values):
+    def check_params(cls, values):  # noqa: ANN201
         if not Web3.is_address(values.get("contract_address")):
             raise ValueError("pool address is invalid!")
         if values.get("base_rate") < 0:
@@ -119,7 +119,7 @@ class BasePool(BasePoolModel):
     @property
     def borrow_rate(self) -> int:
         util_rate = self.util_rate
-        interest_rate = (
+        return (
             self.base_rate + wei_mul(wei_div(util_rate, self.optimal_util_rate), self.base_slope)
             if util_rate < self.optimal_util_rate
             else self.base_rate
@@ -127,16 +127,14 @@ class BasePool(BasePoolModel):
             + wei_mul(
                 wei_div(
                     (util_rate - self.optimal_util_rate),
-                    (1e18 - self.optimal_util_rate),
+                    int(1e18 - self.optimal_util_rate),
                 ),
                 self.kink_slope,
             )
         )
 
-        return interest_rate
-
     @property
-    def supply_rate(self):
+    def supply_rate(self) -> int:
         return wei_mul(self.util_rate, self.borrow_rate)
 
 
@@ -152,30 +150,30 @@ class ChainBasedPoolModel(BaseModel):
         smart_union = True
 
     pool_model_disc: Literal["CHAIN"] = Field(default="CHAIN", description="pool type discriminator")
-    pool_type: Union[POOL_TYPES, int, str] = Field(..., description="type of pool")
+    pool_type: POOL_TYPES | int | str = Field(..., description="type of pool")
     user_address: str = Field(
-        default=web3.constants.ADDRESS_ZERO,
+        default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls",
     )
-    contract_address: str = Field(default=web3.constants.ADDRESS_ZERO, description="address of contract to call")
+    contract_address: str = Field(default=ADDRESS_ZERO, description="address of contract to call")
 
-    _initted: bool = PrivateAttr(False)
+    _initted: bool = PrivateAttr(False)  # noqa: FBT003
 
     @validator("pool_type", pre=True)
-    def validator_pool_type(cls, value):
+    def validator_pool_type(cls, value) -> POOL_TYPES | int | str:
         if isinstance(value, POOL_TYPES):
             return value
-        elif isinstance(value, int):
+        if isinstance(value, int):
             return POOL_TYPES(value)
-        elif isinstance(value, str):
+        if isinstance(value, str):
             try:
                 return POOL_TYPES[value]
             except KeyError:
-                raise ValueError(f"Invalid enum name: {value}")
+                raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
         raise ValueError(f"Invalid value: {value}")
 
     @root_validator
-    def check_params(cls, values):
+    def check_params(cls, values):  # noqa: ANN201
         if not Web3.is_address(values.get("contract_address")):
             raise ValueError("pool address is invalid!")
         if not Web3.is_address(values.get("user_address")):
@@ -183,19 +181,19 @@ class ChainBasedPoolModel(BaseModel):
 
         return values
 
-    def pool_init(self, **args):
+    def pool_init(self, **args: Any) -> None:
         raise NotImplementedError("pool_init() has not been implemented!")
 
-    def sync(self, **args):
+    def sync(self, **args: Any) -> None:
         raise NotImplementedError("sync() has not been implemented!")
 
-    def supply_rate(self, **args):
+    def supply_rate(self, **args: Any) -> int:
         raise NotImplementedError("supply_rate() has not been implemented!")
 
 
 class PoolFactory:
     @staticmethod
-    def create_pool(pool_type: POOL_TYPES, **kwargs) -> Union[ChainBasedPoolModel, BasePoolModel]:
+    def create_pool(pool_type: POOL_TYPES, **kwargs: Any) -> ChainBasedPoolModel | BasePoolModel:
         match pool_type:
             case POOL_TYPES.SYNTHETIC:
                 return BasePool(**kwargs)
@@ -232,10 +230,10 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     class Config:
         arbitrary_types_allowed = True
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self._atoken_contract.address, self._underlying_asset_address))
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, AaveV3DefaultInterestRatePool):
             return NotImplemented
         # Compare the attributes for equality
@@ -244,12 +242,12 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             other._underlying_asset_address,
         )
 
-    def pool_init(self, web3_provider: Web3):
+    def pool_init(self, web3_provider: Web3) -> None:
         try:
-            assert web3_provider.is_connected()
+            assert web3_provider.is_connected()  # noqa: S101
         except Exception as err:
             bt.logging.error("Failed to connect to Web3 instance!")
-            bt.logging.error(err)
+            bt.logging.error(err)  # type: ignore[]
 
         try:
             atoken_abi_file_path = Path(__file__).parent / "abi/AToken.json"
@@ -274,7 +272,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             self._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
 
             self._underlying_asset_address = retry_with_backoff(
-                self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call
+                self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call,
             )
 
             erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
@@ -284,18 +282,17 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 
             underlying_asset_contract = web3_provider.eth.contract(abi=erc20_abi, decode_tuples=True)
             self._underlying_asset_contract = retry_with_backoff(
-                underlying_asset_contract, address=self._underlying_asset_address
+                underlying_asset_contract,
+                address=self._underlying_asset_address,
             )
 
             self._initted = True
 
         except Exception as err:
             bt.logging.error("Failed to load contract!")
-            bt.logging.error(err)
+            bt.logging.error(err)  # type: ignore[]
 
-        return web3_provider
-
-    def sync(self, web3_provider: Web3):
+    def sync(self, web3_provider: Web3) -> None:
         """Syncs with chain"""
         if not self._initted:
             self.pool_init(web3_provider)
@@ -312,11 +309,11 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             self._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
 
             self._underlying_asset_address = retry_with_backoff(
-                self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call
+                self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call,
             )
 
             self._reserve_data = retry_with_backoff(
-                self._pool_contract.functions.getReserveData(self._underlying_asset_address).call
+                self._pool_contract.functions.getReserveData(self._underlying_asset_address).call,
             )
 
             reserve_strat_abi_file_path = Path(__file__).parent / "abi/IReserveInterestRateStrategy.json"
@@ -370,7 +367,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 
         except Exception as err:
             bt.logging.error("Failed to sync to chain!")
-            bt.logging.error(err)
+            bt.logging.error(err)  # type: ignore[]
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
@@ -380,11 +377,11 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             already_deposited = int(
                 retry_with_backoff(self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(user_addr)).call)
                 * 10**self._decimals
-                // 1e18
+                // 1e18,
             )
 
             delta = amount - already_deposited
-            to_deposit = delta if delta > 0 else 0
+            to_deposit = max(0, delta)
             to_remove = abs(delta) if delta < 0 else 0
 
             (nextLiquidityRate, _, _) = retry_with_backoff(
@@ -399,16 +396,15 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                         self._reserveFactor,
                         self._underlying_asset_address,
                         self._atoken_contract.address,
-                    )
-                ).call
+                    ),
+                ).call,
             )
 
-            # return liquidity_rate / 1e27
             return Web3.to_wei(nextLiquidityRate / 1e27, "ether")
 
         except Exception as e:
             bt.logging.error("Failed to retrieve supply apy!")
-            bt.logging.error(e)
+            bt.logging.error(e)  # type: ignore[]
 
         return 0
 
@@ -422,16 +418,16 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _curr_deposit_amount: int = PrivateAttr()
     _util_prec: int = PrivateAttr()
     _fee_prec: int = PrivateAttr()
-    _totalAsset: int = PrivateAttr()
-    _totalBorrow: int = PrivateAttr()
+    _totalAsset: Any = PrivateAttr()
+    _totalBorrow: Any = PrivateAttr()
     _current_rate_info = PrivateAttr()
     _rate_prec: int = PrivateAttr()
-    _block: web3.types.BlockData = PrivateAttr()
+    _block: BlockData = PrivateAttr()
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, VariableInterestSturdySiloStrategy):
             return NotImplemented
         # Compare the attributes for equality
@@ -440,12 +436,12 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             other._pair_contract.address,
         )
 
-    def pool_init(self, user_addr: str, web3_provider: Web3):
+    def pool_init(self, user_addr: str, web3_provider: Web3) -> None:  # noqa: ARG002
         try:
-            assert web3_provider.is_connected()
+            assert web3_provider.is_connected()  # noqa: S101
         except Exception as err:
             bt.logging.error("Failed to connect to Web3 instance!")
-            bt.logging.error(err)
+            bt.logging.error(err)  # type: ignore[]
 
         try:
             silo_strategy_abi_file_path = Path(__file__).parent / "abi/SturdySiloStrategy.json"
@@ -477,9 +473,9 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             self._initted = True
 
         except Exception as e:
-            bt.logging.error(e)
+            bt.logging.error(e)  # type: ignore[]
 
-    def sync(self, user_addr: str, web3_provider: Web3):
+    def sync(self, user_addr: str, web3_provider: Web3) -> None:
         """Syncs with chain"""
         if not self._initted:
             self.pool_init(user_addr, web3_provider)
@@ -490,8 +486,8 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         constants = retry_with_backoff(self._pair_contract.functions.getConstants().call)
         self._util_prec = constants[2]
         self._fee_prec = constants[3]
-        self._totalAsset = retry_with_backoff(self._pair_contract.functions.totalAsset().call)
-        self._totalBorrow = retry_with_backoff(self._pair_contract.functions.totalBorrow().call)
+        self._totalAsset: Any = retry_with_backoff(self._pair_contract.functions.totalAsset().call)
+        self._totalBorrow: Any = retry_with_backoff(self._pair_contract.functions.totalBorrow().call)
 
         self._block = web3_provider.eth.get_block("latest")
 
@@ -507,27 +503,27 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         util_rate = (self._util_prec * self._totalBorrow.amount) // (self._totalAsset.amount + delta)
 
         last_update_timestamp = self._current_rate_info.lastTimestamp
-        current_timestamp = self._block["timestamp"]
+        current_timestamp = self._block["timestamp"]  # type: ignore[]
         delta_time = current_timestamp - last_update_timestamp
 
         protocol_fee = self._current_rate_info.feeToProtocolRate
         (new_rate_per_sec, _) = retry_with_backoff(
             self._rate_model_contract.functions.getNewRate(
-                delta_time, util_rate, self._current_rate_info.fullUtilizationRate
-            ).call
+                delta_time,
+                util_rate,
+                self._current_rate_info.fullUtilizationRate,
+            ).call,
         )
 
-        supply_apy = int(
+        return int(
             new_rate_per_sec
             * 31536000
             * 1e18
             * util_rate
             // self._rate_prec
             // self._util_prec
-            * (1 - (protocol_fee / self._fee_prec))
+            * (1 - (protocol_fee / self._fee_prec)),
         )  # (rate_per_sec_pct * seconds_in_year * util_rate_pct) * 1e18
-
-        return supply_apy
 
 
 class CompoundV3Pool(ChainBasedPoolModel):
@@ -543,11 +539,11 @@ class CompoundV3Pool(ChainBasedPoolModel):
     _base_token_price: float = PrivateAttr()
     _reward_token_price: float = PrivateAttr()
 
-    _CompoundTokenMap: Dict = {
-        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"  # WETH -> ETH
+    _CompoundTokenMap: dict = {
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # WETH -> ETH
     }
 
-    def pool_init(self, web3_provider: Web3):
+    def pool_init(self, web3_provider: Web3) -> None:
         comet_abi_file_path = Path(__file__).parent / "abi/Comet.json"
         comet_abi_file = comet_abi_file_path.open()
         comet_abi = json.load(comet_abi_file)
@@ -577,7 +573,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
         asset_address = self._CompoundTokenMap.get(base_token_address, base_token_address)
 
         base_oracle_address = retry_with_backoff(
-            chainlink_registry_contract.functions.getFeed(asset_address, usd_address).call
+            chainlink_registry_contract.functions.getFeed(asset_address, usd_address).call,
         )
         base_oracle_contract = web3_provider.eth.contract(abi=oracle_abi, decode_tuples=True)
         self._base_oracle_contract = retry_with_backoff(base_oracle_contract, address=base_oracle_address)
@@ -588,7 +584,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
         self._initted = True
 
-    def sync(self, web3_provider: Web3):
+    def sync(self, web3_provider: Web3) -> None:
         if not self._initted:
             self.pool_init(web3_provider)
 
@@ -632,8 +628,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
                 "ether",
             )
 
-        total_rate = int(pool_rate + comp_rate)
-        return total_rate
+        return int(pool_rate + comp_rate)
 
 
 class DaiSavingsRate(ChainBasedPoolModel):
@@ -644,16 +639,16 @@ class DaiSavingsRate(ChainBasedPoolModel):
     _sdai_contract: Contract = PrivateAttr()
     _pot_contract: Contract = PrivateAttr()
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self._sdai_contract.address)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, VariableInterestSturdySiloStrategy):
             return NotImplemented
         # Compare the attributes for equality
-        return self._sdai_contract.address == other._sdai_contract.address
+        return self._sdai_contract.address == other._sdai_contract.address  # type: ignore[]
 
-    def pool_init(self, web3_provider: Web3):
+    def pool_init(self, web3_provider: Web3) -> None:
         sdai_abi_file_path = Path(__file__).parent / "abi/SavingsDai.json"
         sdai_abi_file = sdai_abi_file_path.open()
         sdai_abi = json.load(sdai_abi_file)
@@ -674,60 +669,60 @@ class DaiSavingsRate(ChainBasedPoolModel):
 
         self._initted = True
 
-    def sync(self, web3_provider: Web3):
+    def sync(self, web3_provider: Web3) -> None:
         if not self._initted:
             self.pool_init(web3_provider)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self):
+    def supply_rate(self) -> int:
         RAY = 1e27
         dsr = retry_with_backoff(self._pot_contract.functions.dsr().call)
         seconds_per_year = 31536000
         x = (dsr / RAY) ** seconds_per_year
-        apy = int(math.floor((x - 1) * 1e18))
-
-        return apy
+        return int(math.floor((x - 1) * 1e18))
 
 
-def generate_eth_public_key(rng_gen=np.random) -> str:
-    private_key_bytes = rng_gen.bytes(32)
+def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
+    private_key_bytes = rng_gen.bytes(32) # type: ignore[]
     account = Account.from_key(private_key_bytes)
-    eth_address = account.address
-
-    return eth_address
+    return account.address
 
 
-def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
+def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
     assets_and_pools = {}
 
     pools = [
         BasePool(
             contract_address=generate_eth_public_key(rng_gen=rng_gen),
             pool_type=POOL_TYPES.SYNTHETIC,
-            base_rate=randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen),
-            base_slope=randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen),
-            kink_slope=randrange_float(
-                MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen
+            base_rate=int(randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen)),
+            base_slope=int(randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen)),
+            kink_slope=int(
+                randrange_float(MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen),
             ),  # kink rate - kicks in after pool hits optimal util rate
-            optimal_util_rate=randrange_float(
-                MIN_OPTIMAL_RATE,
-                MAX_OPTIMAL_RATE,
-                OPTIMAL_UTIL_STEP,
-                rng_gen=rng_gen,
+            optimal_util_rate=int(
+                randrange_float(
+                    MIN_OPTIMAL_RATE,
+                    MAX_OPTIMAL_RATE,
+                    OPTIMAL_UTIL_STEP,
+                    rng_gen=rng_gen,
+                ),
             ),  # optimal util rate - after which the kink slope kicks in
             borrow_amount=int(
                 format_num_prec(
                     wei_mul(
                         POOL_RESERVE_SIZE,
-                        randrange_float(
-                            MIN_UTIL_RATE,
-                            MAX_UTIL_RATE,
-                            UTIL_RATE_STEP,
-                            rng_gen=rng_gen,
+                        int(
+                            randrange_float(
+                                MIN_UTIL_RATE,
+                                MAX_UTIL_RATE,
+                                UTIL_RATE_STEP,
+                                rng_gen=rng_gen,
+                            ),
                         ),
-                    )
-                )
+                    ),
+                ),
             ),  # initial borrowed amount from pool
             reserve_size=POOL_RESERVE_SIZE,
         )
@@ -737,7 +732,7 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
     pools = {str(pool.contract_address): pool for pool in pools}
 
     assets_and_pools["total_assets"] = math.floor(
-        randrange_float(MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen)
+        randrange_float(MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen),
     )
     assets_and_pools["pools"] = pools
 
@@ -745,9 +740,8 @@ def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
 
 
 # generate intial allocations for pools
-def generate_initial_allocations_for_pools(assets_and_pools: Dict, rng_gen=np.random) -> Dict:
+def generate_initial_allocations_for_pools(assets_and_pools: dict) -> dict:
     pools = assets_and_pools["pools"]
     alloc = assets_and_pools["total_assets"] / len(pools)
-    allocations = {str(contract_address): alloc for contract_address in pools}
+    return {str(contract_address): alloc for contract_address in pools}
 
-    return allocations

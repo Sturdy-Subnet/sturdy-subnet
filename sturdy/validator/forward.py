@@ -16,22 +16,19 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import copy
-import bittensor as bt
-from typing import List, Dict, Union
 import asyncio
+import copy
+from typing import Any
 
-import web3
+import bittensor as bt
+from web3.constants import ADDRESS_ZERO
 
-from sturdy.protocol import REQUEST_TYPES, AllocateAssets
-from sturdy.validator.reward import get_rewards
-from sturdy.protocol import AllocInfo
 from sturdy.constants import QUERY_TIMEOUT
+from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
+from sturdy.validator.reward import get_rewards
 
-bt.metagraph
 
-
-async def forward(self):
+async def forward(self) -> Any:
     """
     The forward function is called by the validator every time step.
 
@@ -48,10 +45,10 @@ async def forward(self):
 async def query_miner(
     self,
     synapse: bt.Synapse,
-    uid: List[str],
+    uid: str,
     deserialize: bool = False,
-):
-    response = await self.dendrite.forward(
+) -> bt.Synapse:
+    return await self.dendrite.forward(
         axons=self.metagraph.axons[int(uid)],
         synapse=synapse,
         timeout=QUERY_TIMEOUT,
@@ -59,29 +56,23 @@ async def query_miner(
         streaming=False,
     )
 
-    return response
-
 
 async def query_multiple_miners(
     self,
     synapse: bt.Synapse,
-    uids: List[str],
+    uids: list[str],
     deserialize: bool = False,
-):
-    uid_to_query_task = {
-        uid: asyncio.create_task(query_miner(self, synapse, uid, deserialize))
-        for uid in uids
-    }
-    responses = await asyncio.gather(*uid_to_query_task.values())
-    return responses
+) -> list[bt.Synapse]:
+    uid_to_query_task = {uid: asyncio.create_task(query_miner(self, synapse, uid, deserialize)) for uid in uids}
+    return await asyncio.gather(*uid_to_query_task.values())
 
 
 async def query_and_score_miners(
     self,
-    assets_and_pools: Dict[str, Union[Dict[str, int], int]] = None,
+    assets_and_pools: Any = None,
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
-    user_address: str = web3.constants.ADDRESS_ZERO
-) -> Dict[str, AllocInfo]:
+    user_address: str = ADDRESS_ZERO,
+) -> dict[str, AllocInfo]:
     # intialize simulator
     if request_type == REQUEST_TYPES.ORGANIC:
         self.simulator.initialize(timesteps=1)
@@ -98,11 +89,7 @@ async def query_and_score_miners(
 
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
-    active_uids = [
-        str(uid)
-        for uid in range(self.metagraph.n.item())
-        if self.metagraph.axons[uid].is_serving
-    ]
+    active_uids = [str(uid) for uid in range(self.metagraph.n.item()) if self.metagraph.axons[uid].is_serving]
 
     bt.logging.debug(f"active_uids: {active_uids}")
 
@@ -110,7 +97,7 @@ async def query_and_score_miners(
         request_type=request_type,
         assets_and_pools=self.simulator.assets_and_pools,
         allocations=self.simulator.allocations,
-        user_address=user_address
+        user_address=user_address,
     )
 
     responses = await query_multiple_miners(
@@ -118,9 +105,7 @@ async def query_and_score_miners(
         synapse,
         active_uids,
     )
-    allocations = {
-        uid: responses[idx].allocations for idx, uid in enumerate(active_uids)
-    }
+    allocations = {uid: responses[idx].allocations for idx, uid in enumerate(active_uids)}  # type: ignore[]
 
     # Log the results for monitoring purposes.
     bt.logging.debug(f"Pools: {synapse.assets_and_pools['pools']}")

@@ -17,12 +17,13 @@
 # DEALINGS IN THE SOFTWARE.
 
 from enum import IntEnum
-from typing import Annotated, Dict, Optional, Union
-from typing_extensions import TypedDict
+from typing import Annotated
+
 import bittensor as bt
 from pydantic import BaseModel, Field, root_validator, validator
-import web3
+from typing_extensions import TypedDict
 from web3 import Web3
+from web3.constants import ADDRESS_ZERO
 
 from sturdy.pools import BasePoolModel, ChainBasedPoolModel
 
@@ -32,15 +33,15 @@ class REQUEST_TYPES(IntEnum):
     SYNTHETIC = 1
 
 
-AllocationsDict = Dict[str, int]
+AllocationsDict = dict[str, int]
 
 
 class AllocInfo(TypedDict):
     apy: int
-    allocations: Union[AllocationsDict, None]
+    allocations: AllocationsDict | None
 
 
-PoolModel = Annotated[Union[ChainBasedPoolModel, BasePoolModel], Field(discriminator="pool_model_disc")]
+PoolModel = Annotated[ChainBasedPoolModel | BasePoolModel, Field(discriminator="pool_model_disc")]
 
 
 class AllocateAssetsRequest(BaseModel):
@@ -48,31 +49,31 @@ class AllocateAssetsRequest(BaseModel):
         use_enum_values = True
         smart_union = True
 
-    request_type: Union[REQUEST_TYPES, int, str] = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
+    request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
+    assets_and_pools: dict[str, dict[str, PoolModel] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
     user_address: str = Field(
-        default=web3.constants.ADDRESS_ZERO,
+        default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls for organic requests",
     )
 
     @validator("request_type", pre=True)
-    def validator_pool_type(cls, value):
+    def validator_pool_type(cls, value) -> REQUEST_TYPES:
         if isinstance(value, REQUEST_TYPES):
             return value
-        elif isinstance(value, int):
+        elif isinstance(value, int):  # noqa: RET505
             return REQUEST_TYPES(value)
         elif isinstance(value, str):
             try:
                 return REQUEST_TYPES[value]
             except KeyError:
-                raise ValueError(f"Invalid enum name: {value}")
+                raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
         raise ValueError(f"Invalid value: {value}")
 
     @root_validator
-    def check_params(cls, values):
+    def check_params(cls, values):  # noqa: ANN201
         user_addr = values.get("user_address")
         if not Web3.is_address(user_addr):
             raise ValueError("user address is invalid!")
@@ -85,7 +86,7 @@ class AllocateAssetsResponse(BaseModel):
         use_enum_values = True
 
     request_uuid: str
-    allocations: Dict[str, AllocInfo] = Field(
+    allocations: dict[str, AllocInfo] = Field(
         ...,
         description="allocations produce by miners",
     )
@@ -105,44 +106,44 @@ class AllocateAssetsBase(BaseModel):
         use_enum_values = True
         smart_union = True
 
-    request_type: Union[REQUEST_TYPES, int, str] = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]] = Field(
+    request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
+    assets_and_pools: dict[str, dict[str, PoolModel] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
     user_address: str = Field(
-        default=web3.constants.ADDRESS_ZERO,
+        default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls",
     )
 
     # Optional request output, filled by recieving axon.
-    allocations: Optional[AllocationsDict] = Field(
+    allocations: AllocationsDict | None = Field(
         None,
         description="allocations produce by miners",
     )
 
     @validator("request_type", pre=True)
-    def validator_pool_type(cls, value):
+    def validator_pool_type(cls, value):  # noqa: ANN201
         if isinstance(value, REQUEST_TYPES):
             return value
-        elif isinstance(value, int):
+        elif isinstance(value, int):  # noqa: RET505
             return REQUEST_TYPES(value)
         elif isinstance(value, str):
             try:
                 return REQUEST_TYPES[value]
             except KeyError:
-                raise ValueError(f"Invalid enum name: {value}")
+                raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
         raise ValueError(f"Invalid value: {value}")
 
     @root_validator
-    def check_params(cls, values):
+    def check_params(cls, values):  # noqa: ANN201
         user_addr = values.get("user_address")
         if not Web3.is_address(user_addr):
             raise ValueError("user address is invalid!")
 
         allocs = values.get("allocations")
         if allocs is not None:
-            for alloc_dict_key in allocs.keys():
+            for alloc_dict_key in allocs:
                 if not Web3.is_address(alloc_dict_key):
                     raise ValueError("contract address is invalid!")
 
@@ -150,7 +151,7 @@ class AllocateAssetsBase(BaseModel):
 
 
 class AllocateAssets(bt.Synapse, AllocateAssetsBase):
-    def __str__(self):
+    def __str__(self) -> str:
         return f"""AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools},
             user_address={self.user_address}, allocations={self.allocations})"""
 

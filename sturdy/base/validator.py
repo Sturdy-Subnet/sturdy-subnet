@@ -46,11 +46,11 @@ class BaseValidatorNeuron(BaseNeuron):
     neuron_type: str = "ValidatorNeuron"
 
     @classmethod
-    def add_args(cls, parser: argparse.ArgumentParser):
+    def add_args(cls, parser: argparse.ArgumentParser) -> None:
         super().add_args(parser)
         add_validator_args(cls, parser)
 
-    def __init__(self, config=None):
+    def __init__(self, config=None) -> None:
         super().__init__(config=config)
         load_dotenv()
 
@@ -384,7 +384,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Update the hotkeys.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-    def update_scores(self, rewards: torch.FloatTensor, uids: List[int]):
+    def update_scores(self, rewards: torch.Tensor, uids: list[int]):
         """Performs exponential moving average on the scores based on the rewards received from the miners."""
 
         # Check if rewards contains NaN values.
@@ -401,7 +401,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # shape: [ metagraph.n ]
-        scattered_rewards: torch.FloatTensor = self.scores.scatter(
+        scattered_rewards: torch.Tensor = self.scores.scatter(
             0, uids_tensor, rewards
         ).to(self.device)
         bt.logging.debug(f"Scattered rewards: {rewards}")
@@ -409,7 +409,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.FloatTensor = alpha * scattered_rewards + (
+        self.scores: torch.Tensor = alpha * scattered_rewards + (
             1 - alpha
         ) * self.scores.to(self.device)
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")

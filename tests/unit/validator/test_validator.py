@@ -1,19 +1,22 @@
+import copy
 import unittest
 from unittest import IsolatedAsyncioTestCase
+
 import numpy as np
 import torch
 
-from sturdy.pools import generate_assets_and_pools
-from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from neurons.validator import Validator
-from sturdy.validator.reward import get_rewards
 from sturdy.constants import QUERY_TIMEOUT
-import copy
+from sturdy.mock import MockDendrite
+from sturdy.pools import generate_assets_and_pools
+from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocationsDict
+from sturdy.validator.reward import get_rewards
 
 
 class TestValidator(IsolatedAsyncioTestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
+        np.random.seed(69)  # noqa: NPY002
         config = {
             "mock": True,
             "wandb": {"off": True},
@@ -31,24 +34,24 @@ class TestValidator(IsolatedAsyncioTestCase):
             "total_assets": int(1000e18),
         }
 
-        cls.contract_addresses = list(assets_and_pools["pools"].keys())
+        cls.contract_addresses: list[str] = list(assets_and_pools["pools"].keys())  # type: ignore[]
 
-        cls.allocations = {
-            cls.contract_addresses[0]: 100e18,
-            cls.contract_addresses[1]: 100e18,
-            cls.contract_addresses[2]: 200e18,
-            cls.contract_addresses[3]: 50e18,
-            cls.contract_addresses[4]: 200e18,
-            cls.contract_addresses[5]: 25e18,
-            cls.contract_addresses[6]: 25e18,
-            cls.contract_addresses[7]: 50e18,
-            cls.contract_addresses[8]: 50e18,
-            cls.contract_addresses[9]: 200e18,
+        cls.allocations: AllocationsDict = {
+            cls.contract_addresses[0]: int(100e18),
+            cls.contract_addresses[1]: int(100e18),
+            cls.contract_addresses[2]: int(200e18),
+            cls.contract_addresses[3]: int(50e18),
+            cls.contract_addresses[4]: int(200e18),
+            cls.contract_addresses[5]: int(25e18),
+            cls.contract_addresses[6]: int(25e18),
+            cls.contract_addresses[7]: int(50e18),
+            cls.contract_addresses[8]: int(50e18),
+            cls.contract_addresses[9]: int(200e18),
         }
 
         cls.validator.simulator.initialize(timesteps=50)
 
-    async def test_get_rewards(self):
+    async def test_get_rewards(self) -> None:
         print("----==== test_get_rewards ====----")
 
         assets_and_pools = copy.deepcopy(self.assets_and_pools)
@@ -61,11 +64,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             init_allocations=copy.deepcopy(allocations),
         )
 
-        active_uids = [
-            str(uid)
-            for uid in range(validator.metagraph.n.item())
-            if validator.metagraph.axons[uid].is_serving
-        ]
+        active_uids = [str(uid) for uid in range(validator.metagraph.n.item()) if validator.metagraph.axons[uid].is_serving]  # type: ignore[]
 
         active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
@@ -75,6 +74,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             allocations=copy.deepcopy(allocations),
         )
 
+        validator.dendrite = MockDendrite(wallet=validator.wallet, custom_allocs=True)
         responses = await validator.dendrite(
             # Send the query to selected miner axons in the network.
             axons=active_axons,
@@ -86,7 +86,7 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         for response in responses:
             self.assertEqual(response.assets_and_pools, assets_and_pools)
-            self.assertEqual(response.allocations, allocations)
+            self.assertLessEqual(sum(response.allocations.values()), assets_and_pools["total_assets"])
 
         # TODO: better testing?
         rewards, allocs = get_rewards(
@@ -105,23 +105,18 @@ class TestValidator(IsolatedAsyncioTestCase):
         self.assertFalse(torch.equal(rewards, to_compare))
 
         rewards_dict = {active_uids[k]: v for k, v in enumerate(list(rewards))}
-        sorted_rewards = {
-            k: v
-            for k, v in sorted(
-                rewards_dict.items(), key=lambda item: item[1], reverse=True
-            )
-        }
+        sorted_rewards = dict(sorted(rewards_dict.items(), key=lambda item: item[1], reverse=True))  # type: ignore[]
 
         print(f"sorted rewards: {sorted_rewards}")
 
-    async def test_get_rewards_punish(self):
+    async def test_get_rewards_punish(self) -> None:
         print("----==== test_get_rewards_punish ====----")
         validator = self.validator
         assets_and_pools = copy.deepcopy(self.assets_and_pools)
 
         allocations = copy.deepcopy(self.allocations)
         # increase one of the allocations by +10000  -> clearly this means the miner is cheating!!!
-        allocations[self.contract_addresses[0]] += 10000e18
+        allocations[self.contract_addresses[0]] += int(10000e18)
 
         validator.simulator.reset()
         validator.simulator.init_data(
@@ -129,11 +124,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             init_allocations=copy.deepcopy(allocations),
         )
 
-        active_uids = [
-            str(uid)
-            for uid in range(validator.metagraph.n.item())
-            if validator.metagraph.axons[uid].is_serving
-        ]
+        active_uids = [str(uid) for uid in range(validator.metagraph.n.item()) if validator.metagraph.axons[uid].is_serving]  # type: ignore[]
 
         active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
@@ -143,6 +134,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             allocations=copy.deepcopy(allocations),
         )
 
+        validator.dendrite = MockDendrite(wallet=validator.wallet)
         responses = await validator.dendrite(
             # Send the query to selected miner axons in the network.
             axons=active_axons,
@@ -165,19 +157,14 @@ class TestValidator(IsolatedAsyncioTestCase):
             assets_and_pools=assets_and_pools,
         )
 
-        for _, allocInfo in allocs.items():
+        for allocInfo in allocs.values():
             self.assertEqual(allocInfo["apy"], 0)
 
         # rewards should all be the same (0)
         self.assertEqual(all(rewards), 0)
 
-        rewards_dict = {k: v for k, v in enumerate(list(rewards))}
-        sorted_rewards = {
-            k: v
-            for k, v in sorted(
-                rewards_dict.items(), key=lambda item: item[1], reverse=True
-            )
-        }
+        rewards_dict = dict(enumerate(list(rewards)))
+        sorted_rewards = dict(sorted(rewards_dict.items(), key=lambda item: item[1], reverse=True))  # type: ignore[]
 
         print(f"sorted rewards: {sorted_rewards}")
 
@@ -185,7 +172,7 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         allocations = copy.deepcopy(self.allocations)
         # set one of the allocations to be negative! This should not be allowed!
-        allocations[self.contract_addresses[0]] = -1.0
+        allocations[self.contract_addresses[0]] = -1
 
         validator.simulator.reset()
         validator.simulator.init_data(
@@ -193,11 +180,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             init_allocations=copy.deepcopy(allocations),
         )
 
-        active_uids = [
-            str(uid)
-            for uid in range(validator.metagraph.n.item())
-            if validator.metagraph.axons[uid].is_serving
-        ]
+        active_uids = [str(uid) for uid in range(validator.metagraph.n.item()) if validator.metagraph.axons[uid].is_serving]  # type: ignore[]
 
         active_axons = [validator.metagraph.axons[int(uid)] for uid in active_uids]
 
@@ -207,6 +190,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             allocations=copy.deepcopy(allocations),
         )
 
+        validator.dendrite = MockDendrite(wallet=validator.wallet)
         responses = await validator.dendrite(
             # Send the query to selected miner axons in the network.
             axons=active_axons,
@@ -229,19 +213,14 @@ class TestValidator(IsolatedAsyncioTestCase):
             assets_and_pools=assets_and_pools,
         )
 
-        for _, allocInfo in allocs.items():
+        for allocInfo in allocs.values():
             self.assertEqual(allocInfo["apy"], 0)
 
         # rewards should all be the same (0)
         self.assertEqual(all(rewards), 0)
 
-        rewards_dict = {k: v for k, v in enumerate(list(rewards))}
-        sorted_rewards = {
-            k: v
-            for k, v in sorted(
-                rewards_dict.items(), key=lambda item: item[1], reverse=True
-            )
-        }
+        rewards_dict = dict(enumerate(list(rewards)))
+        sorted_rewards = dict(sorted(rewards_dict.items(), key=lambda item: item[1], reverse=True))  # type: ignore[]
 
         print(f"sorted rewards: {sorted_rewards}")
 

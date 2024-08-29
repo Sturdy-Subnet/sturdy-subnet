@@ -4,7 +4,7 @@ import typer
 from typing import Optional
 from rich.console import Console
 from rich.table import Table
-from db import sql
+from sturdy.validator import sql
 
 cli = typer.Typer(name="Sturdy Subnet CLI")
 
