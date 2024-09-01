@@ -18,14 +18,15 @@
 
 import time
 import typing
+
 import bittensor as bt
 
 # Bittensor Miner Template:
 import sturdy
+from sturdy.algo import naive_algorithm
 
 # import base miner class which takes care of most of the boilerplate
 from sturdy.base.miner import BaseMinerNeuron
-from sturdy.algo import naive_algorithm
 
 
 class Miner(BaseMinerNeuron):
@@ -42,8 +43,8 @@ class Miner(BaseMinerNeuron):
     requests based on stake, and forwarding requests to the forward function. If you need to define custom
     """
 
-    def __init__(self, config=None):
-        super(Miner, self).__init__(config=config)
+    def __init__(self, config=None) -> None:
+        super().__init__(config=config)
 
     async def forward(self, synapse: sturdy.protocol.AllocateAssets) -> sturdy.protocol.AllocateAssets:
         """
@@ -73,7 +74,7 @@ class Miner(BaseMinerNeuron):
         bt.logging.info(f"sending allocations: {synapse.allocations}")
         return synapse
 
-    async def blacklist(self, synapse: sturdy.protocol.AllocateAssets) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: sturdy.protocol.AllocateAssets) -> typing.Tuple[bool, str]:  # noqa: UP006
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -106,17 +107,17 @@ class Miner(BaseMinerNeuron):
 
         bt.logging.info("Checking miner blacklist")
 
-        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
+        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:  # type: ignore[]
             return True, "Hotkey is not registered"
 
-        requesting_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        requesting_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)  # type: ignore[]
         stake = self.metagraph.S[requesting_uid].item()
 
         bt.logging.info(f"Requesting UID: {requesting_uid} | Stake at UID: {stake}")
 
         if stake <= self.config.validator.min_stake:
             bt.logging.info(
-                f"Hotkey: {synapse.dendrite.hotkey}: stake below minimum threshold of {self.config.validator.min_stake}"
+                f"Hotkey: {synapse.dendrite.hotkey}: stake below minimum threshold of {self.config.validator.min_stake}"  # type: ignore[]
             )
             return True, "Stake below minimum threshold"
 
@@ -147,15 +148,15 @@ class Miner(BaseMinerNeuron):
         Example priority logic:
         - A higher stake results in a higher priority value.
         """
-        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)  # Get the caller index.
-        prirority = float(self.metagraph.S[caller_uid])  # Return the stake as the priority.
-        bt.logging.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority)
-        return prirority
+        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)  # Get the caller index. # type: ignore[]
+        priority = float(self.metagraph.S[caller_uid])  # Return the stake as the priority.
+        bt.logging.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority)  # type: ignore[]
+        return priority
 
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
     with Miner() as miner:
         while True:
-            bt.logging.info("Miner running...", time.time())
+            bt.logging.info(f"Miner running... {time.time()}")
             time.sleep(5)
