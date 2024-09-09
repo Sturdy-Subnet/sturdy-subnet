@@ -77,7 +77,7 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "sturdy=sturdycli:cli",
+            "sturdy=sturdy.sturdycli:cli",
         ],
     },
     classifiers=[

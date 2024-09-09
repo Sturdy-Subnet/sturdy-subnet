@@ -1,9 +1,9 @@
 import uuid
 
 import typer
-from typing import Optional
 from rich.console import Console
 from rich.table import Table
+
 from sturdy.validator import sql
 
 cli = typer.Typer(name="Sturdy Subnet CLI")
@@ -11,10 +11,10 @@ cli = typer.Typer(name="Sturdy Subnet CLI")
 
 @cli.command()
 def create_key(
-    balance: Optional[float] = None,
-    rate_limit_per_minute: Optional[int] = None,
-    name: Optional[str] = None,
-):
+    balance: float | None = None,
+    rate_limit_per_minute: int | None = None,
+    name: str | None = None,
+) -> str:
     """
     Create a new API key.
 
@@ -56,7 +56,7 @@ def create_key(
 
 
 @cli.command()
-def update_key(key: str, balance: float, rate_limit_per_minute: int, name: str):
+def update_key(key: str, balance: float, rate_limit_per_minute: int, name: str) -> None:
     """
     Update an existing API Key.
 
@@ -78,7 +78,7 @@ def update_key(key: str, balance: float, rate_limit_per_minute: int, name: str):
 
 
 @cli.command()
-def delete_key(key: str):
+def delete_key(key: str) -> None:
     """
     Delete an existing API Key.
 
@@ -92,7 +92,7 @@ def delete_key(key: str):
 
 
 @cli.command()
-def list_keys():
+def list_keys() -> None:
     """
     List all API keys.
     """
@@ -116,7 +116,7 @@ def list_keys():
 
 
 @cli.command()
-def show_key_info(key: str):
+def show_key_info(key: str) -> None:
     """
     Show information about an API key.
     """
@@ -131,7 +131,7 @@ def show_key_info(key: str):
         row = sql.get_api_key_info(conn, key)
 
     if row:
-        for column_name in row.keys():
+        for column_name in row:
             table.add_column(column_name)
 
         table.add_row(*[str(value) for value in row.values()])
@@ -139,12 +139,12 @@ def show_key_info(key: str):
 
 
 @cli.command()
-def logs_for_key(key: str):
+def logs_for_key(key: str) -> None:
     """
     Show all logs for an API key.
     """
-    from rich.table import Table
     from rich.console import Console
+    from rich.table import Table
 
     console = Console()
     table = Table(show_header=True, header_style="bold magenta")
@@ -153,11 +153,11 @@ def logs_for_key(key: str):
         logs = sql.get_all_logs_for_key(conn, key)
 
     if logs:
-        for column_name in logs[0].keys():
+        for column_name in logs[0]:
             table.add_column(column_name)
 
         for log in logs:
-            log = dict(log)
+            log = dict(log)  # noqa: PLW2901
             table.add_row(*[str(value) for value in log.values()])
 
         console.print(table)
@@ -166,7 +166,7 @@ def logs_for_key(key: str):
 
 
 @cli.command()
-def logs_summary():
+def logs_summary() -> None:
     """
     Summary of all logs.
     """
@@ -183,7 +183,7 @@ def logs_summary():
     global_endpoint_dict = {}
 
     for key in keys:
-        key = dict(key)[sql.KEY]
+        key = dict(key)[sql.KEY]  # noqa: PLW2901
         with sql.get_db_connection() as conn:
             logs = sql.get_all_logs_for_key(conn, key)
 
@@ -191,7 +191,7 @@ def logs_summary():
         total_credits_used = sum([dict(log).get("cost", 0) for log in logs])
 
         for log in logs:
-            log = dict(log)
+            log = dict(log)  # noqa: PLW2901
             endpoint = log.get(sql.ENDPOINT, "unknown_endpoint")
             global_endpoint_dict[endpoint] = global_endpoint_dict.get(endpoint, 0) + 1
 
