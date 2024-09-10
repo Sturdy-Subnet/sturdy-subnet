@@ -16,20 +16,23 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import os
-import torch
 import argparse
+import os
+
 import bittensor as bt
+import torch
 from loguru import logger
+
+from sturdy import __spec_version__ as spec_version
 from sturdy.constants import QUERY_TIMEOUT
 
 
-def check_config(cls, config: "bt.Config"):
+def check_config(cls, config: "bt.Config") -> None:
     r"""Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 
-    full_path = os.path.expanduser(
-        "{}/{}/{}/netuid{}/{}".format(
+    full_path = os.path.expanduser(  # noqa: PTH111
+        "{}/{}/{}/netuid{}/{}".format(  # noqa: UP032
             config.logging.logging_dir,  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
             config.wallet.name,
             config.wallet.hotkey,
@@ -38,15 +41,15 @@ def check_config(cls, config: "bt.Config"):
         )
     )
     print("full path:", full_path)
-    config.neuron.full_path = os.path.expanduser(full_path)
-    if not os.path.exists(config.neuron.full_path):
-        os.makedirs(config.neuron.full_path, exist_ok=True)
+    config.neuron.full_path = os.path.expanduser(full_path)  # noqa: PTH111
+    if not os.path.exists(config.neuron.full_path):  # noqa: PTH110
+        os.makedirs(config.neuron.full_path, exist_ok=True)  # noqa: PTH103
 
     if not config.neuron.dont_save_events:
         # Add custom event logger for the events.
         logger.level("EVENTS", no=38, icon="📝")
         logger.add(
-            os.path.join(config.neuron.full_path, "events.log"),
+            os.path.join(config.neuron.full_path, "events.log"),  # noqa: PTH118
             rotation=config.neuron.events_retention_size,
             serialize=True,
             enqueue=True,
@@ -258,7 +261,7 @@ def add_validator_args(cls, parser):
     )
 
 
-def config(cls):
+def config(cls) -> bt.config:
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
     """
@@ -270,4 +273,5 @@ def config(cls):
     cls.add_args(parser)
     conf = bt.config(parser)
     conf.mock_n = 16  # default number of mock miners for testing
+    conf.spec_version = spec_version
     return conf

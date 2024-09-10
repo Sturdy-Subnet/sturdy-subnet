@@ -4,7 +4,7 @@ dotenv.config()
 
 const accounts = {
   mnemonic: process.env.MNEMONIC || "test test test test test test test test test test test junk",
-  accountsBalance: "1000000000000000000000000",
+  accountsBalance: "100000000000000000000000000000",
 }
 
 /** @type import('hardhat/config').HardhatUserConfig */

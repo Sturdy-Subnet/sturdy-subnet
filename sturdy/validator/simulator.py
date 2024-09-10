@@ -1,56 +1,53 @@
-import numpy as np
-from typing import Dict, Union
+import copy
+from typing import Any
 
-from sturdy.protocol import AllocationsDict
-from sturdy.utils.ethmath import wei_mul_arrays
-from sturdy.utils.misc import check_allocations
+import numpy as np
+
+from sturdy.constants import *
 from sturdy.pools import (
     BasePoolModel,
     ChainBasedPoolModel,
     generate_assets_and_pools,
     generate_initial_allocations_for_pools,
 )
-from sturdy.constants import *
-import copy
+from sturdy.protocol import AllocationsDict
+from sturdy.utils.ethmath import wei_mul_arrays
+from sturdy.utils.misc import check_allocations
 
 
-class Simulator(object):
+class Simulator:
     def __init__(
         self,
         reversion_speed: float = REVERSION_SPEED,
         seed=None,
-    ):
+    ) -> None:
         self.reversion_speed = reversion_speed
         self.assets_and_pools = {}
         self.allocations = {}
         self.pool_history = []
         self.init_rng = None
-        self.rng_state_container = None
+        self.rng_state_container: Any = None
         self.seed = seed
 
     # initializes data - by default these are randomly generated
     def init_data(
         self,
-        init_assets_and_pools: Dict[
-            str, Union[Dict[str, Union[ChainBasedPoolModel, BasePoolModel]], int]
-        ] = None,
-        init_allocations: AllocationsDict = None,
-    ):
+        init_assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int] | None = None,
+        init_allocations: AllocationsDict | None = None,
+    ) -> None:
         if self.rng_state_container is None or self.init_rng is None:
-            raise RuntimeError(
-                "You must have first initialize()-ed the simulation if you'd like to initialize some data"
-            )
+            raise RuntimeError("You must have first initialize()-ed the simulation if you'd like to initialize some data")
 
         if init_assets_and_pools is None:
-            self.assets_and_pools = generate_assets_and_pools(
-                rng_gen=self.rng_state_container
+            self.assets_and_pools: Any = generate_assets_and_pools(
+                rng_gen=self.rng_state_container,
             )
         else:
             self.assets_and_pools = init_assets_and_pools
 
         if init_allocations is None:
             self.allocations = generate_initial_allocations_for_pools(
-                self.assets_and_pools, rng_gen=self.rng_state_container
+                self.assets_and_pools,
             )
         else:
             self.allocations = init_allocations
@@ -59,12 +56,12 @@ class Simulator(object):
         self.pool_history = [
             {
                 uid: copy.deepcopy(pool)
-                for uid, pool in self.assets_and_pools["pools"].items()
-            }
+                for uid, pool in self.assets_and_pools["pools"].items()  #
+            },
         ]
 
     # initialize fresh simulation instance
-    def initialize(self, timesteps: int = None, stochasticity: float = None):
+    def initialize(self, timesteps: int | None = None, stochasticity: float | None = None) -> None:
         # create fresh rng state
         self.init_rng = np.random.RandomState(self.seed)
         self.rng_state_container = copy.copy(self.init_rng)
@@ -72,7 +69,9 @@ class Simulator(object):
         if timesteps is None:
             self.timesteps = self.rng_state_container.choice(
                 np.arange(
-                    MIN_TIMESTEPS, MAX_TIMESTEPS + TIMESTEPS_STEP, TIMESTEPS_STEP
+                    MIN_TIMESTEPS,
+                    MAX_TIMESTEPS + TIMESTEPS_STEP,
+                    TIMESTEPS_STEP,
                 ),
             )
         else:
@@ -92,34 +91,27 @@ class Simulator(object):
         self.rng_state_container = copy.copy(self.init_rng)
 
     # reset sim to initial params for rng
-    def reset(self):
+    def reset(self) -> None:
         if self.rng_state_container is None or self.init_rng is None:
             raise RuntimeError(
-                "You must have first initialize()-ed the simulation if you'd like to reset it"
+                "You must have first initialize()-ed the simulation if you'd like to reset it",
             )
         self.rng_state_container = copy.copy(self.init_rng)
 
     # update the reserves in the pool with given allocations
-    def update_reserves_with_allocs(self, allocs=None):
-        if (
-            len(self.pool_history) <= 0
-            or len(self.assets_and_pools) <= 0
-            or len(self.allocations) <= 0
-        ):
+    def update_reserves_with_allocs(self, allocs=None) -> None:
+        if len(self.pool_history) <= 0 or len(self.assets_and_pools) <= 0 or len(self.allocations) <= 0:
             raise RuntimeError(
-                "You must first initialize() and init_data() before updating reserves!!!"
+                "You must first initialize() and init_data() before updating reserves!!!",
             )
 
-        if allocs is None:
-            allocations = self.allocations
-        else:
-            allocations = allocs
+        allocations = self.allocations if allocs is None else allocs
 
         check_allocations(self.assets_and_pools, allocations)
 
         if len(self.pool_history) != 1:
             raise RuntimeError(
-                "You must have first init data for the simulation if you'd like to update reserves"
+                "You must have first init data for the simulation if you'd like to update reserves",
             )
 
         for uid, alloc in allocations.items():
@@ -131,50 +123,33 @@ class Simulator(object):
 
     # initialize pools
     # Function to update borrow amounts and other pool params based on reversion rate and stochasticity
-    def generate_new_pool_data(self):
+    def generate_new_pool_data(self) -> dict:
         latest_pool_data = self.pool_history[-1]
-        curr_borrow_rates = np.array(
-            [pool.borrow_rate for _, pool in latest_pool_data.items()]
-        )
-        curr_borrow_amounts = np.array(
-            [pool.borrow_amount for _, pool in latest_pool_data.items()]
-        )
-        curr_reserve_sizes = np.array(
-            [pool.reserve_size for _, pool in latest_pool_data.items()]
-        )
+        curr_borrow_rates = np.array([pool.borrow_rate for _, pool in latest_pool_data.items()])
+        curr_borrow_amounts = np.array([pool.borrow_amount for _, pool in latest_pool_data.items()])
+        curr_reserve_sizes = np.array([pool.reserve_size for _, pool in latest_pool_data.items()])
 
         median_rate = np.median(curr_borrow_rates)  # Calculate the median borrow rate
-        noise = self.rng_state_container.normal(
-            0, self.stochasticity * 1e18, len(curr_borrow_rates)
-        )  # Add some random noise
-        rate_changes = (
-            (-self.reversion_speed * (curr_borrow_rates - median_rate)) + noise
-        )  # Mean reversion principle
+        noise = self.rng_state_container.normal(0, self.stochasticity * 1e18, len(curr_borrow_rates))  # Add some random noise
+        rate_changes = (-self.reversion_speed * (curr_borrow_rates - median_rate)) + noise  # Mean reversion principle
         new_borrow_amounts = curr_borrow_amounts + wei_mul_arrays(
-            rate_changes, curr_borrow_amounts
+            rate_changes, curr_borrow_amounts,
         )  # Update the borrow amounts
-        amounts = np.clip(
-            new_borrow_amounts, 0, curr_reserve_sizes
-        )  # Ensure borrow amounts do not exceed reserves
+        amounts = np.clip(new_borrow_amounts, 0, curr_reserve_sizes)  # Ensure borrow amounts do not exceed reserves
         pool_uids = list(latest_pool_data.keys())
 
-        new_pools = [
-            copy.deepcopy(pool) for pool in self.assets_and_pools["pools"].values()
-        ]
+        new_pools = [copy.deepcopy(pool) for pool in self.assets_and_pools["pools"].values()]
 
         for idx, pool in enumerate(new_pools):
             pool.borrow_amount = amounts[idx]
 
-        new_pool_data = {pool_uids[uid]: pool for uid, pool in enumerate(new_pools)}
+        return {pool_uids[uid]: pool for uid, pool in enumerate(new_pools)}
 
-        return new_pool_data
 
     # run simulation
-    def run(self):
+    def run(self) -> None:
         if len(self.pool_history) != 1:
-            raise RuntimeError(
-                "You must first initialize() and init_data() before running the simulation!!!"
-            )
+            raise RuntimeError("You must first initialize() and init_data() before running the simulation!!!")
         for _ in range(1, self.timesteps):
             new_info = self.generate_new_pool_data()
             # TODO: do we need to copy?

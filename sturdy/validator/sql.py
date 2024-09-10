@@ -1,15 +1,13 @@
 # db_queries.py
 
-import sqlite3
-from datetime import datetime, timedelta
-from contextlib import contextmanager
-from typing import Dict, List, Optional, Union
 import json
+import sqlite3
+from contextlib import contextmanager
+from datetime import datetime, timedelta
 
 from fastapi.encoders import jsonable_encoder
 
 from sturdy.protocol import AllocInfo, PoolModel
-
 
 BALANCE = "balance"
 KEY = "key"
@@ -31,7 +29,7 @@ ALLOCATION = "allocation"
 
 
 @contextmanager
-def get_db_connection():
+def get_db_connection():  # noqa: ANN201
     conn = sqlite3.connect("validator_database.db")
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -41,20 +39,20 @@ def get_db_connection():
         conn.close()
 
 
-def get_api_key_info(conn: sqlite3.Connection, api_key: str) -> sqlite3.Row:
+def get_api_key_info(conn: sqlite3.Connection, api_key: str) -> dict | None:
     row = conn.execute(f"SELECT * FROM {API_KEYS_TABLE} WHERE {KEY} = ?", (api_key,)).fetchone()
     return dict(row) if row else None
 
 
-def get_all_api_keys(conn: sqlite3.Connection):
+def get_all_api_keys(conn: sqlite3.Connection) -> list:
     return conn.execute(f"SELECT * FROM {API_KEYS_TABLE}").fetchall()
 
 
-def get_all_logs_for_key(conn: sqlite3.Connection, api_key: str):
+def get_all_logs_for_key(conn: sqlite3.Connection, api_key: str) -> list:
     return conn.execute(f"SELECT * FROM {LOGS_TABLE} WHERE {KEY} = ?", (api_key,)).fetchall()
 
 
-def get_all_logs(conn: sqlite3.Connection):
+def get_all_logs(conn: sqlite3.Connection) -> list:
     return conn.execute(f"SELECT * FROM {LOGS_TABLE}").fetchall()
 
 
@@ -67,17 +65,17 @@ def add_api_key(
 ) -> None:
     conn.execute(
         f"INSERT INTO {API_KEYS_TABLE} VALUES (?, ?, ?, ?, ?)",
-        (api_key, name, balance, rate_limit_per_minute, datetime.now()),
+        (api_key, name, balance, rate_limit_per_minute, datetime.now()),  # noqa: DTZ005
     )
     conn.commit()
 
 
-def update_api_key_balance(conn: sqlite3.Connection, key: str, balance: float):
+def update_api_key_balance(conn: sqlite3.Connection, key: str, balance: float) -> None:
     conn.execute(f"UPDATE {API_KEYS_TABLE} SET {BALANCE} = ? WHERE {KEY} = ?", (balance, key))
     conn.commit()
 
 
-def update_api_key_rate_limit(conn: sqlite3.Connection, key: str, rate: int):
+def update_api_key_rate_limit(conn: sqlite3.Connection, key: str, rate: int) -> None:
     conn.execute(
         f"UPDATE {API_KEYS_TABLE} SET {RATE_LIMIT_PER_MINUTE} = ? WHERE {KEY} = ?",
         (rate, key),
@@ -85,7 +83,7 @@ def update_api_key_rate_limit(conn: sqlite3.Connection, key: str, rate: int):
     conn.commit()
 
 
-def update_api_key_name(conn: sqlite3.Connection, key: str, name: str):
+def update_api_key_name(conn: sqlite3.Connection, key: str, name: str) -> None:
     conn.execute(f"UPDATE {API_KEYS_TABLE} SET {NAME} = ? WHERE {KEY} = ?", (name, key))
     conn.commit()
 
@@ -95,25 +93,26 @@ def delete_api_key(conn: sqlite3.Connection, api_key: str) -> None:
     conn.commit()
 
 
-def update_requests_and_credits(conn: sqlite3.Connection, api_key_info: sqlite3.Row, cost: float) -> float:
+def update_requests_and_credits(conn: sqlite3.Connection, api_key_info: dict, cost: float) -> None:
     conn.execute(
         f"UPDATE api_keys SET {BALANCE} = {BALANCE} - {cost} WHERE {KEY} = ?",
         (api_key_info[KEY],),
     )
 
 
-def log_request(conn: sqlite3.Connection, api_key_info: sqlite3.Row, path: str, cost: float) -> None:
-    api_key_info = get_api_key_info(conn, api_key_info[KEY])
-    balance = api_key_info[BALANCE]
+def log_request(conn: sqlite3.Connection, api_key_info: dict, path: str, cost: float) -> None:
+    info = get_api_key_info(conn, api_key_info[KEY])
+    if isinstance(info, dict):
+        balance = info[BALANCE]
 
-    conn.execute(
-        f"INSERT INTO {LOGS_TABLE} VALUES (?, ?, ?, ?, ?)",
-        (api_key_info[KEY], path, cost, balance, datetime.now()),
-    )
+        conn.execute(
+            f"INSERT INTO {LOGS_TABLE} VALUES (?, ?, ?, ?, ?)",
+            (info[KEY], path, cost, balance, datetime.now()),  # noqa: DTZ005
+        )
 
 
-def rate_limit_exceeded(conn: sqlite3.Connection, api_key_info: sqlite3.Row) -> bool:
-    one_minute_ago = datetime.now() - timedelta(minutes=1)
+def rate_limit_exceeded(conn: sqlite3.Connection, api_key_info: dict) -> bool:
+    one_minute_ago = datetime.now() - timedelta(minutes=1)  # noqa: DTZ005
 
     # Prepare a SQL statement
     query = f"""
@@ -128,7 +127,7 @@ def rate_limit_exceeded(conn: sqlite3.Connection, api_key_info: sqlite3.Row) -> 
     return len(recent_logs) >= api_key_info[RATE_LIMIT_PER_MINUTE]
 
 
-def to_json_string(input_data):
+def to_json_string(input_data) -> str:
     """
     Convert a dictionary or a string to a valid JSON string.
 
@@ -138,41 +137,41 @@ def to_json_string(input_data):
     """
     if isinstance(input_data, dict):
         return json.dumps(input_data)
-    elif isinstance(input_data, str):
+    if isinstance(input_data, str):
         try:
             # Check if the string is already a valid JSON string
             json.loads(input_data)
-            return input_data
+            return input_data  # noqa: TRY300
         except json.JSONDecodeError:
-            raise ValueError("Invalid JSON string provided.")
+            raise ValueError("Invalid JSON string provided.")  # noqa: B904
     else:
-        raise ValueError("Input must be a dictionary or a valid JSON string.")
+        raise TypeError("Input must be a dictionary or a valid JSON string.")
 
 
 def log_allocations(
     conn: sqlite3.Connection,
     request_uid: str,
-    assets_and_pools: Dict[str, Union[Dict[str, PoolModel], int]],
-    allocations: Dict[str, AllocInfo],
-) -> bool:
-    ts_now = datetime.utcnow().timestamp()
+    assets_and_pools: dict[str, dict[str, PoolModel] | int],
+    allocations: dict[str, AllocInfo],
+) -> None:
+    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
     conn.execute(
         f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?)",
         (
             request_uid,
             json.dumps(jsonable_encoder(assets_and_pools)),
-            datetime.fromtimestamp(ts_now),
+            datetime.fromtimestamp(ts_now),  # noqa: DTZ006
         ),
     )
 
     to_insert = []
-    ts_now = datetime.utcnow().timestamp()
+    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
     for miner_uid, miner_allocation in allocations.items():
         row = (
             request_uid,
             miner_uid,
             to_json_string(miner_allocation),
-            datetime.fromtimestamp(ts_now),
+            datetime.fromtimestamp(ts_now),  # noqa: DTZ006
         )
         to_insert.append(row)
 
@@ -183,11 +182,11 @@ def log_allocations(
 
 def get_filtered_allocations(
     conn: sqlite3.Connection,
-    request_uid: Optional[str],
-    miner_uid: Optional[str],
-    from_ts: Optional[int],
-    to_ts: Optional[int],
-) -> List[Dict]:
+    request_uid: str | None,
+    miner_uid: str | None,
+    from_ts: int | None,
+    to_ts: int | None,
+) -> list[dict]:
     query = f"""
     SELECT * FROM {ALLOCATIONS_TABLE}
     WHERE 1=1
@@ -204,11 +203,11 @@ def get_filtered_allocations(
 
     if from_ts:
         query += " AND created_at >= ?"
-        params.append(datetime.fromtimestamp(from_ts / 1000))
+        params.append(datetime.fromtimestamp(from_ts / 1000))  # noqa: DTZ006
 
     if to_ts:
         query += " AND created_at <= ?"
-        params.append(datetime.fromtimestamp(to_ts / 1000))
+        params.append(datetime.fromtimestamp(to_ts / 1000))  # noqa: DTZ006
 
     cur = conn.execute(query, params)
     rows = cur.fetchall()
@@ -217,10 +216,10 @@ def get_filtered_allocations(
 
 def get_request_info(
     conn: sqlite3.Connection,
-    request_uid: Optional[str],
-    from_ts: Optional[int],
-    to_ts: Optional[int],
-) -> List[Dict]:
+    request_uid: str | None,
+    from_ts: int | None,
+    to_ts: int | None,
+) -> list[dict]:
     query = f"""
     SELECT * FROM {ALLOCATION_REQUESTS_TABLE}
     WHERE 1=1
@@ -233,11 +232,11 @@ def get_request_info(
 
     if from_ts:
         query += " AND created_at >= ?"
-        params.append(datetime.fromtimestamp(from_ts / 1000))
+        params.append(datetime.fromtimestamp(from_ts / 1000))  # noqa: DTZ006
 
     if to_ts:
         query += " AND created_at <= ?"
-        params.append(datetime.fromtimestamp(to_ts / 1000))
+        params.append(datetime.fromtimestamp(to_ts / 1000))  # noqa: DTZ006
 
     cur = conn.execute(query, params)
     rows = cur.fetchall()

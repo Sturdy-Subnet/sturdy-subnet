@@ -1,21 +1,20 @@
+import copy
 import unittest
 from unittest import IsolatedAsyncioTestCase
-import copy
 
 import numpy as np
 
 from neurons.validator import Validator
 from sturdy.pools import generate_assets_and_pools
-from sturdy.validator.simulator import Simulator
-
 from sturdy.validator.forward import query_and_score_miners
+from sturdy.validator.simulator import Simulator
 
 
 class TestValidator(IsolatedAsyncioTestCase):
     maxDiff = 4000
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         # dont log this in wandb
         config = {
             "mock": True,
@@ -28,14 +27,14 @@ class TestValidator(IsolatedAsyncioTestCase):
         # simulator with preset seed
         cls.validator.simulator = Simulator(seed=69)
 
-        assets_and_pools = generate_assets_and_pools(np.random.RandomState(seed=420))
+        assets_and_pools = generate_assets_and_pools(np.random.RandomState(seed=420)) # type: ignore[]
 
         cls.assets_and_pools = {
             "pools": assets_and_pools["pools"],
             "total_assets": int(1000e18),
         }
 
-        cls.contract_addresses = list(assets_and_pools["pools"].keys())
+        cls.contract_addresses = list(assets_and_pools["pools"].keys()) # type: ignore[]
 
         cls.allocations = {
             cls.contract_addresses[0]: 100e18,
@@ -50,7 +49,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             cls.contract_addresses[9]: 200e18,
         }
 
-    async def test_query_and_score_miners(self):
+    async def test_query_and_score_miners(self) -> None:
         # use simulator generated assets and pools
         await query_and_score_miners(self.validator)
         self.assertIsNotNone(self.validator.simulator.assets_and_pools)
@@ -59,7 +58,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         # use user-defined generated assets and pools
         simulator_copy = copy.deepcopy(self.validator.simulator)
         await query_and_score_miners(
-            self.validator, assets_and_pools=self.assets_and_pools
+            self.validator, assets_and_pools=self.assets_and_pools,
         )
         simulator_copy.initialize()
         simulator_copy.init_data(
@@ -72,7 +71,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         self.assertEqual(assets_pools2, assets_pools_should_be)
         self.assertIsNotNone(self.validator.simulator.allocations)
 
-    async def test_forward(self):
+    async def test_forward(self) -> None:
         await self.validator.forward()
 
 

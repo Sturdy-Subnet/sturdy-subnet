@@ -15,7 +15,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
         # run test multiple times to to ensure the number generated are
         # within the correct ranges
         for i in range(0, 100):
-            result = generate_assets_and_pools()
+            result = generate_assets_and_pools(np.random.RandomState(69))
 
             # Assert total assets
             self.assertTrue(
@@ -63,7 +63,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
         # run test multiple times to to ensure the number generated are
         # within the correct ranges
         for i in range(0, 100):
-            assets_and_pools = generate_assets_and_pools()
+            assets_and_pools = generate_assets_and_pools(np.random.RandomState(69))
             max_alloc = assets_and_pools["total_assets"]
             pools = assets_and_pools["pools"]
             result = generate_initial_allocations_for_pools(assets_and_pools)

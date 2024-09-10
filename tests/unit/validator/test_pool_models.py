@@ -1,15 +1,12 @@
 import json
-from pathlib import Path
-import unittest
-from web3 import Web3
-from web3.contract import Contract
-from eth_account import Account
-
-# import brownie
-# from brownie import network
-
 import os
+import unittest
+from pathlib import Path
+
 from dotenv import load_dotenv
+from eth_account import Account
+from web3 import Web3
+from web3.contract.contract import Contract
 
 from sturdy.pools import (
     AaveV3DefaultInterestRatePool,
@@ -26,7 +23,7 @@ WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 # TODO: test pool_init seperately???
 class TestAavePool(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         # runs tests on local mainnet fork at block: 20233401
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
@@ -55,19 +52,19 @@ class TestAavePool(unittest.TestCase):
             ),
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
-    def setUp(self):
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])
+    def setUp(self) -> None:
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id)
+        self.w3.provider.make_request("evm_revert", self.snapshot_id) # type: ignore[]
 
-    def test_pool_contract(self):
+    def test_pool_contract(self) -> None:
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
         pool = AaveV3DefaultInterestRatePool(
@@ -82,7 +79,7 @@ class TestAavePool(unittest.TestCase):
         self.assertTrue(isinstance(pool._pool_contract, Contract))
 
     # TODO: test syncing after time travel
-    def test_sync(self):
+    def test_sync(self) -> None:
         print("----==== test_sync ====----")
         pool = AaveV3DefaultInterestRatePool(
             contract_address=self.atoken_address,
@@ -98,7 +95,7 @@ class TestAavePool(unittest.TestCase):
         self.assertTrue(isinstance(pool._pool_contract, Contract))
 
     # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
-    def test_supply_rate_alloc(self):
+    def test_supply_rate_alloc(self) -> None:
         print("----==== test_supply_rate_increase_alloc ====----")
         pool = AaveV3DefaultInterestRatePool(
             contract_address=self.atoken_address,
@@ -122,7 +119,7 @@ class TestAavePool(unittest.TestCase):
         self.assertNotEqual(apy_after, 0)
         self.assertLess(apy_after, apy_before)
 
-    def test_supply_rate_decrease_alloc(self):
+    def test_supply_rate_decrease_alloc(self) -> None:
         print("----==== test_supply_rate_decrease_alloc ====----")
         pool = AaveV3DefaultInterestRatePool(
             contract_address=self.atoken_address,
@@ -218,7 +215,7 @@ class TestAavePool(unittest.TestCase):
 
 class TestSturdySiloStrategy(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         # runs tests on local mainnet fork at block: 20225081
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
@@ -235,7 +232,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
         )
 
         cls.w3.provider.make_request(
-            "hardhat_reset",
+            "hardhat_reset",  # type: ignore[]
             [
                 {
                     "forking": {
@@ -246,24 +243,24 @@ class TestSturdySiloStrategy(unittest.TestCase):
             ],
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
-    def setUp(self):
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])
+    def setUp(self) -> None:
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id)
+        self.w3.provider.make_request("evm_revert", self.snapshot_id) # type: ignore[]
 
-    def test_silo_strategy_contract(self):
+    def test_silo_strategy_contract(self) -> None:
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
         pool = VariableInterestSturdySiloStrategy(
             contract_address=self.contract_address,
-        )
+        ) # type: ignore[]
         whale_addr = self.w3.to_checksum_address(
             "0x0669091F451142b3228171aE6aD794cF98288124"
         )
@@ -297,7 +294,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
 
 class TestCompoundV3Pool(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         # runs tests on local mainnet fork at block: 20233401
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
@@ -314,24 +311,24 @@ class TestCompoundV3Pool(unittest.TestCase):
             }
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
-    def setUp(self):
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])
+    def setUp(self) -> None:
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id)
+        self.w3.provider.make_request("evm_revert", self.snapshot_id) # type: ignore[]
 
-    def test_compound_pool_model(self):
+    def test_compound_pool_model(self) -> None:
         print("----==== test_compound_pool_model ====----")
         pool = CompoundV3Pool(
             contract_address=self.ctoken_address,
             user_address=self.user_address,
-        )
+        ) # type: ignore[]
 
         pool.sync(self.w3)
 
@@ -353,13 +350,13 @@ class TestCompoundV3Pool(unittest.TestCase):
         # check pool supply_rate
         pool.supply_rate(0)
 
-    def test_supply_rate_increase_alloc(self):
+    def test_supply_rate_increase_alloc(self) -> None:
         print("----==== test_supply_rate_increase_alloc ====----")
 
         pool = CompoundV3Pool(
             contract_address=self.ctoken_address,
             user_address=self.user_address,
-        )
+        ) # type: ignore[]
 
         pool.sync(self.w3)
 
@@ -378,13 +375,13 @@ class TestCompoundV3Pool(unittest.TestCase):
         self.assertNotEqual(apy_after, 0)
         self.assertLess(apy_after, apy_before)
 
-    def test_supply_rate_decrease_alloc(self):
+    def test_supply_rate_decrease_alloc(self) -> None:
         print("----==== test_supply_rate_decrease_alloc ====----")
 
         pool = CompoundV3Pool(
             contract_address=self.ctoken_address,
             user_address=self.user_address,
-        )
+        ) # type: ignore[]
 
         pool.sync(self.w3)
 
@@ -406,7 +403,7 @@ class TestCompoundV3Pool(unittest.TestCase):
 
 class TestDaiSavingsRate(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         # runs tests on local mainnet fork at block: 20225081
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
@@ -424,7 +421,7 @@ class TestDaiSavingsRate(unittest.TestCase):
         )
 
         cls.w3.provider.make_request(
-            "hardhat_reset",
+            "hardhat_reset", # type: ignore[]
             [
                 {
                     "forking": {
@@ -435,24 +432,24 @@ class TestDaiSavingsRate(unittest.TestCase):
             ],
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
-    def setUp(self):
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])
+    def setUp(self) -> None:
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id)
+        self.w3.provider.make_request("evm_revert", self.snapshot_id) # type: ignore[]
 
-    def test_dai_savings_rate_contract(self):
+    def test_dai_savings_rate_contract(self) -> None:
         print("----==== test_dai_savings_rate_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
         pool = DaiSavingsRate(
             contract_address=self.contract_address,
-        )
+        ) # type: ignore[]
 
         pool.sync(self.w3)
 
