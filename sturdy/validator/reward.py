@@ -81,6 +81,7 @@ def format_allocations(
     return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
 
+# TODO: name this better?
 def pctl_normalize_rewards(rewards: torch.Tensor, epsilon: float = 1e-8) -> torch.Tensor:
     # Applying Min-Max Scaling with only lower percentile clipping
     lower_percentile = torch.quantile(rewards, 0.05)
@@ -91,8 +92,9 @@ def pctl_normalize_rewards(rewards: torch.Tensor, epsilon: float = 1e-8) -> torc
     # Normalize using only the lower percentile
     normalized_percentile_lower = (rewards - lower_percentile) / denominator
 
-    # Clip to 0-1 range (but only from below)
-    return torch.clamp(normalized_percentile_lower, 0, 1)
+    pwrd = normalized_percentile_lower**7
+
+    return (pwrd - pwrd.min()) / (pwrd.max() - pwrd.min() + epsilon)
 
 
 def calculate_penalties(
@@ -301,7 +303,6 @@ def calculate_aggregate_apy(
     return int(pct_yield // timesteps)  # for simplicity each timestep is a day in the simulator
 
 
-
 def get_rewards(
     self,
     query: int,  # noqa: ARG001
@@ -355,7 +356,7 @@ def get_rewards(
         try:
             cheating = not check_allocations(init_assets_and_pools, allocations)
         except Exception as e:
-            bt.logging.error(e) # type: ignore[]
+            bt.logging.error(e)  # type: ignore[]
 
         # score response very low if miner is cheating somehow or returns allocations with incorrect format
         if cheating:
@@ -388,7 +389,7 @@ def get_rewards(
                     init_assets_and_pools,
                 )
         except Exception as e:
-            bt.logging.error(e) # type: ignore[]
+            bt.logging.error(e)  # type: ignore[]
             bt.logging.error("Failed to calculate apy - PENALIZING MINER")
             miner_uid = uids[response_idx]
             apys[miner_uid] = 0
