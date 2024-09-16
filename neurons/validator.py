@@ -183,8 +183,9 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
             "total_assets": 1000000000000000000,
             "pools": {
               ...
-              "Sturdy ETH/rsETH silo": {
+              "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": {
                 "pool_type": "STURDY_SILO",
+                "pool_model_disc: "CHAIN",
                 "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
               },
               ...

@@ -204,22 +204,22 @@ curl -X POST \
     "total_assets": 4070000000000000000000,
     "pools": {
       "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": {
-      	"pool_model_disc": "CHAIN",
+        "pool_model_disc": "CHAIN",
         "pool_type": "STURDY_SILO",
         "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
       },
-      "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695": {
-      	"pool_model_disc": "CHAIN",
+       "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695": {
+        "pool_model_disc": "CHAIN",
         "pool_type": "STURDY_SILO",
         "contract_address": "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695"
       },
-      "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2": {
-      	"pool_model_disc": "CHAIN",
+       "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2": {
+        "pool_model_disc": "CHAIN",
         "pool_type": "STURDY_SILO",
         "contract_address": "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2"
       },
-      "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f": {
-      	"pool_model_disc": "CHAIN",
+       "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f": {
+        "pool_model_disc": "CHAIN",
         "pool_type": "STURDY_SILO",
         "contract_address": "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f"
       }
