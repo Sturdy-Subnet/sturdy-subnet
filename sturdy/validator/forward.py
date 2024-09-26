@@ -73,14 +73,15 @@ async def query_and_score_miners(
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
     user_address: str = ADDRESS_ZERO,
 ) -> dict[str, AllocInfo]:
+
     # intialize simulator
     if request_type == REQUEST_TYPES.ORGANIC:
         self.simulator.initialize(timesteps=1)
     else:
-        # initialize simulator data
-        # if there is no "organic" info then generate synthetic info
         self.simulator.initialize()
 
+    # initialize simulator data
+    # if there is no "organic" info then generate synthetic info
     if assets_and_pools is not None:
         self.simulator.init_data(init_assets_and_pools=copy.deepcopy(assets_and_pools))
     else:
@@ -108,7 +109,7 @@ async def query_and_score_miners(
     allocations = {uid: responses[idx].allocations for idx, uid in enumerate(active_uids)}  # type: ignore[]
 
     # Log the results for monitoring purposes.
-    bt.logging.debug(f"Pools: {synapse.assets_and_pools['pools']}")
+    bt.logging.debug(f"Assets and pools: {synapse.assets_and_pools}")
     bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
     # Adjust the scores based on responses from miners.

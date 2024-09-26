@@ -14,8 +14,9 @@ from sturdy.pools import (
 )
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 
+THRESHOLD = 0.98 # used to avoid over-allocations
 
-# NOTE: THIS IS JUST AN EXAMPLE - THIS MAY NOT WORK FOR ALL KINDS OF POOLS
+# NOTE: THIS IS JUST AN EXAMPLE - THIS IS NOT VERY OPTIMIZED
 def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     bt.logging.debug(f"received request type: {synapse.request_type}")
     pools = cast(dict, synapse.assets_and_pools["pools"])
@@ -38,7 +39,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
             for uid in pools:
                 pools[uid] = BasePool(**pools[uid].dict())
 
-    balance = synapse.assets_and_pools["total_assets"]
+    total_assets_available = int(THRESHOLD * synapse.assets_and_pools["total_assets"])
     pools = cast(dict, synapse.assets_and_pools["pools"])
 
     supply_rate_sum = 0
@@ -56,6 +57,24 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
             case _:
                 pass
 
+    # check the amounts that have been borrowed from the pools - and account for them
+    minimums = {}
+    for pool_uid, pool in pools.items():
+        match pool.pool_type:
+            case POOL_TYPES.STURDY_SILO:
+                minimums[pool_uid] = pool._totalBorrow.amount
+            case POOL_TYPES.AAVE:
+                minimums[pool_uid] = pool._nextTotalStableDebt + pool._totalVariableDebt
+            case POOL_TYPES.COMPOUND_V3:
+                minimums[pool_uid] = pool._total_borrow
+            case POOL_TYPES.SYNTHETIC:
+                minimums[pool_uid] = pool.borrow_amount
+            case _:
+                # we assume this is fine for default case
+                minimums[pool_uid] = total_assets_available // len(pools)
+
+    total_assets_available -= sum(minimums.values())
+    balance = int(total_assets_available)
     # obtain supply rates of pools - aave pool and sturdy silo
     # rates are determined by making on chain calls to smart contracts
     for pool in pools.values():
@@ -79,4 +98,6 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
             case _:
                 pass
 
-    return {pool_uid: math.floor((supply_rates[pool_uid] / supply_rate_sum) * balance) for pool_uid, _ in pools.items()}
+    return {
+        pool_uid: minimums[pool_uid] + math.floor((supply_rates[pool_uid] / supply_rate_sum) * balance) for pool_uid in pools
+    }

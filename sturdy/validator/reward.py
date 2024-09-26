@@ -24,10 +24,9 @@ import numpy as np
 import torch
 
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
-from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel
+from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel, check_allocations
 from sturdy.protocol import REQUEST_TYPES, AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div, wei_mul
-from sturdy.utils.misc import check_allocations
 
 
 def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, float]:
@@ -81,20 +80,23 @@ def format_allocations(
     return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
 
-# TODO: name this better?
-def pctl_normalize_rewards(rewards: torch.Tensor, epsilon: float = 1e-8) -> torch.Tensor:
-    # Applying Min-Max Scaling with only lower percentile clipping
-    lower_percentile = torch.quantile(rewards, 0.05)
+def dynamic_normalize_zscore(rewards: torch.Tensor, z_threshold: float = 1.0, epsilon: float = 1e-8) -> torch.Tensor:
+    mean = rewards.mean()
+    std_dev = rewards.std()
 
-    # Ensure the denominator is not zero by adding a small epsilon
-    denominator = torch.max(rewards) - lower_percentile + epsilon
+    # Calculate z-scores
+    z_scores = (rewards - mean) / std_dev
 
-    # Normalize using only the lower percentile
-    normalized_percentile_lower = (rewards - lower_percentile) / denominator
+    lower_q_range = torch.quantile(rewards, 0.05) - rewards.min()
+    rest_range = rewards.max() - torch.quantile(rewards, 0.05)
 
-    pwrd = normalized_percentile_lower**7
+    # Set a lower bound based on z-score threshold if the lower quartile range is larger than the rest
+    lower_bound = rewards[z_scores > -z_threshold].min() if lower_q_range > rest_range else rewards.min()
 
-    return (pwrd - pwrd.min()) / (pwrd.max() - pwrd.min() + epsilon)
+    # No upper bound, only clip the lower bound
+    clipped_data = torch.clip(rewards, lower_bound)
+
+    return (clipped_data - clipped_data.min()) / (clipped_data.max() - clipped_data.min() + epsilon)
 
 
 def calculate_penalties(
@@ -245,7 +247,7 @@ def _get_rewards(
 
     raw_apys = torch.Tensor([apys_and_allocations[uid]["apy"] for uid in uids])
 
-    rewards_apy = pctl_normalize_rewards(raw_apys).to(self.device)
+    rewards_apy = dynamic_normalize_zscore(raw_apys).to(self.device)
 
     return adjust_rewards_for_plagiarism(rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 

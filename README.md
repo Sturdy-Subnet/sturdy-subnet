@@ -105,7 +105,7 @@ There are three core files.
 
       assets_and_pools["total_assets"] = math.floor(
           randrange_float(
-              MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen
+              MIN_TOTAL_ASSETS_OFFSET, MAX_TOTAL_ASSETS_OFFSET, TOTAL_ASSETS_OFFSET_STEP, rng_gen=rng_gen
           )
       )
       assets_and_pools["pools"] = pools

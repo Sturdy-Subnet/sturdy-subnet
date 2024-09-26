@@ -54,11 +54,12 @@ class TestValidator(IsolatedAsyncioTestCase):
         await query_and_score_miners(self.validator)
         self.assertIsNotNone(self.validator.simulator.assets_and_pools)
         self.assertIsNotNone(self.validator.simulator.allocations)
+        self.maxDiff = None
 
         # use user-defined generated assets and pools
         simulator_copy = copy.deepcopy(self.validator.simulator)
         await query_and_score_miners(
-            self.validator, assets_and_pools=self.assets_and_pools,
+            self.validator, assets_and_pools=copy.deepcopy(self.assets_and_pools),
         )
         simulator_copy.initialize()
         simulator_copy.init_data(
