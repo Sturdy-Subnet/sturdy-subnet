@@ -80,15 +80,16 @@ def format_allocations(
     return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
 
-def dynamic_normalize_zscore(rewards: torch.Tensor, z_threshold: float = 1.0, epsilon: float = 1e-8) -> torch.Tensor:
+def dynamic_normalize_zscore(rewards, z_threshold: float = 1.0, q: float = 0.25, epsilon: float = 1e-8) -> torch.Tensor:
+    rewards: torch.Tensor = torch.tensor(rewards)
     mean = rewards.mean()
     std_dev = rewards.std()
 
     # Calculate z-scores
     z_scores = (rewards - mean) / std_dev
 
-    lower_q_range = torch.quantile(rewards, 0.05) - rewards.min()
-    rest_range = rewards.max() - torch.quantile(rewards, 0.05)
+    lower_q_range = torch.quantile(rewards, q) - rewards.min()
+    rest_range = rewards.max() - torch.quantile(rewards, q)
 
     # Set a lower bound based on z-score threshold if the lower quartile range is larger than the rest
     lower_bound = rewards[z_scores > -z_threshold].min() if lower_q_range > rest_range else rewards.min()

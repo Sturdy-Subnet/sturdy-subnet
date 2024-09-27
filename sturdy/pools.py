@@ -809,9 +809,11 @@ def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[
 
     minimums = [pool.borrow_amount for pool in pools_list]
     min_total = sum(minimums)
-    assets_and_pools["total_assets"] = int(min_total) + int(math.floor(
-        randrange_float(MIN_TOTAL_ASSETS_OFFSET, MAX_TOTAL_ASSETS_OFFSET, TOTAL_ASSETS_OFFSET_STEP, rng_gen=rng_gen),
-    ))
+    assets_and_pools["total_assets"] = int(min_total) + int(
+        math.floor(
+            randrange_float(MIN_TOTAL_ASSETS_OFFSET, MAX_TOTAL_ASSETS_OFFSET, TOTAL_ASSETS_OFFSET_STEP, rng_gen=rng_gen),
+        )
+    )
     assets_and_pools["pools"] = pools
 
     return assets_and_pools
@@ -819,5 +821,11 @@ def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[
 
 # generate intial allocations for pools
 def generate_initial_allocations_for_pools(assets_and_pools: dict) -> dict:
+    total_assets: int = assets_and_pools["total_assets"]
     pools: dict[str, BasePool] = assets_and_pools["pools"]
-    return {str(pool.contract_address): pool.borrow_amount for pool in pools.values()}
+    allocs = {}
+    for pool_uid, pool in pools.items():
+        alloc = pool.borrow_amount if pool.pool_type == POOL_TYPES.SYNTHETIC else total_assets // len(pools)
+        allocs[pool_uid] = alloc
+
+    return allocs
