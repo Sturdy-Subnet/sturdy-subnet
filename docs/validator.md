@@ -192,72 +192,86 @@ For them to use your server, you will need to communicate:
 
 Just for reference - below is an example `curl` command which could be used to interact with an organic validator:
 
-```
+```bash
 curl -X POST \
   http://{HOST_ADDRESS}/allocate \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer {API_KEY}' \
   -d '{
   "request_type": "ORGANIC",
-  "user_address": "0xD8f9475A4A1A6812212FD62e80413d496038A89A",
+  "user_address": "0x73E4C11B670Ef9C025A030A20b72CB9150E54523",
   "assets_and_pools": {
-    "total_assets": 4070000000000000000000,
+    "total_assets": 548568963376234830607950,
     "pools": {
-      "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": {
-        "pool_model_disc": "CHAIN",
+      "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": {
         "pool_type": "STURDY_SILO",
-        "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
+        "pool_model_disc": "CHAIN",
+        "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
       },
-       "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695": {
-        "pool_model_disc": "CHAIN",
+       "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b": {
         "pool_type": "STURDY_SILO",
-        "contract_address": "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695"
+        "pool_model_disc": "CHAIN",
+        "contract_address": "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b"
       },
-       "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2": {
-        "pool_model_disc": "CHAIN",
+       "0x26fe402A57D52c8a323bb6e09f06489C8216aC88": {
         "pool_type": "STURDY_SILO",
-        "contract_address": "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2"
+        "pool_model_disc": "CHAIN",
+        "contract_address": "0x26fe402A57D52c8a323bb6e09f06489C8216aC88"
       },
-       "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f": {
-        "pool_model_disc": "CHAIN",
+       "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D": {
         "pool_type": "STURDY_SILO",
-        "contract_address": "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f"
+        "pool_model_disc": "CHAIN",
+        "contract_address": "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D"
       }
     }
   }
 }'
 ```
 
-And the corresponding response(example) format from the subnet:
+Some annotations are provided below to further help understand the request format:
+```bash
+  "request_type": "ORGANIC", # request type
+  "user_address": "0x73E4C11B670Ef9C025A030A20b72CB9150E54523", # this tends to be an aggregator address
+  "assets_and_pools": {
+    "total_assets": 548568963376234830607950, # total assets available to a miner to allocate
+    "pools": { # pools available to output allocations for
+      "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": { # address used to get relevant info about the the pool
+        "pool_type": "STURDY_SILO", 
+        "pool_model_disc": "CHAIN", # if this is a synthetic or chain (organic) pool 
+        "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227" # address used to get relevant info about the the pool
+      },
 ```
+
+And the corresponding response(example) format from the subnet:
+```bash
 {
-    "request_uuid": "a8af54a41fa347d7b59570c81fe35492",
-    "allocations": {
-        "1": {
-            "apy": 2609043057391825,
-            "allocations": {
-                "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": 250000000000000000,
-                "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695": 250000000000000000,
-                "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2": 250000000000000000,
-                "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f": 250000000000000000
+    "request_uuid":"1e09d3f1ce574921bd13a2461607f5fe",
+    "allocations":{
+        "1":{ # miner uid
+            "apy":62133011236204113, # apy of miner's allocations in wei. 
+            "allocations":{ # allocations to pools in wei
+                "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":114864688949643874140160,
+                "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":1109027125282399872,
+                "0x26fe402A57D52c8a323bb6e09f06489C8216aC88":71611128603622265323520,
+                "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D":3594097438744
             }
         },
-        "2": {
-            "apy": 2609043057391825,
-            "allocations": {
-                "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": 250000000000000000,
-                "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695": 250000000000000000,
-                "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2": 250000000000000000,
-                "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f": 250000000000000000
+        "4":{
+            "apy":61332661325287823,
+            "allocations":{
+                "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":119201178628424617426944,
+                "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":1290874337673458688,
+                "0x26fe402A57D52c8a323bb6e09f06489C8216aC88":74795928505515430117376,
+                "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D":4534575558121
             }
         },
-        "4": {
-            "apy": 2609043057391825,
-            "allocations": {
-                "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": 250000000000000000,
-                "0xC8D4a8a7F593e73cD32cD6C5Fb11fE20F23f9695": 250000000000000000,
-                "0xD002Dc1c05fd7FF28C55eEA3dDcB9051B2B81bD2": 250000000000000000,
-                "0x0DD49C449C788285F50B529145D6e6E76f02Fd8f": 250000000000000000
+        "2":{
+            "apy":31168293423379011,
+            "allocations":{
+                "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":45592862828746122461184,
+                "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":172140896186699296,
+                "0x26fe402A57D52c8a323bb6e09f06489C8216aC88":53871255848631538810880,
+                "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D":465839210713
             }
         }
     }

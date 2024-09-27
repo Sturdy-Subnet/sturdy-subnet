@@ -183,10 +183,10 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
             "total_assets": 1000000000000000000,
             "pools": {
               ...
-              "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": {
+              "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": {
                 "pool_type": "STURDY_SILO",
                 "pool_model_disc: "CHAIN",
-                "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
+                "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
               },
               ...
             }
@@ -202,7 +202,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
                     "apy": 2609043057391825,
                     "allocations": {
                         ...
-                        "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": 250000000000000000,
+                        "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": 250000000000000000,
                         ...
                     }
                 },
