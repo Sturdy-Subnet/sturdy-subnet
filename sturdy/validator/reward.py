@@ -185,6 +185,7 @@ def get_similarity_matrix(
 
 
 def adjust_rewards_for_plagiarism(
+    self,
     rewards_apy: torch.Tensor,
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
@@ -226,6 +227,7 @@ def adjust_rewards_for_plagiarism(
 
     # Step 2: Apply penalties considering axon times
     penalties = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
+    self.similarity_penalties = penalties
 
     # Step 3: Calculate final rewards with adjusted penalties
     return calculate_rewards_with_adjusted_penalties(uids, rewards_apy, penalties)
@@ -250,7 +252,7 @@ def _get_rewards(
 
     rewards_apy = dynamic_normalize_zscore(raw_apys).to(self.device)
 
-    return adjust_rewards_for_plagiarism(rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
+    return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 
 
 def calculate_apy(

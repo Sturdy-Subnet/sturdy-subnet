@@ -1,4 +1,3 @@
-import copy
 import unittest
 
 import numpy as np
@@ -6,14 +5,15 @@ import torch
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
+from neurons.validator import Validator
 from sturdy.pools import *
 from sturdy.validator.reward import (
     adjust_rewards_for_plagiarism,
     calculate_penalties,
     calculate_rewards_with_adjusted_penalties,
+    dynamic_normalize_zscore,
     format_allocations,
     get_similarity_matrix,
-    dynamic_normalize_zscore,
 )
 
 BEEF = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
@@ -25,6 +25,16 @@ class TestRewardFunctions(unittest.TestCase):
         # runs tests on local mainnet fork at block: 20233401
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
+
+        cls.vali = Validator(
+            config={
+                "mock": True,
+                "wandb": {"off": True},
+                "mock_n": 16,
+                "neuron": {"dont_save_events": True},
+                "netuid": 420,
+            }
+        )
 
     def test_check_allocations_valid(self) -> None:
         allocations = {ADDRESS_ZERO: int(5e18), BEEF: int(3e18)}
@@ -321,7 +331,7 @@ class TestRewardFunctions(unittest.TestCase):
         print(normalized)
 
         # If all values are the same, the output should also be uniform (or handle gracefully)
-        self.assertTrue(torch.allclose(normalized, torch.zeros_like(rewards), atol = 1e-8))
+        self.assertTrue(torch.allclose(normalized, torch.zeros_like(rewards), atol=1e-8))
 
     def test_low_variance(self) -> None:
         # Test with low variance data (values are close to each other)
@@ -523,7 +533,9 @@ class TestRewardFunctions(unittest.TestCase):
         axon_times = {"0": 1.0, "1": 2.0, "2": 3.0}
 
         expected_rewards = torch.Tensor([1.0, 0.0, 0.03 / 0.05])
-        result = adjust_rewards_for_plagiarism(rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
+        result = adjust_rewards_for_plagiarism(
+            self.vali, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
+        )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
 
@@ -541,7 +553,9 @@ class TestRewardFunctions(unittest.TestCase):
         axon_times = {"0": 1.0, "1": 2.0}
 
         expected_rewards = torch.Tensor([1.0, 0.0])
-        result = adjust_rewards_for_plagiarism(rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
+        result = adjust_rewards_for_plagiarism(
+            self.vali, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
+        )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
 
