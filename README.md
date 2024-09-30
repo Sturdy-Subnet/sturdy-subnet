@@ -53,59 +53,59 @@ There are three core files.
   used for generating a dummy `assets_and_pools` taken from [pools.py](./sturdy/pools.py) used for
   synthetic requests:
     ```python
-  def generate_eth_public_key(rng_gen=np.random) -> str:
-      private_key_bytes = rng_gen.bytes(32)
+  def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
+      private_key_bytes = rng_gen.bytes(32)  # type: ignore[]
       account = Account.from_key(private_key_bytes)
-      eth_address = account.address
-
-      return eth_address
+      return account.address
 
 
-  def generate_assets_and_pools(rng_gen=np.random) -> Dict:  # generate pools
+  def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
       assets_and_pools = {}
 
-      pools = [
+      pools_list = [
           BasePool(
               contract_address=generate_eth_public_key(rng_gen=rng_gen),
               pool_type=POOL_TYPES.SYNTHETIC,
-              base_rate=randrange_float(
-                  MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen
-              ),
-              base_slope=randrange_float(
-                  MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen
-              ),
-              kink_slope=randrange_float(
-                  MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen
+              base_rate=int(randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen)),
+              base_slope=int(randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen)),
+              kink_slope=int(
+                  randrange_float(MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen),
               ),  # kink rate - kicks in after pool hits optimal util rate
-              optimal_util_rate=randrange_float(
-                  MIN_OPTIMAL_RATE,
-                  MAX_OPTIMAL_RATE,
-                  OPTIMAL_UTIL_STEP,
-                  rng_gen=rng_gen,
+              optimal_util_rate=int(
+                  randrange_float(
+                      MIN_OPTIMAL_RATE,
+                      MAX_OPTIMAL_RATE,
+                      OPTIMAL_UTIL_STEP,
+                      rng_gen=rng_gen,
+                  ),
               ),  # optimal util rate - after which the kink slope kicks in
               borrow_amount=int(
                   format_num_prec(
                       wei_mul(
                           POOL_RESERVE_SIZE,
-                          randrange_float(
-                              MIN_UTIL_RATE,
-                              MAX_UTIL_RATE,
-                              UTIL_RATE_STEP,
-                              rng_gen=rng_gen,
+                          int(
+                              randrange_float(
+                                  MIN_UTIL_RATE,
+                                  MAX_UTIL_RATE,
+                                  UTIL_RATE_STEP,
+                                  rng_gen=rng_gen,
+                              ),
                           ),
-                      )
-                  )
+                      ),
+                  ),
               ),  # initial borrowed amount from pool
-              reserve_size=POOL_RESERVE_SIZE,
+              reserve_size=int(POOL_RESERVE_SIZE),
           )
           for _ in range(NUM_POOLS)
       ]
 
-      pools = {str(pool.contract_address): pool for pool in pools}
+      pools = {str(pool.contract_address): pool for pool in pools_list}
 
-      assets_and_pools["total_assets"] = math.floor(
-          randrange_float(
-              MIN_TOTAL_ASSETS_OFFSET, MAX_TOTAL_ASSETS_OFFSET, TOTAL_ASSETS_OFFSET_STEP, rng_gen=rng_gen
+      minimums = [pool.borrow_amount for pool in pools_list]
+      min_total = sum(minimums)
+      assets_and_pools["total_assets"] = int(min_total) + int(
+          math.floor(
+              randrange_float(MIN_TOTAL_ASSETS_OFFSET, MAX_TOTAL_ASSETS_OFFSET, TOTAL_ASSETS_OFFSET_STEP, rng_gen=rng_gen),
           )
       )
       assets_and_pools["pools"] = pools
