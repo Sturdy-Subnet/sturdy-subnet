@@ -250,7 +250,8 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     )
     request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
-    ret = AllocateAssetsResponse(allocations=result, request_uuid=request_uuid)
+    to_ret = dict(list(result.items())[:body.num_allocs])
+    ret = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
     with sql.get_db_connection() as conn:
         sql.log_allocations(conn, ret.request_uuid, synapse.assets_and_pools, ret.allocations)
 
