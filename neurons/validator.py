@@ -183,9 +183,10 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
             "total_assets": 1000000000000000000,
             "pools": {
               ...
-              "Sturdy ETH/rsETH silo": {
+              "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": {
                 "pool_type": "STURDY_SILO",
-                "contract_address": "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4"
+                "pool_model_disc: "CHAIN",
+                "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
               },
               ...
             }
@@ -201,7 +202,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
                     "apy": 2609043057391825,
                     "allocations": {
                         ...
-                        "0xe53FFd56FaDC7030156069aE1b34dE0Ab8b703F4": 250000000000000000,
+                        "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": 250000000000000000,
                         ...
                     }
                 },
@@ -249,7 +250,8 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     )
     request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
-    ret = AllocateAssetsResponse(allocations=result, request_uuid=request_uuid)
+    to_ret = dict(list(result.items())[:body.num_allocs])
+    ret = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
     with sql.get_db_connection() as conn:
         sql.log_allocations(conn, ret.request_uuid, synapse.assets_and_pools, ret.allocations)
 

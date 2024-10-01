@@ -2,18 +2,263 @@ import unittest
 
 import numpy as np
 import torch
+from web3 import Web3
+from web3.constants import ADDRESS_ZERO
 
+from neurons.validator import Validator
+from sturdy.pools import *
 from sturdy.validator.reward import (
     adjust_rewards_for_plagiarism,
     calculate_penalties,
     calculate_rewards_with_adjusted_penalties,
+    dynamic_normalize_zscore,
     format_allocations,
     get_similarity_matrix,
-    pctl_normalize_rewards,
 )
+
+BEEF = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
 
 
 class TestRewardFunctions(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # runs tests on local mainnet fork at block: 20233401
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.vali = Validator(
+            config={
+                "mock": True,
+                "wandb": {"off": True},
+                "mock_n": 16,
+                "neuron": {"dont_save_events": True},
+                "netuid": 420,
+            }
+        )
+
+    def test_check_allocations_valid(self) -> None:
+        allocations = {ADDRESS_ZERO: int(5e18), BEEF: int(3e18)}
+        assets_and_pools = {
+            "total_assets": int(10e18),
+            "pools": {
+                ADDRESS_ZERO: BasePool(
+                    contract_address=ADDRESS_ZERO,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(2e18),
+                    reserve_size=0,
+                ),
+                BEEF: BasePool(
+                    contract_address=BEEF,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(1e18),
+                    reserve_size=0,
+                ),
+            },
+        }
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertTrue(result)
+
+    def test_check_allocations_overallocate(self) -> None:
+        allocations = {ADDRESS_ZERO: int(10e18), BEEF: int(3e18)}
+        assets_and_pools = {
+            "total_assets": int(10e18),
+            "pools": {
+                ADDRESS_ZERO: BasePool(
+                    contract_address=ADDRESS_ZERO,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(2e18),
+                    reserve_size=0,
+                ),
+                BEEF: BasePool(
+                    contract_address=BEEF,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(1e18),
+                    reserve_size=0,
+                ),
+            },
+        }
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertFalse(result)
+
+    def test_check_allocations_below_borrow(self) -> None:
+        allocations = {ADDRESS_ZERO: int(10e18), BEEF: int(3e18)}
+        assets_and_pools = {
+            "total_assets": int(10e18),
+            "pools": {
+                ADDRESS_ZERO: BasePool(
+                    contract_address=ADDRESS_ZERO,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(2e18),
+                    reserve_size=0,
+                ),
+                BEEF: BasePool(
+                    contract_address=BEEF,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(1e18),
+                    reserve_size=0,
+                ),
+            },
+        }
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertFalse(result)
+
+    def test_check_allocations_valid_sturdy(self) -> None:
+        A = "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
+        B = "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b"
+        VAULT = "0x73E4C11B670Ef9C025A030A20b72CB9150E54523"
+        # assuming block # is: 20233401
+        allocations = {A: int(6e23), B: int(6e22)}
+        assets_and_pools = {
+            "total_assets": int(7e23),
+            "pools": {
+                A: VariableInterestSturdySiloStrategy(
+                    user_address=VAULT,
+                    contract_address=A,
+                ),
+                B: VariableInterestSturdySiloStrategy(
+                    user_address=VAULT,
+                    contract_address=B,
+                ),
+            },
+        }
+
+        pool_a: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][A]
+        pool_b: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][B]
+        pool_a.sync(VAULT, web3_provider=self.w3)
+        pool_b.sync(VAULT, web3_provider=self.w3)
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertTrue(result)
+
+    def test_check_allocations_invalid_sturdy(self) -> None:
+        A = "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
+        B = "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b"
+        VAULT = "0x73E4C11B670Ef9C025A030A20b72CB9150E54523"
+        # assuming block # is: 20233401
+        allocations = {A: int(5e23), B: int(6e22)}
+        assets_and_pools = {
+            "total_assets": int(7e23),
+            "pools": {
+                A: VariableInterestSturdySiloStrategy(
+                    user_address=VAULT,
+                    contract_address=A,
+                ),
+                B: VariableInterestSturdySiloStrategy(
+                    user_address=VAULT,
+                    contract_address=B,
+                ),
+            },
+        }
+
+        pool_a: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][A]
+        pool_b: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][B]
+        pool_a.sync(VAULT, web3_provider=self.w3)
+        pool_b.sync(VAULT, web3_provider=self.w3)
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertFalse(result)
+
+    def test_check_allocations_valid_aave(self) -> None:
+        A = "0x018008bfb33d285247A21d44E50697654f754e63"
+        # assuming block # is: 20233401
+        allocations = {A: int(1.5e26)}
+        assets_and_pools = {
+            "total_assets": int(2e26),
+            "pools": {
+                A: AaveV3DefaultInterestRatePool(
+                    user_address=ADDRESS_ZERO,
+                    contract_address=A,
+                ),
+            },
+        }
+
+        pool_a: AaveV3DefaultInterestRatePool = assets_and_pools["pools"][A]
+        pool_a.sync(self.w3)
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertTrue(result)
+
+    def test_check_allocations_invalid_aave(self) -> None:
+        A = "0x018008bfb33d285247A21d44E50697654f754e63"
+        # assuming block # is: 20233401
+        allocations = {A: int(1e26)}
+        assets_and_pools = {
+            "total_assets": int(2e26),
+            "pools": {
+                A: AaveV3DefaultInterestRatePool(
+                    user_address=ADDRESS_ZERO,
+                    contract_address=A,
+                ),
+            },
+        }
+
+        pool_a: AaveV3DefaultInterestRatePool = assets_and_pools["pools"][A]
+        pool_a.sync(self.w3)
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertFalse(result)
+
+    def test_check_allocations_valid_compound(self) -> None:
+        A = "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+        # assuming block # is: 20233401
+        allocations = {A: int(5e14)}
+        assets_and_pools = {
+            "total_assets": int(6e14),
+            "pools": {
+                A: CompoundV3Pool(
+                    user_address=ADDRESS_ZERO,
+                    contract_address=A,
+                ),
+            },
+        }
+
+        pool_a: CompoundV3Pool = assets_and_pools["pools"][A]
+        pool_a.sync(self.w3)
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertTrue(result)
+
+    def test_check_allocations_invalid_compound(self) -> None:
+        A = "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+        # assuming block # is: 20233401
+        allocations = {A: int(4e14)}
+        assets_and_pools = {
+            "total_assets": int(6e14),
+            "pools": {
+                A: CompoundV3Pool(
+                    user_address=ADDRESS_ZERO,
+                    contract_address=A,
+                ),
+            },
+        }
+
+        pool_a: CompoundV3Pool = assets_and_pools["pools"][A]
+        pool_a.sync(self.w3)
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertFalse(result)
+
     def test_format_allocations(self) -> None:
         allocations = {"1": int(5e18), "2": int(3e18)}
         assets_and_pools = {
@@ -52,43 +297,68 @@ class TestRewardFunctions(unittest.TestCase):
 
         self.assertEqual(result, expected_output)
 
-    def test_all_positive_values(self) -> None:
+    def test_basic_normalization(self) -> None:
+        # Test a simple tensor with a standard range of values
         rewards = torch.tensor([10.0, 20.0, 30.0, 40.0, 50.0])
-        normalized_rewards = pctl_normalize_rewards(rewards)
-        self.assertTrue(torch.all(normalized_rewards >= 0))
-        self.assertTrue(torch.all(normalized_rewards <= 1))
+        normalized = dynamic_normalize_zscore(rewards)
 
-    def test_some_negative_values(self) -> None:
-        rewards = torch.tensor([-10.0, 0.0, 10.0, 20.0, 30.0])
-        normalized_rewards = pctl_normalize_rewards(rewards)
-        self.assertTrue(torch.all(normalized_rewards >= 0))
-        self.assertTrue(torch.all(normalized_rewards <= 1))
+        # Check if output is normalized between 0 and 1
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
 
-    def test_all_zero_values(self) -> None:
-        rewards = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
-        normalized_rewards = pctl_normalize_rewards(rewards)
-        expected_result = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
-        self.assertTrue(torch.equal(normalized_rewards, expected_result))
+    def test_with_low_outliers(self) -> None:
+        # Test with low outliers
+        rewards = torch.tensor([1.0, 1.0, 1.0, 50.0, 100.0, 200.0])
+        normalized = dynamic_normalize_zscore(rewards)
 
-    def test_single_value(self) -> None:
-        rewards = torch.tensor([100.0])
-        normalized_rewards = pctl_normalize_rewards(rewards)
-        expected_result = torch.tensor([0.0])  # With a single value, normalization should return 0
-        self.assertTrue(torch.equal(normalized_rewards, expected_result))
+        # Check that outliers don't affect the overall normalization
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
 
-    def test_with_outliers(self) -> None:
-        rewards = torch.tensor([1.0, 1.5, 2.0, 100.0, 1000.0])
-        normalized_rewards = pctl_normalize_rewards(rewards)
-        self.assertTrue(torch.all(normalized_rewards >= 0))
-        self.assertTrue(torch.all(normalized_rewards <= 1))
-        # The outliers should be normalized to near 1 after clipping
-        self.assertAlmostEqual(float(torch.max(normalized_rewards)), 1.0, places=5)
+    def test_with_high_outliers(self) -> None:
+        # Test with high outliers
+        rewards = torch.tensor([50.0, 60.0, 70.0, 1000.0, 2000.0])
+        normalized = dynamic_normalize_zscore(rewards)
 
-    def test_identical_values(self) -> None:
-        rewards = torch.tensor([50.0, 50.0, 50.0, 50.0])
-        normalized_rewards = pctl_normalize_rewards(rewards)
-        expected_result = torch.tensor([0.0, 0.0, 0.0, 0.0])  # Identical values should all be normalized to 0
-        self.assertTrue(torch.equal(normalized_rewards, expected_result))
+        # Check that the function correctly handles high outliers
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
+
+    def test_uniform_values(self) -> None:
+        # Test where all values are the same
+        rewards = torch.tensor([10.0, 10.0, 10.0, 10.0])
+        normalized = dynamic_normalize_zscore(rewards)
+        print(normalized)
+
+        # If all values are the same, the output should also be uniform (or handle gracefully)
+        self.assertTrue(torch.allclose(normalized, torch.zeros_like(rewards), atol=1e-8))
+
+    def test_low_variance(self) -> None:
+        # Test with low variance data (values are close to each other)
+        rewards = torch.tensor([100.0, 101.0, 102.0, 103.0, 104.0])
+        normalized = dynamic_normalize_zscore(rewards)
+
+        # Check if normalization happens correctly
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
+
+    def test_high_variance(self) -> None:
+        # Test with high variance data
+        rewards = torch.tensor([1.0, 100.0, 500.0, 1000.0])
+        normalized = dynamic_normalize_zscore(rewards)
+
+        # Ensure that the normalization works even with high variance
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
+
+    def test_quantile_logic(self) -> None:
+        # Test a case where the lower quartile range affects the lower bound decision
+        rewards = torch.tensor([1.0, 2.0, 3.0, 4.0, 100.0, 200.0, 300.0, 400.0])
+        normalized = dynamic_normalize_zscore(rewards)
+
+        # Ensure that quantile-based clipping works as expected
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
 
     def test_get_similarity_matrix(self) -> None:
         apys_and_allocations = {
@@ -263,7 +533,9 @@ class TestRewardFunctions(unittest.TestCase):
         axon_times = {"0": 1.0, "1": 2.0, "2": 3.0}
 
         expected_rewards = torch.Tensor([1.0, 0.0, 0.03 / 0.05])
-        result = adjust_rewards_for_plagiarism(rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
+        result = adjust_rewards_for_plagiarism(
+            self.vali, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
+        )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
 
@@ -281,7 +553,9 @@ class TestRewardFunctions(unittest.TestCase):
         axon_times = {"0": 1.0, "1": 2.0}
 
         expected_rewards = torch.Tensor([1.0, 0.0])
-        result = adjust_rewards_for_plagiarism(rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
+        result = adjust_rewards_for_plagiarism(
+            self.vali, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
+        )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
 

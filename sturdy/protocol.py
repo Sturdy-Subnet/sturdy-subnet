@@ -58,6 +58,7 @@ class AllocateAssetsRequest(BaseModel):
         default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls for organic requests",
     )
+    num_allocs: int = Field(default=1, description="number of miner allocations to receive")
 
     @validator("request_type", pre=True)
     def validator_pool_type(cls, value) -> REQUEST_TYPES:

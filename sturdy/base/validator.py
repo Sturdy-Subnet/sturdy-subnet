@@ -66,9 +66,7 @@ class BaseValidatorNeuron(BaseNeuron):
         if self.config.organic:
             w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
             if w3_provider_url is None:
-                raise ValueError(
-                    "You must provide a valid web3 provider url as an organic validator!"
-                )
+                raise ValueError("You must provide a valid web3 provider url as an organic validator!")
 
             self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
 
@@ -82,9 +80,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
-        self.scores = torch.zeros(
-            self.metagraph.n, dtype=torch.float32, device=self.device
-        )
+        self.scores = torch.zeros(self.metagraph.n, dtype=torch.float32, device=self.device)
+        self.similarity_penalties = {}
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -129,9 +126,7 @@ class BaseValidatorNeuron(BaseNeuron):
             pass
 
     async def concurrent_forward(self):
-        coroutines = [
-            self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)
-        ]
+        coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
         await asyncio.gather(*coroutines)
 
     def run(self):
@@ -173,9 +168,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     bt.logging.info(f"step({self.step}) block({self.block})")
 
                     if self.config.organic:
-                        future = asyncio.run_coroutine_threadsafe(
-                            self.concurrent_forward(), self.loop
-                        )
+                        future = asyncio.run_coroutine_threadsafe(self.concurrent_forward(), self.loop)
                         future.result()  # Wait for the coroutine to complete
                     else:
                         self.loop.run_until_complete(self.concurrent_forward())
@@ -188,14 +181,17 @@ class BaseValidatorNeuron(BaseNeuron):
                         bt.logging.debug("Logging info to wandb")
                         try:
                             metrics_to_log = {
-                                f"miner_scores/score_uid_{uid}": float(score)
-                                for uid, score in enumerate(self.scores)
+                                f"miner_scores/score_uid_{uid}": float(score) for uid, score in enumerate(self.scores)
                             }
                             other_metrics = {
                                 "block": self.block,
                                 "validator_run_step": self.step,
                             }
+                            sim_penalties = {
+                                f"similarity_penalties/uid_{uid}": score for uid, score in self.similarity_penalties.items()
+                            }
                             metrics_to_log.update(other_metrics)
+                            metrics_to_log.update(sim_penalties)
                             self.wandb.log(metrics_to_log, step=self.block)
                             self.wandb_run_log_count += 1
                             bt.logging.info(
@@ -329,9 +325,7 @@ class BaseValidatorNeuron(BaseNeuron):
         (
             uint_uids,
             uint_weights,
-        ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(
-            uids=processed_weight_uids, weights=processed_weights
-        )
+        ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(uids=processed_weight_uids, weights=processed_weights)
         bt.logging.debug("uint_weights", uint_weights)
         bt.logging.debug("uint_uids", uint_uids)
 
@@ -364,9 +358,7 @@ class BaseValidatorNeuron(BaseNeuron):
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        bt.logging.info(
-            "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
-        )
+        bt.logging.info("Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages")
         # Zero out all hotkeys that have been replaced.
         for uid, hotkey in enumerate(self.hotkeys):
             if hotkey != self.metagraph.hotkeys[uid]:
@@ -401,17 +393,13 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # shape: [ metagraph.n ]
-        scattered_rewards: torch.Tensor = self.scores.scatter(
-            0, uids_tensor, rewards
-        ).to(self.device)
+        scattered_rewards: torch.Tensor = self.scores.scatter(0, uids_tensor, rewards).to(self.device)
         bt.logging.debug(f"Scattered rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.Tensor = alpha * scattered_rewards + (
-            1 - alpha
-        ) * self.scores.to(self.device)
+        self.scores: torch.Tensor = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
     def save_state(self):

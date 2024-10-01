@@ -7,12 +7,12 @@ from sturdy.constants import *
 from sturdy.pools import (
     BasePoolModel,
     ChainBasedPoolModel,
+    check_allocations,
     generate_assets_and_pools,
     generate_initial_allocations_for_pools,
 )
 from sturdy.protocol import AllocationsDict
 from sturdy.utils.ethmath import wei_mul_arrays
-from sturdy.utils.misc import check_allocations
 
 
 class Simulator:
@@ -107,8 +107,6 @@ class Simulator:
 
         allocations = self.allocations if allocs is None else allocs
 
-        check_allocations(self.assets_and_pools, allocations)
-
         if len(self.pool_history) != 1:
             raise RuntimeError(
                 "You must have first init data for the simulation if you'd like to update reserves",
@@ -117,7 +115,8 @@ class Simulator:
         for uid, alloc in allocations.items():
             pool = self.assets_and_pools["pools"][uid]
             pool_history_start = self.pool_history[0]
-            pool.reserve_size += alloc
+            pool.reserve_size += int(alloc)
+            pool.reserve_size = int(pool.reserve_size)
             pool_from_history = pool_history_start[uid]
             pool_from_history.reserve_size += allocations[uid]
 
@@ -152,5 +151,4 @@ class Simulator:
             raise RuntimeError("You must first initialize() and init_data() before running the simulation!!!")
         for _ in range(1, self.timesteps):
             new_info = self.generate_new_pool_data()
-            # TODO: do we need to copy?
             self.pool_history.append(new_info.copy())

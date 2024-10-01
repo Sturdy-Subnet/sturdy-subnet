@@ -122,52 +122,6 @@ def supply_rate(util_rate, pool) -> int:
     return wei_mul(util_rate, pool.borrow_rate)
 
 
-def check_allocations(
-    assets_and_pools: dict,
-    allocations: dict[str, int],  # TODO: fix circular import so we can type this with AllocationsDict?
-) -> bool:
-    """
-    Checks allocations from miner.
-
-    Args:
-    - assets_and_pools (dict[str, Union[dict[str, int], int]]): The assets and pools which the allocations are for.
-    - allocations (dict[str, int]): The allocations to validate.
-
-    Returns:
-    - bool: Represents if allocations are valid.
-    """
-
-    # Ensure the allocations are provided and valid
-    if not allocations or not isinstance(allocations, dict):
-        return False
-
-    # Ensure the 'total_assets' key exists in assets_and_pools and is a valid number
-    to_allocate = assets_and_pools.get("total_assets")
-    if to_allocate is None or not isinstance(to_allocate, int):
-        return False
-
-    to_allocate = Decimal(str(to_allocate))
-    total_allocated = Decimal(0)
-
-    # Check allocations
-    for allocation in allocations.values():
-        try:
-            allocation_value = Decimal(str(allocation))
-        except (ValueError, TypeError):
-            return False
-
-        if allocation_value < 0:
-            return False
-
-        total_allocated += allocation_value
-
-        if total_allocated > to_allocate:
-            return False
-
-    # Ensure total allocated does not exceed the total assets
-    return not total_allocated > to_allocate
-
-
 # LRU Cache with TTL
 def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1) -> Any:
     """
