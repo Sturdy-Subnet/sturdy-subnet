@@ -13,9 +13,9 @@ OPTIMAL_UTIL_STEP = int(0.05e18)
 MIN_UTIL_RATE = int(0.55e18)
 MAX_UTIL_RATE = int(0.95e18)
 UTIL_RATE_STEP = int(0.05e18)
-MIN_TOTAL_ASSETS_OFFSET = 500e18  # 500 when converted from wei -> ether unit
-MAX_TOTAL_ASSETS_OFFSET = 3000e18  # 3000
-TOTAL_ASSETS_OFFSET_STEP = 100e18  # 100
+MIN_TOTAL_ASSETS = 500e18  # 500 when converted from wei -> ether unit
+MAX_TOTAL_ASSETS = 3000e18  # 3000
+TOTAL_ASSETS_STEP = 100e18  # 100
 SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
 REVERSION_SPEED = 0.1  # reversion speed to median borrow rate of pools
@@ -29,7 +29,7 @@ STOCHASTICITY_STEP = 0.005
 POOL_RESERVE_SIZE = int(1000e18)  # 1000
 
 QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
-QUERY_TIMEOUT = 45  # timeout (seconds)
+QUERY_TIMEOUT = 30  # timeout (seconds)
 
 # The following constants are for different pool models
 # Aave

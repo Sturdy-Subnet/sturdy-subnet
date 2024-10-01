@@ -88,6 +88,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             self.assertEqual(response.assets_and_pools, assets_and_pools)
             self.assertLessEqual(sum(response.allocations.values()), assets_and_pools["total_assets"])
 
+        # TODO: better testing?
         rewards, allocs = get_rewards(
             validator,
             validator.step,
@@ -147,6 +148,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             self.assertEqual(response.assets_and_pools, assets_and_pools)
             self.assertEqual(response.allocations, allocations)
 
+        # TODO: better testing?
         rewards, allocs = get_rewards(
             validator,
             validator.step,
@@ -202,6 +204,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             self.assertEqual(response.assets_and_pools, assets_and_pools)
             self.assertEqual(response.allocations, allocations)
 
+        # TODO: better testing?
         rewards, allocs = get_rewards(
             validator,
             validator.step,

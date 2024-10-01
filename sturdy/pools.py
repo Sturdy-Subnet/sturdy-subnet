@@ -17,7 +17,6 @@
 
 import json
 import math
-from decimal import Decimal
 from enum import IntEnum
 from pathlib import Path
 from typing import Any, Literal
@@ -49,76 +48,6 @@ class POOL_TYPES(IntEnum):
     AAVE = 2
     DAI_SAVINGS = 3
     COMPOUND_V3 = 4
-
-
-def check_allocations(
-    assets_and_pools: dict,
-    allocations: dict[str, int],
-) -> bool:
-    """
-    Checks allocations from miner.
-
-    Args:
-    - assets_and_pools (dict[str, Union[dict[str, int], int]]): The assets and pools which the allocations are for.
-    - allocations (dict[str, int]): The allocations to validate.
-
-    Returns:
-    - bool: Represents if allocations are valid.
-    """
-
-    # Ensure the allocations are provided and valid
-    if not allocations or not isinstance(allocations, dict):
-        return False
-
-    # Ensure the 'total_assets' key exists in assets_and_pools and is a valid number
-    to_allocate = assets_and_pools.get("total_assets")
-    if to_allocate is None or not isinstance(to_allocate, int):
-        return False
-
-    to_allocate = Decimal(str(to_allocate))
-    total_allocated = Decimal(0)
-
-    # Check allocations
-    for allocation in allocations.values():
-        try:
-            allocation_value = Decimal(str(allocation))
-        except (ValueError, TypeError):
-            return False
-
-        if allocation_value < 0:
-            return False
-
-        total_allocated += allocation_value
-
-        if total_allocated > to_allocate:
-            return False
-
-    # Ensure total allocated does not exceed the total assets
-    if total_allocated > to_allocate:
-        return False
-
-    pools = assets_and_pools["pools"]
-    # check if allocations are above the borrow amounts
-    for pool_uid, pool in pools.items():
-        allocation = allocations.get(pool_uid, 0)
-        borrow_amount = 0
-        match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                borrow_amount = pool._totalBorrow.amount
-            case POOL_TYPES.AAVE:
-                # borrow amount for aave pools is total_stable_debt + total_variable_debt
-                borrow_amount = pool._nextTotalStableDebt + pool._totalVariableDebt
-            case POOL_TYPES.COMPOUND_V3:
-                borrow_amount = pool._total_borrow
-            case POOL_TYPES.DAI_SAVINGS:
-                pass  # TODO: is there a more appropriate way to go about this?
-            case _:  # we assume it is a synthetic pool
-                borrow_amount = pool.borrow_amount
-
-        if allocation < borrow_amount:
-            return False
-
-    return True
 
 
 class BasePoolModel(BaseModel):
@@ -175,12 +104,12 @@ class BasePool(BasePoolModel):
 
     Args:
         contract_address: (str),
-        base_rate: (int),
-        base_slope: (int),
-        kink_slope: (int),
-        optimal_util_rate: (int),
-        borrow_amount: (int),
-        reserve_size: (int),
+        base_rate: (float),
+        base_slope: (float),
+        kink_slope: (float),
+        optimal_util_rate: (float),
+        borrow_amount: (float),
+        reserve_size: (float),
     """
 
     @property
@@ -489,7 +418,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _curr_deposit_amount: int = PrivateAttr()
     _util_prec: int = PrivateAttr()
     _fee_prec: int = PrivateAttr()
-    _totalAssets: Any = PrivateAttr()
+    _totalAsset: Any = PrivateAttr()
     _totalBorrow: Any = PrivateAttr()
     _current_rate_info = PrivateAttr()
     _rate_prec: int = PrivateAttr()
@@ -551,13 +480,13 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         if not self._initted:
             self.pool_init(user_addr, web3_provider)
 
-        user_shares = retry_with_backoff(self._pair_contract.functions.balanceOf(self.contract_address).call)
+        user_shares = retry_with_backoff(self._pair_contract.functions.balanceOf(user_addr).call)
         self._curr_deposit_amount = retry_with_backoff(self._pair_contract.functions.convertToAssets(user_shares).call)
 
         constants = retry_with_backoff(self._pair_contract.functions.getConstants().call)
         self._util_prec = constants[2]
         self._fee_prec = constants[3]
-        self._totalAssets: Any = retry_with_backoff(self._pair_contract.functions.totalAssets().call)
+        self._totalAsset: Any = retry_with_backoff(self._pair_contract.functions.totalAsset().call)
         self._totalBorrow: Any = retry_with_backoff(self._pair_contract.functions.totalBorrow().call)
 
         self._block = web3_provider.eth.get_block("latest")
@@ -570,20 +499,19 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: int) -> int:
         delta = amount - self._curr_deposit_amount
-
         """Returns supply rate given new deposit amount"""
-        util_rate = int((self._util_prec * self._totalBorrow.amount) // (self._totalAssets + delta))
+        util_rate = (self._util_prec * self._totalBorrow.amount) // (self._totalAsset.amount + delta)
 
         last_update_timestamp = self._current_rate_info.lastTimestamp
-        current_timestamp = self._block["timestamp"]
-        delta_time = int(current_timestamp - last_update_timestamp)
+        current_timestamp = self._block["timestamp"]  # type: ignore[]
+        delta_time = current_timestamp - last_update_timestamp
 
         protocol_fee = self._current_rate_info.feeToProtocolRate
         (new_rate_per_sec, _) = retry_with_backoff(
             self._rate_model_contract.functions.getNewRate(
                 delta_time,
                 util_rate,
-                int(self._current_rate_info.fullUtilizationRate),
+                self._current_rate_info.fullUtilizationRate,
             ).call,
         )
 
@@ -610,8 +538,6 @@ class CompoundV3Pool(ChainBasedPoolModel):
     _reward_token_contract: Contract = PrivateAttr()
     _base_token_price: float = PrivateAttr()
     _reward_token_price: float = PrivateAttr()
-    _base_decimals: int = PrivateAttr()
-    _total_borrow: int = PrivateAttr()
 
     _CompoundTokenMap: dict = {
         "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # WETH -> ETH
@@ -664,9 +590,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
         # get token prices - in wei
         base_decimals = retry_with_backoff(self._base_oracle_contract.functions.decimals().call)
-        self._base_decimals = base_decimals
         reward_decimals = retry_with_backoff(self._reward_oracle_contract.functions.decimals().call)
-        self._total_borrow = retry_with_backoff(self._ctoken_contract.functions.totalBorrow().call)
 
         self._base_token_price = (
             retry_with_backoff(self._base_oracle_contract.functions.latestAnswer().call) / 10**base_decimals
@@ -682,7 +606,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
         delta = amount - already_in_pool
         new_supply = current_supply + delta
-        current_borrows = self._total_borrow
+        current_borrows = retry_with_backoff(self._ctoken_contract.functions.totalBorrow().call)
 
         utilization = wei_div(current_borrows, new_supply)
         seconds_per_year = 31536000
@@ -760,7 +684,7 @@ class DaiSavingsRate(ChainBasedPoolModel):
 
 
 def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
-    private_key_bytes = rng_gen.bytes(32)  # type: ignore[]
+    private_key_bytes = rng_gen.bytes(32) # type: ignore[]
     account = Account.from_key(private_key_bytes)
     return account.address
 
@@ -768,7 +692,7 @@ def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
 def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
     assets_and_pools = {}
 
-    pools_list = [
+    pools = [
         BasePool(
             contract_address=generate_eth_public_key(rng_gen=rng_gen),
             pool_type=POOL_TYPES.SYNTHETIC,
@@ -800,19 +724,15 @@ def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[
                     ),
                 ),
             ),  # initial borrowed amount from pool
-            reserve_size=int(POOL_RESERVE_SIZE),
+            reserve_size=POOL_RESERVE_SIZE,
         )
         for _ in range(NUM_POOLS)
     ]
 
-    pools = {str(pool.contract_address): pool for pool in pools_list}
+    pools = {str(pool.contract_address): pool for pool in pools}
 
-    minimums = [pool.borrow_amount for pool in pools_list]
-    min_total = sum(minimums)
-    assets_and_pools["total_assets"] = int(min_total) + int(
-        math.floor(
-            randrange_float(MIN_TOTAL_ASSETS_OFFSET, MAX_TOTAL_ASSETS_OFFSET, TOTAL_ASSETS_OFFSET_STEP, rng_gen=rng_gen),
-        )
+    assets_and_pools["total_assets"] = math.floor(
+        randrange_float(MIN_TOTAL_ASSETS, MAX_TOTAL_ASSETS, TOTAL_ASSETS_STEP, rng_gen=rng_gen),
     )
     assets_and_pools["pools"] = pools
 
@@ -821,11 +741,7 @@ def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[
 
 # generate intial allocations for pools
 def generate_initial_allocations_for_pools(assets_and_pools: dict) -> dict:
-    total_assets: int = assets_and_pools["total_assets"]
-    pools: dict[str, BasePool] = assets_and_pools["pools"]
-    allocs = {}
-    for pool_uid, pool in pools.items():
-        alloc = pool.borrow_amount if pool.pool_type == POOL_TYPES.SYNTHETIC else total_assets // len(pools)
-        allocs[pool_uid] = alloc
+    pools = assets_and_pools["pools"]
+    alloc = assets_and_pools["total_assets"] / len(pools)
+    return {str(contract_address): alloc for contract_address in pools}
 
-    return allocs

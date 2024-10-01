@@ -1,38 +1,32 @@
 import unittest
-
 import numpy as np
-
-from sturdy.constants import *
 from sturdy.pools import (
-    BasePoolModel,
     generate_assets_and_pools,
     generate_initial_allocations_for_pools,
 )
+from sturdy.constants import *
 from sturdy.utils.ethmath import wei_mul
 
 
 class TestPoolAndAllocGeneration(unittest.TestCase):
-    def test_generate_assets_and_pools(self) -> None:
+    def test_generate_assets_and_pools(self):
         # same seed on every test run
         np.random.seed(69)
         # run test multiple times to to ensure the number generated are
         # within the correct ranges
-        for _ in range(100):
+        for i in range(0, 100):
             result = generate_assets_and_pools(np.random.RandomState(69))
-
-            pools: dict[str, BasePoolModel] = result["pools"]
-            total_borrows = sum([pool.borrow_amount for pool in pools.values()])
 
             # Assert total assets
             self.assertTrue(
-                total_borrows + MIN_TOTAL_ASSETS_OFFSET <= result["total_assets"] <= total_borrows + MAX_TOTAL_ASSETS_OFFSET
+                MIN_TOTAL_ASSETS <= result["total_assets"] <= MAX_TOTAL_ASSETS
             )
 
             # Assert number of pools
             self.assertEqual(len(result["pools"]), NUM_POOLS)
 
             # Assert properties of each pool
-            for pool_info in result["pools"].values():
+            for _, pool_info in result["pools"].items():
                 self.assertTrue(hasattr(pool_info, "base_rate"))
                 self.assertTrue(
                     MIN_BASE_RATE <= pool_info.base_rate <= MAX_BASE_RATE
@@ -63,17 +57,20 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
                     <= wei_mul(MAX_UTIL_RATE, POOL_RESERVE_SIZE)
                 )
 
-    def test_generate_initial_allocations_for_pools(self) -> None:
+    def test_generate_initial_allocations_for_pools(self):
         # same seed on every test run
         np.random.seed(69)
         # run test multiple times to to ensure the number generated are
         # within the correct ranges
-        for _ in range(100):
+        for i in range(0, 100):
             assets_and_pools = generate_assets_and_pools(np.random.RandomState(69))
             max_alloc = assets_and_pools["total_assets"]
             pools = assets_and_pools["pools"]
             result = generate_initial_allocations_for_pools(assets_and_pools)
-            result = dict(result.items())
+            result = {i: alloc for i, alloc in result.items()}
+
+            # Assert total assets
+            self.assertAlmostEqual(sum(result.values()) - max_alloc, 0, places=8)
 
             # Assert number of allocations
             self.assertEqual(len(result), len(pools))
