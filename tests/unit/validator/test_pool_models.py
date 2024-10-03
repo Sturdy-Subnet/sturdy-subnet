@@ -86,7 +86,7 @@ class TestAavePool(unittest.TestCase):
         )
 
         # sync pool params
-        pool.sync(web3_provider=self.w3)
+        pool.sync(self.account.address, web3_provider=self.w3)
 
         self.assertTrue(hasattr(pool, "_atoken_contract"))
         self.assertTrue(isinstance(pool._atoken_contract, Contract))
@@ -102,7 +102,7 @@ class TestAavePool(unittest.TestCase):
         )
 
         # sync pool params
-        pool.sync(web3_provider=self.w3)
+        pool.sync(self.account.address, web3_provider=self.w3)
 
         reserve_data = retry_with_backoff(
             pool._pool_contract.functions.getReserveData(
@@ -114,7 +114,7 @@ class TestAavePool(unittest.TestCase):
         print(f"apy before supplying: {apy_before}")
 
         # calculate predicted future supply rate after supplying 10000 ETH
-        apy_after = pool.supply_rate(self.account.address, int(10000e18))
+        apy_after = pool.supply_rate(int(10000e18))
         print(f"apy after supplying 10000 ETH: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertLess(apy_after, apy_before)
@@ -126,7 +126,7 @@ class TestAavePool(unittest.TestCase):
         )
 
         # sync pool params
-        pool.sync(web3_provider=self.w3)
+        pool.sync(self.account.address, web3_provider=self.w3)
 
         tx = self.weth_contract.functions.deposit().build_transaction(
             {
@@ -207,7 +207,8 @@ class TestAavePool(unittest.TestCase):
         print(f"apy before rebalancing ether: {apy_before}")
 
         # calculate predicted future supply rate after removing 1000 ETH to end up with 9000 ETH in the pool
-        apy_after = pool.supply_rate(self.account.address, int(9000e18))
+        pool.sync(self.account.address, self.w3)
+        apy_after = pool.supply_rate(int(9000e18))
         print(f"apy after rebalancing ether: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertGreater(apy_after, apy_before)

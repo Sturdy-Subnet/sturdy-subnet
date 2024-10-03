@@ -102,20 +102,32 @@ def check_allocations(
     for pool_uid, pool in pools.items():
         allocation = allocations.get(pool_uid, 0)
         borrow_amount = 0
+        our_supply = 0
+        assets_available = 0
         match pool.pool_type:
             case POOL_TYPES.STURDY_SILO:
-                borrow_amount = pool._totalBorrow.amount
+                borrow_amount = pool._totalBorrow
+                our_supply = pool._curr_deposit_amount
+                assets_available = pool._totalAssets - borrow_amount
             case POOL_TYPES.AAVE:
                 # borrow amount for aave pools is total_stable_debt + total_variable_debt
-                borrow_amount = pool._nextTotalStableDebt + pool._totalVariableDebt
+                borrow_amount = ((pool._nextTotalStableDebt * int(1e18)) // int(10**pool._decimals)) + (
+                    (pool._totalVariableDebt * int(1e18)) // int(10**pool._decimals)
+                )
+                our_supply = pool._scaled_collateral_amount
+                assets_available = ((pool._total_supplied * int(1e18)) // int(10**pool._decimals)) - borrow_amount
             case POOL_TYPES.COMPOUND_V3:
                 borrow_amount = pool._total_borrow
+                our_supply = pool._deposit_amount
+                assets_available = pool._total_supply - borrow_amount
             case POOL_TYPES.DAI_SAVINGS:
                 pass  # TODO: is there a more appropriate way to go about this?
             case _:  # we assume it is a synthetic pool
                 borrow_amount = pool.borrow_amount
 
-        if allocation < borrow_amount:
+        min_alloc = 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
+
+        if allocation < min_alloc:
             return False
 
     return True
@@ -296,6 +308,9 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _variable_debt_token_contract = PrivateAttr()
     _totalVariableDebt = PrivateAttr()
     _reserveFactor = PrivateAttr()
+    _collateral_amount: int = PrivateAttr()
+    _scaled_collateral_amount: int = PrivateAttr()
+    _total_supplied: int = PrivateAttr()
     _decimals: int = PrivateAttr()
 
     class Config:
@@ -357,13 +372,15 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 address=self._underlying_asset_address,
             )
 
+            self._total_supplied = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
+
             self._initted = True
 
         except Exception as err:
             bt.logging.error("Failed to load contract!")
             bt.logging.error(err)  # type: ignore[]
 
-    def sync(self, web3_provider: Web3) -> None:
+    def sync(self, user_addr: str, web3_provider: Web3) -> None:
         """Syncs with chain"""
         if not self._initted:
             self.pool_init(web3_provider)
@@ -435,6 +452,12 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             reserveConfiguration = self._reserve_data.configuration
             self._reserveFactor = getReserveFactor(reserveConfiguration)
             self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
+            self._collateral_amount = retry_with_backoff(
+                self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(user_addr)).call
+            )
+            self._scaled_collateral_amount = int(
+                self._collateral_amount * 10**self._decimals // 1e18,
+            )
 
         except Exception as err:
             bt.logging.error("Failed to sync to chain!")
@@ -442,15 +465,10 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, user_addr: str, amount: int) -> int:
+    def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
-            already_deposited = int(
-                retry_with_backoff(self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(user_addr)).call)
-                * 10**self._decimals
-                // 1e18,
-            )
-
+            already_deposited = self._scaled_collateral_amount
             delta = amount - already_deposited
             to_deposit = max(0, delta)
             to_remove = abs(delta) if delta < 0 else 0
@@ -494,6 +512,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _current_rate_info = PrivateAttr()
     _rate_prec: int = PrivateAttr()
     _block: BlockData = PrivateAttr()
+    _decimals: int = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
@@ -540,6 +559,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             rate_model_contract_address = retry_with_backoff(self._pair_contract.functions.rateContract().call)
             rate_model_contract = web3_provider.eth.contract(abi=rate_model_abi, decode_tuples=True)
             self._rate_model_contract = retry_with_backoff(rate_model_contract, address=rate_model_contract_address)
+            self._decimals = retry_with_backoff(self._pair_contract.functions.decimals().call)
 
             self._initted = True
 
@@ -558,7 +578,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._util_prec = constants[2]
         self._fee_prec = constants[3]
         self._totalAssets: Any = retry_with_backoff(self._pair_contract.functions.totalAssets().call)
-        self._totalBorrow: Any = retry_with_backoff(self._pair_contract.functions.totalBorrow().call)
+        self._totalBorrow: Any = retry_with_backoff(self._pair_contract.functions.totalBorrow().call).amount
 
         self._block = web3_provider.eth.get_block("latest")
 
@@ -569,10 +589,12 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: int) -> int:
-        delta = amount - self._curr_deposit_amount
+        # amount scaled down to the asset's decimals from 18 decimals (wei)
+        scaledAmount = (amount * int(10 ** self._decimals)) // int(1e18)
+        delta = scaledAmount - self._curr_deposit_amount
 
         """Returns supply rate given new deposit amount"""
-        util_rate = int((self._util_prec * self._totalBorrow.amount) // (self._totalAssets + delta))
+        util_rate = int((self._util_prec * self._totalBorrow) // (self._totalAssets + delta))
 
         last_update_timestamp = self._current_rate_info.lastTimestamp
         current_timestamp = self._block["timestamp"]
@@ -612,6 +634,8 @@ class CompoundV3Pool(ChainBasedPoolModel):
     _reward_token_price: float = PrivateAttr()
     _base_decimals: int = PrivateAttr()
     _total_borrow: int = PrivateAttr()
+    _deposit_amount: int = PrivateAttr()
+    _total_supply: int = PrivateAttr()
 
     _CompoundTokenMap: dict = {
         "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # WETH -> ETH
@@ -675,13 +699,17 @@ class CompoundV3Pool(ChainBasedPoolModel):
             retry_with_backoff(self._reward_oracle_contract.functions.latestAnswer().call) / 10**reward_decimals
         )
 
-    def supply_rate(self, amount: int) -> int:
-        # get pool supply rate (base token)
-        current_supply = retry_with_backoff(self._ctoken_contract.functions.totalSupply().call)
-        already_in_pool = retry_with_backoff(self._ctoken_contract.functions.balanceOf(self.user_address).call)
+        self._deposit_amount = retry_with_backoff(self._ctoken_contract.functions.balanceOf(self.user_address).call)
+        self._total_supply = retry_with_backoff(self._ctoken_contract.functions.totalSupply().call)
 
-        delta = amount - already_in_pool
-        new_supply = current_supply + delta
+    def supply_rate(self, amount: int) -> int:
+        # amount scaled down to the asset's decimals from 18 decimals (wei)
+        scaledAmount = (amount * int(10 ** self._decimals)) // int(1e18)
+        # get pool supply rate (base token)
+        already_in_pool = self._deposit_amount
+
+        delta = scaledAmount - already_in_pool
+        new_supply = self._total_supply + delta
         current_borrows = self._total_borrow
 
         utilization = wei_div(current_borrows, new_supply)

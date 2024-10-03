@@ -49,7 +49,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     for pool in pools.values():
         match pool.pool_type:
             case POOL_TYPES.AAVE:
-                pool.sync(self.w3)
+                pool.sync(synapse.user_address, self.w3)
             case POOL_TYPES.STURDY_SILO:
                 pool.sync(synapse.user_address, self.w3)
             case T if T in (POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3):
@@ -62,7 +62,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     for pool_uid, pool in pools.items():
         match pool.pool_type:
             case POOL_TYPES.STURDY_SILO:
-                minimums[pool_uid] = pool._totalBorrow.amount
+                minimums[pool_uid] = pool._totalBorrow
             case POOL_TYPES.AAVE:
                 minimums[pool_uid] = pool._nextTotalStableDebt + pool._totalVariableDebt
             case POOL_TYPES.COMPOUND_V3:
@@ -79,11 +79,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     # rates are determined by making on chain calls to smart contracts
     for pool in pools.values():
         match pool.pool_type:
-            case POOL_TYPES.AAVE:
-                apy = pool.supply_rate(synapse.user_address, balance // len(pools))  # type: ignore[]
-                supply_rates[pool.contract_address] = apy
-                supply_rate_sum += apy
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.COMPOUND_V3):
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.COMPOUND_V3, POOL_TYPES.AAVE):
                 apy = pool.supply_rate(balance // len(pools))  # type: ignore[]
                 supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy

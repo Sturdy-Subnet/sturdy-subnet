@@ -270,14 +270,10 @@ def calculate_apy(
     for uid, pool in pools.items():
         allocation = allocations[uid]
         match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                pool_yield = wei_mul(allocation, pool.supply_rate(amount=allocation))
             case POOL_TYPES.DAI_SAVINGS:
                 pool_yield = wei_mul(allocation, pool.supply_rate())
-            case POOL_TYPES.COMPOUND_V3:
-                pool_yield = wei_mul(allocation, pool.supply_rate(amount=allocation))
             case _:
-                pool_yield = wei_mul(allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation))
+                pool_yield = wei_mul(allocation, pool.supply_rate(amount=allocation))
         pct_yield += pool_yield
 
     return wei_div(pct_yield, initial_balance)
