@@ -47,22 +47,20 @@ class TestAavePool(unittest.TestCase):
         weth_contract = cls.w3.eth.contract(abi=weth_abi)
         cls.weth_contract = retry_with_backoff(
             weth_contract,
-            address=Web3.to_checksum_address(
-                "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-            ),
+            address=Web3.to_checksum_address("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
     def setUp(self) -> None:
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
 
     def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id) # type: ignore[]
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
     def test_pool_contract(self) -> None:
         print("----==== test_pool_contract ====----")
@@ -104,11 +102,7 @@ class TestAavePool(unittest.TestCase):
         # sync pool params
         pool.sync(self.account.address, web3_provider=self.w3)
 
-        reserve_data = retry_with_backoff(
-            pool._pool_contract.functions.getReserveData(
-                pool._underlying_asset_address
-            ).call
-        )
+        reserve_data = retry_with_backoff(pool._pool_contract.functions.getReserveData(pool._underlying_asset_address).call)
 
         apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
         print(f"apy before supplying: {apy_before}")
@@ -138,24 +132,18 @@ class TestAavePool(unittest.TestCase):
             }
         )
 
-        signed_tx = self.w3.eth.account.sign_transaction(
-            transaction_dict=tx, private_key=self.account.key
-        )
+        signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
 
         # Send the transaction
         tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
         print(f"weth deposit tx hash: {tx_hash}")
 
         # check if we received some weth
-        weth_balance = self.weth_contract.functions.balanceOf(
-            self.account.address
-        ).call()
+        weth_balance = self.weth_contract.functions.balanceOf(self.account.address).call()
         self.assertGreaterEqual(int(weth_balance), self.w3.to_wei(10000, "ether"))
 
         # approve aave pool to use weth
-        tx = self.weth_contract.functions.approve(
-            pool._pool_contract.address, self.w3.to_wei(1e9, "ether")
-        ).build_transaction(
+        tx = self.weth_contract.functions.approve(pool._pool_contract.address, self.w3.to_wei(1e9, "ether")).build_transaction(
             {
                 "from": self.w3.to_checksum_address(self.account.address),
                 "gas": 1000000,
@@ -164,9 +152,7 @@ class TestAavePool(unittest.TestCase):
             }
         )
 
-        signed_tx = self.w3.eth.account.sign_transaction(
-            transaction_dict=tx, private_key=self.account.key
-        )
+        signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
 
         # Send the transaction
         tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
@@ -187,21 +173,13 @@ class TestAavePool(unittest.TestCase):
             }
         )
 
-        signed_tx = self.w3.eth.account.sign_transaction(
-            transaction_dict=tx, private_key=self.account.key
-        )
+        signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
 
         # Send the transaction
-        tx_hash = retry_with_backoff(
-            self.w3.eth.send_raw_transaction, signed_tx.rawTransaction
-        )
+        tx_hash = retry_with_backoff(self.w3.eth.send_raw_transaction, signed_tx.rawTransaction)
         print(f"supply weth tx hash: {tx_hash}")
 
-        reserve_data = retry_with_backoff(
-            pool._pool_contract.functions.getReserveData(
-                pool._underlying_asset_address
-            ).call
-        )
+        reserve_data = retry_with_backoff(pool._pool_contract.functions.getReserveData(pool._underlying_asset_address).call)
 
         apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
         print(f"apy before rebalancing ether: {apy_before}")
@@ -244,27 +222,25 @@ class TestSturdySiloStrategy(unittest.TestCase):
             ],
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
     def setUp(self) -> None:
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
 
     def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id) # type: ignore[]
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
     def test_silo_strategy_contract(self) -> None:
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
         pool = VariableInterestSturdySiloStrategy(
             contract_address=self.contract_address,
-        ) # type: ignore[]
-        whale_addr = self.w3.to_checksum_address(
-            "0x0669091F451142b3228171aE6aD794cF98288124"
-        )
+        )  # type: ignore[]
+        whale_addr = self.w3.to_checksum_address("0x0669091F451142b3228171aE6aD794cF98288124")
 
         pool.sync(whale_addr, self.w3)
 
@@ -312,24 +288,24 @@ class TestCompoundV3Pool(unittest.TestCase):
             }
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
     def setUp(self) -> None:
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
 
     def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id) # type: ignore[]
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
     def test_compound_pool_model(self) -> None:
         print("----==== test_compound_pool_model ====----")
         pool = CompoundV3Pool(
             contract_address=self.ctoken_address,
             user_address=self.user_address,
-        ) # type: ignore[]
+        )  # type: ignore[]
 
         pool.sync(self.w3)
 
@@ -357,14 +333,12 @@ class TestCompoundV3Pool(unittest.TestCase):
         pool = CompoundV3Pool(
             contract_address=self.ctoken_address,
             user_address=self.user_address,
-        ) # type: ignore[]
+        )  # type: ignore[]
 
         pool.sync(self.w3)
 
         # get current balance of the user
-        current_balance = pool._ctoken_contract.functions.balanceOf(
-            self.user_address
-        ).call()
+        current_balance = pool._ctoken_contract.functions.balanceOf(self.user_address).call()
         new_balance = current_balance + int(1000000e6)
 
         apy_before = pool.supply_rate(current_balance)
@@ -382,14 +356,12 @@ class TestCompoundV3Pool(unittest.TestCase):
         pool = CompoundV3Pool(
             contract_address=self.ctoken_address,
             user_address=self.user_address,
-        ) # type: ignore[]
+        )  # type: ignore[]
 
         pool.sync(self.w3)
 
         # get current balance of the user
-        current_balance = pool._ctoken_contract.functions.balanceOf(
-            self.user_address
-        ).call()
+        current_balance = pool._ctoken_contract.functions.balanceOf(self.user_address).call()
         new_balance = current_balance - int(1000000e6)
 
         apy_before = pool.supply_rate(current_balance)
@@ -408,9 +380,7 @@ class TestDaiSavingsRate(unittest.TestCase):
         # runs tests on local mainnet fork at block: 20225081
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
-        cls.contract_address = cls.w3.to_checksum_address(
-            "0x83f20f44975d03b1b09e64809b757c47f942beea"
-        )
+        cls.contract_address = cls.w3.to_checksum_address("0x83f20f44975d03b1b09e64809b757c47f942beea")
         # Create a funded account for testing
         cls.account = Account.create()
         cls.w3.eth.send_transaction(
@@ -422,7 +392,7 @@ class TestDaiSavingsRate(unittest.TestCase):
         )
 
         cls.w3.provider.make_request(
-            "hardhat_reset", # type: ignore[]
+            "hardhat_reset",  # type: ignore[]
             [
                 {
                     "forking": {
@@ -433,24 +403,24 @@ class TestDaiSavingsRate(unittest.TestCase):
             ],
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
     def setUp(self) -> None:
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", []) # type: ignore[]
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
 
     def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id) # type: ignore[]
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
     def test_dai_savings_rate_contract(self) -> None:
         print("----==== test_dai_savings_rate_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
         pool = DaiSavingsRate(
             contract_address=self.contract_address,
-        ) # type: ignore[]
+        )  # type: ignore[]
 
         pool.sync(self.w3)
 

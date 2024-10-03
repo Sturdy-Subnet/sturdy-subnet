@@ -590,7 +590,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
-        scaledAmount = (amount * int(10 ** self._decimals)) // int(1e18)
+        scaledAmount = (amount * int(10**self._decimals)) // int(1e18)
         delta = scaledAmount - self._curr_deposit_amount
 
         """Returns supply rate given new deposit amount"""
@@ -704,7 +704,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
     def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
-        scaledAmount = (amount * int(10 ** self._decimals)) // int(1e18)
+        scaledAmount = (amount * int(10**self._decimals)) // int(1e18)
         # get pool supply rate (base token)
         already_in_pool = self._deposit_amount
 
