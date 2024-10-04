@@ -13,6 +13,7 @@ from sturdy.pools import (
     CompoundV3Pool,
     DaiSavingsRate,
     VariableInterestSturdySiloStrategy,
+    MorphoVault
 )
 from sturdy.utils.misc import retry_with_backoff
 
@@ -27,6 +28,18 @@ class TestAavePool(unittest.TestCase):
         # runs tests on local mainnet fork at block: 20233401
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20233401,
+                    },
+                },
+            ],
+        )
 
         cls.atoken_address = "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8"
         # Create a funded account for testing
@@ -199,17 +212,6 @@ class TestSturdySiloStrategy(unittest.TestCase):
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
 
-        cls.contract_address = "0x0669091F451142b3228171aE6aD794cF98288124"
-        # Create a funded account for testing
-        cls.account = Account.create()
-        cls.w3.eth.send_transaction(
-            {
-                "to": cls.account.address,
-                "from": cls.w3.eth.accounts[0],
-                "value": cls.w3.to_wei(200000, "ether"),
-            }
-        )
-
         cls.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
             [
@@ -220,6 +222,17 @@ class TestSturdySiloStrategy(unittest.TestCase):
                     },
                 },
             ],
+        )
+
+        cls.contract_address = "0x0669091F451142b3228171aE6aD794cF98288124"
+        # Create a funded account for testing
+        cls.account = Account.create()
+        cls.w3.eth.send_transaction(
+            {
+                "to": cls.account.address,
+                "from": cls.w3.eth.accounts[0],
+                "value": cls.w3.to_wei(200000, "ether"),
+            }
         )
 
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
@@ -275,6 +288,18 @@ class TestCompoundV3Pool(unittest.TestCase):
         # runs tests on local mainnet fork at block: 20233401
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20233401,
+                    },
+                },
+            ],
+        )
 
         cls.ctoken_address = "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
         cls.user_address = "0x2b2E894f08F1BF8C93a82297c347EbdC8717d99a"
@@ -380,16 +405,6 @@ class TestDaiSavingsRate(unittest.TestCase):
         # runs tests on local mainnet fork at block: 20225081
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
-        cls.contract_address = cls.w3.to_checksum_address("0x83f20f44975d03b1b09e64809b757c47f942beea")
-        # Create a funded account for testing
-        cls.account = Account.create()
-        cls.w3.eth.send_transaction(
-            {
-                "to": cls.account.address,
-                "from": cls.w3.eth.accounts[0],
-                "value": cls.w3.to_wei(200000, "ether"),
-            }
-        )
 
         cls.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
@@ -401,6 +416,17 @@ class TestDaiSavingsRate(unittest.TestCase):
                     },
                 },
             ],
+        )
+
+        cls.contract_address = cls.w3.to_checksum_address("0x83f20f44975d03b1b09e64809b757c47f942beea")
+        # Create a funded account for testing
+        cls.account = Account.create()
+        cls.w3.eth.send_transaction(
+            {
+                "to": cls.account.address,
+                "from": cls.w3.eth.accounts[0],
+                "value": cls.w3.to_wei(200000, "ether"),
+            }
         )
 
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
@@ -436,6 +462,123 @@ class TestDaiSavingsRate(unittest.TestCase):
         # get supply rate
         supply_rate = pool.supply_rate()
         print(f"supply rate: {supply_rate}")
+
+
+class TestMorphoVault(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # runs tests on local mainnet fork at block: 20233401
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20892138,
+                    },
+                },
+            ],
+        )
+
+        # Usual Boosted USDC Vault
+        cls.vault_address = "0xd63070114470f685b75B74D60EEc7c1113d33a3D"
+        # USDC whale
+        cls.user_address = "0x4B16c5dE96EB2117bBE5fd171E4d203624B014aa"
+        # Create a funded account for testing
+        cls.account = Account.create()
+        cls.w3.eth.send_transaction(
+            {
+                "to": cls.account.address,
+                "from": cls.w3.eth.accounts[0],
+                "value": cls.w3.to_wei(200000, "ether"),
+            }
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+
+        print(f"snapshot id: {cls.snapshot_id}")
+
+    def setUp(self) -> None:
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+        print(f"snapshot id: {self.snapshot_id}")
+
+    def tearDown(self) -> None:
+        # Optional: Revert to the original snapshot after each test
+        print("reverting to original evm snapshot")
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+
+    def test_morphovault_pool_model(self) -> None:
+        print("----==== test_morphovault_pool_model ====----")
+        pool = MorphoVault(
+            contract_address=self.vault_address,
+            user_address=self.user_address,
+        )  # type: ignore[]
+
+        pool.sync(self.w3)
+
+        self.assertTrue(hasattr(pool, "_vault_contract"))
+        self.assertTrue(isinstance(pool._vault_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_morpho_contract"))
+        self.assertTrue(isinstance(pool._morpho_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_decimals"))
+        self.assertTrue(isinstance(pool._decimals, int))
+
+        self.assertTrue(hasattr(pool, "_DECIMALS_OFFSET"))
+        self.assertTrue(isinstance(pool._DECIMALS_OFFSET, int))
+
+        # check pool supply_rate
+        print(pool.supply_rate(self.user_address, self.w3, 0))
+
+    # def test_supply_rate_increase_alloc(self) -> None:
+    #     print("----==== test_supply_rate_increase_alloc ====----")
+
+    #     pool = CompoundV3Pool(
+    #         contract_address=self.ctoken_address,
+    #         user_address=self.user_address,
+    #     )  # type: ignore[]
+
+    #     pool.sync(self.w3)
+
+    #     # get current balance of the user
+    #     current_balance = pool._ctoken_contract.functions.balanceOf(self.user_address).call()
+    #     new_balance = current_balance + int(1000000e6)
+
+    #     apy_before = pool.supply_rate(current_balance)
+    #     print(f"apy before supplying: {apy_before}")
+
+    #     # calculate predicted future supply rate after supplying 1000000 USDC
+    #     apy_after = pool.supply_rate(new_balance)
+    #     print(f"apy after supplying 1000000 USDC: {apy_after}")
+    #     self.assertNotEqual(apy_after, 0)
+    #     self.assertLess(apy_after, apy_before)
+
+    # def test_supply_rate_decrease_alloc(self) -> None:
+    #     print("----==== test_supply_rate_decrease_alloc ====----")
+
+    #     pool = CompoundV3Pool(
+    #         contract_address=self.ctoken_address,
+    #         user_address=self.user_address,
+    #     )  # type: ignore[]
+
+    #     pool.sync(self.w3)
+
+    #     # get current balance of the user
+    #     current_balance = pool._ctoken_contract.functions.balanceOf(self.user_address).call()
+    #     new_balance = current_balance - int(1000000e6)
+
+    #     apy_before = pool.supply_rate(current_balance)
+    #     print(f"apy before supplying: {apy_before}")
+
+    #     # calculate predicted future supply rate after removing 1000000 USDC
+    #     apy_after = pool.supply_rate(new_balance)
+    #     print(f"apy after removing 1000000 USDC: {apy_after}")
+    #     self.assertNotEqual(apy_after, 0)
+    #     self.assertGreater(apy_after, apy_before)
 
 
 if __name__ == "__main__":

@@ -10,5 +10,4 @@ def wei_div(x: int, y: int) -> int:
 
 
 def wei_mul_arrays(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    ret = (np.multiply(x, y)) // 1e18
-    return ret
+    return (np.multiply(x, y)) // 1e18

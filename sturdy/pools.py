@@ -20,7 +20,7 @@ import math
 from decimal import Decimal
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import bittensor as bt
 import numpy as np
@@ -49,6 +49,7 @@ class POOL_TYPES(IntEnum):
     AAVE = 2
     DAI_SAVINGS = 3
     COMPOUND_V3 = 4
+    MORPHO = 5
 
 
 def check_allocations(
@@ -704,7 +705,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
     def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
-        scaledAmount = (amount * int(10**self._decimals)) // int(1e18)
+        scaledAmount = (amount * int(10**self._base_decimals)) // int(1e18)
         # get pool supply rate (base token)
         already_in_pool = self._deposit_amount
 
@@ -785,6 +786,146 @@ class DaiSavingsRate(ChainBasedPoolModel):
         seconds_per_year = 31536000
         x = (dsr / RAY) ** seconds_per_year
         return int(math.floor((x - 1) * 1e18))
+
+
+class MorphoVault(ChainBasedPoolModel):
+    # TODO: remove
+    """Model for Morpho Vaults
+    NOTE:
+    This pool type is a bit different from other pools
+    pools = {
+        ...
+        "0x0...1": { # <--- this is the index of the market in the morpho vault's "supplyQueue"
+            "contract_address": "0x....", # <---- this is the address of the morpho vault
+            ...
+        }
+        ...
+    }
+
+    new_pools = []
+    for pool_uid, pool in pools.items():
+        new_pool = MorphoVault(contract_address=pool["contract_address"], market_idx=pool_uid ...)
+    """
+
+    pool_type: POOL_TYPES = Field(POOL_TYPES.MORPHO, const=True, description="type of pool")
+
+    _vault_contract: Contract = PrivateAttr()
+    _morpho_contract: Contract = PrivateAttr()
+    _irm_abi: str = PrivateAttr()
+    _decimals: int = PrivateAttr()
+    _DECIMALS_OFFSET: int = PrivateAttr()
+
+    _VIRTUAL_SHARES: ClassVar[int] = 1e6
+    _VIRTUAL_ASSETS: ClassVar[int] = 1
+
+    def __hash__(self) -> int:
+        return hash(self._vault_contract.address)
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, MorphoVault):
+            return NotImplemented
+        # Compare the attributes for equality
+        return self._vault_contract.address == other._vault_contract.address  # type: ignore[]
+
+    def pool_init(self, web3_provider: Web3) -> None:
+        vault_abi_file_path = Path(__file__).parent / "abi/MetaMorpho.json"
+        vault_abi_file = vault_abi_file_path.open()
+        vault_abi = json.load(vault_abi_file)
+        vault_abi_file.close()
+
+        vault_contract = web3_provider.eth.contract(abi=vault_abi, decode_tuples=True)
+        self._vault_contract = retry_with_backoff(vault_contract, address=self.contract_address)
+
+        morpho_abi_file_path = Path(__file__).parent / "abi/Morpho.json"
+        morpho_abi_file = morpho_abi_file_path.open()
+        morpho_abi = json.load(morpho_abi_file)
+        morpho_abi_file.close()
+
+        morpho_address = retry_with_backoff(self._vault_contract.functions.MORPHO().call)
+
+        morpho_contract = web3_provider.eth.contract(abi=morpho_abi, decode_tuples=True)
+        self._morpho_contract = retry_with_backoff(morpho_contract, address=morpho_address)
+
+        self._decimals = retry_with_backoff(self._vault_contract.functions.decimals().call)
+        self._DECIMALS_OFFSET = retry_with_backoff(self._vault_contract.functions.DECIMALS_OFFSET().call)
+
+        irm_abi_file_path = Path(__file__).parent / "abi/AdaptiveCurveIrm.json"
+        irm_abi_file = irm_abi_file_path.open()
+        self._irm_abi = json.load(irm_abi_file)
+        irm_abi_file.close()
+
+        self._initted = True
+
+    def sync(self, web3_provider: Web3) -> None:
+        if not self._initted:
+            self.pool_init(web3_provider)
+
+    @classmethod
+    def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
+        return (assets * (total_shares + cls._VIRTUAL_SHARES)) // (total_assets + cls._VIRTUAL_ASSETS)
+
+    @classmethod
+    def shares_to_assets_down(cls, shares: int, total_assets: int, total_shares: int) -> int:
+        return (shares * (total_assets + cls._VIRTUAL_ASSETS)) // (total_shares + cls._VIRTUAL_SHARES)
+
+    # last 256 unique calls to this will be cached for the next 60 seconds
+    @ttl_cache(maxsize=256, ttl=60)
+    def supply_rate(self, user_addr: str, web3_provider: Web3, amount: int) -> int:
+        supply_queue_length = retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
+        market_ids = [
+            retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
+        ]
+
+        curr_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
+        curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(user_addr).call)
+        curr_user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        asset_decimals = self._decimals - self._DECIMALS_OFFSET
+        scaled_curr_assets = ((curr_assets) * int(1e18)) // int(10**asset_decimals)
+        scaled_user_assets = ((curr_user_assets) * int(1e18)) // int(10**asset_decimals)
+        total_asset_delta = scaled_user_assets - amount
+
+        # apys in each market
+        current_supply_apys = []
+        # current assets allocated to each market
+        current_assets = []
+
+        # calculate the supply apys for each market
+        for market_id in market_ids:
+            # calculate current supply apy
+            market = retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
+            market_params = retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
+            irm_address = market_params.irm
+
+            if irm_address == ADDRESS_ZERO:
+                current_supply_apys.append(0)
+                current_assets.append(0)
+                continue
+
+            irm_contract_raw = web3_provider.eth.contract(abi=self._irm_abi, decode_tuples=True)
+            irm_contract = retry_with_backoff(irm_contract_raw, address=irm_address)
+            borrow_rate = retry_with_backoff(irm_contract.functions.borrowRateView(market_params, market).call)
+
+            seconds_per_year = 31536000
+            utilization = market.totalBorrowAssets / market.totalSupplyAssets
+
+            borrow_apy_raw = math.exp(borrow_rate * seconds_per_year / 1e18) - 1
+            supply_apy_raw = borrow_apy_raw * utilization * (1 - (market.fee / 1e18))
+
+            current_supply_apys.append(int(supply_apy_raw * int(1e18)))
+
+            # calculate current assets allocated to the market
+            position = retry_with_backoff(self._morpho_contract.functions.position(market_id, self.contract_address).call)
+            allocated_assets_raw = self.shares_to_assets_down(
+                position.supplyShares, market.totalSupplyAssets, market.totalSupplyShares
+            )
+            scaled_allocated_assets = ((allocated_assets_raw) * int(1e18)) // int(10**asset_decimals)
+            current_assets.append(scaled_allocated_assets)
+
+        curr_agg_apy = sum([wei_mul(current_assets[i], current_supply_apys[i]) for i in range(supply_queue_length)]) / sum(
+            current_assets
+        )
+
+        return int((wei_mul(curr_agg_apy, scaled_curr_assets) / (scaled_curr_assets + total_asset_delta)) * (int(1e36)))
 
 
 def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
