@@ -289,6 +289,8 @@ class PoolFactory:
                 return DaiSavingsRate(**kwargs)
             case POOL_TYPES.COMPOUND_V3:
                 return CompoundV3Pool(**kwargs)
+            case POOL_TYPES.MORPHO:
+                return MorphoVault(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
@@ -814,6 +816,7 @@ class MorphoVault(ChainBasedPoolModel):
     _irm_abi: str = PrivateAttr()
     _decimals: int = PrivateAttr()
     _DECIMALS_OFFSET: int = PrivateAttr()
+    _irm_contracts: dict = PrivateAttr(default={})
 
     _VIRTUAL_SHARES: ClassVar[int] = 1e6
     _VIRTUAL_ASSETS: ClassVar[int] = 1
@@ -860,6 +863,20 @@ class MorphoVault(ChainBasedPoolModel):
         if not self._initted:
             self.pool_init(web3_provider)
 
+        supply_queue_length = retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
+        market_ids = [
+            retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
+        ]
+
+        # get irm contracts
+        for market_id in market_ids:
+            # calculate current supply apy
+            market_params = retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
+            irm_address = market_params.irm
+            irm_contract_raw = web3_provider.eth.contract(abi=self._irm_abi, decode_tuples=True)
+            irm_contract = retry_with_backoff(irm_contract_raw, address=irm_address)
+            self._irm_contracts[market_id] = irm_contract
+
     @classmethod
     def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
         return (assets * (total_shares + cls._VIRTUAL_SHARES)) // (total_assets + cls._VIRTUAL_ASSETS)
@@ -870,7 +887,9 @@ class MorphoVault(ChainBasedPoolModel):
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, user_addr: str, web3_provider: Web3, amount: int) -> int:
+    def supply_rate(self, amount: int) -> int:
+
+        user_addr = self.user_address
         supply_queue_length = retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
         market_ids = [
             retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
@@ -882,7 +901,7 @@ class MorphoVault(ChainBasedPoolModel):
         asset_decimals = self._decimals - self._DECIMALS_OFFSET
         scaled_curr_assets = ((curr_assets) * int(1e18)) // int(10**asset_decimals)
         scaled_user_assets = ((curr_user_assets) * int(1e18)) // int(10**asset_decimals)
-        total_asset_delta =  amount - scaled_user_assets
+        total_asset_delta = amount - scaled_user_assets
 
         # apys in each market
         current_supply_apys = []
@@ -894,15 +913,14 @@ class MorphoVault(ChainBasedPoolModel):
             # calculate current supply apy
             market = retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
             market_params = retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
-            irm_address = market_params.irm
+            irm_contract = self._irm_contracts[market_id]
+            irm_address = irm_contract.address
 
             if irm_address == ADDRESS_ZERO:
                 current_supply_apys.append(0)
                 current_assets.append(0)
                 continue
 
-            irm_contract_raw = web3_provider.eth.contract(abi=self._irm_abi, decode_tuples=True)
-            irm_contract = retry_with_backoff(irm_contract_raw, address=irm_address)
             borrow_rate = retry_with_backoff(irm_contract.functions.borrowRateView(market_params, market).call)
 
             seconds_per_year = 31536000

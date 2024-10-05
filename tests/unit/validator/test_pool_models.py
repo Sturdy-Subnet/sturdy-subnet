@@ -532,7 +532,7 @@ class TestMorphoVault(unittest.TestCase):
         self.assertTrue(isinstance(pool._DECIMALS_OFFSET, int))
 
         # check pool supply_rate
-        print(pool.supply_rate(self.user_address, self.w3, 0))
+        print(pool.supply_rate(0))
 
     def test_supply_rate_increase_alloc(self) -> None:
         print("----==== test_supply_rate_increase_alloc ====----")
@@ -549,11 +549,11 @@ class TestMorphoVault(unittest.TestCase):
         current_balance = retry_with_backoff(pool._vault_contract.functions.convertToAssets(curr_user_shares).call)
         new_balance = current_balance + int(1000000e6)
 
-        apy_before = pool.supply_rate(self.user_address, self.w3, current_balance)
+        apy_before = pool.supply_rate(current_balance)
         print(f"apy before supplying: {apy_before}")
 
         # calculate predicted future supply rate after supplying 1000000 USDC
-        apy_after = pool.supply_rate(self.user_address, self.w3, new_balance)
+        apy_after = pool.supply_rate(new_balance)
         print(f"apy after supplying 1000000 USDC: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertLess(apy_after, apy_before)
@@ -573,11 +573,11 @@ class TestMorphoVault(unittest.TestCase):
         current_balance = retry_with_backoff(pool._vault_contract.functions.convertToAssets(curr_user_shares).call)
         new_balance = current_balance - int(1000000e6)
 
-        apy_before = pool.supply_rate(self.user_address, self.w3, current_balance)
+        apy_before = pool.supply_rate(current_balance)
         print(f"apy before supplying: {apy_before}")
 
         # calculate predicted future supply rate after removing 1000000 USDC
-        apy_after = pool.supply_rate(self.user_address, self.w3, new_balance)
+        apy_after = pool.supply_rate(new_balance)
         print(f"apy after removing 1000000 USDC: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertGreater(apy_after, apy_before)
