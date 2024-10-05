@@ -882,7 +882,7 @@ class MorphoVault(ChainBasedPoolModel):
         asset_decimals = self._decimals - self._DECIMALS_OFFSET
         scaled_curr_assets = ((curr_assets) * int(1e18)) // int(10**asset_decimals)
         scaled_user_assets = ((curr_user_assets) * int(1e18)) // int(10**asset_decimals)
-        total_asset_delta = scaled_user_assets - amount
+        total_asset_delta =  amount - scaled_user_assets
 
         # apys in each market
         current_supply_apys = []

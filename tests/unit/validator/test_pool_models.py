@@ -13,7 +13,7 @@ from sturdy.pools import (
     CompoundV3Pool,
     DaiSavingsRate,
     VariableInterestSturdySiloStrategy,
-    MorphoVault
+    MorphoVault,
 )
 from sturdy.utils.misc import retry_with_backoff
 
@@ -534,51 +534,53 @@ class TestMorphoVault(unittest.TestCase):
         # check pool supply_rate
         print(pool.supply_rate(self.user_address, self.w3, 0))
 
-    # def test_supply_rate_increase_alloc(self) -> None:
-    #     print("----==== test_supply_rate_increase_alloc ====----")
+    def test_supply_rate_increase_alloc(self) -> None:
+        print("----==== test_supply_rate_increase_alloc ====----")
 
-    #     pool = CompoundV3Pool(
-    #         contract_address=self.ctoken_address,
-    #         user_address=self.user_address,
-    #     )  # type: ignore[]
+        pool = MorphoVault(
+            contract_address=self.vault_address,
+            user_address=self.user_address,
+        )  # type: ignore[]
 
-    #     pool.sync(self.w3)
+        pool.sync(self.w3)
 
-    #     # get current balance of the user
-    #     current_balance = pool._ctoken_contract.functions.balanceOf(self.user_address).call()
-    #     new_balance = current_balance + int(1000000e6)
+        # get current balance of the user
+        curr_user_shares = retry_with_backoff(pool._vault_contract.functions.balanceOf(self.user_address).call)
+        current_balance = retry_with_backoff(pool._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        new_balance = current_balance + int(1000000e6)
 
-    #     apy_before = pool.supply_rate(current_balance)
-    #     print(f"apy before supplying: {apy_before}")
+        apy_before = pool.supply_rate(self.user_address, self.w3, current_balance)
+        print(f"apy before supplying: {apy_before}")
 
-    #     # calculate predicted future supply rate after supplying 1000000 USDC
-    #     apy_after = pool.supply_rate(new_balance)
-    #     print(f"apy after supplying 1000000 USDC: {apy_after}")
-    #     self.assertNotEqual(apy_after, 0)
-    #     self.assertLess(apy_after, apy_before)
+        # calculate predicted future supply rate after supplying 1000000 USDC
+        apy_after = pool.supply_rate(self.user_address, self.w3, new_balance)
+        print(f"apy after supplying 1000000 USDC: {apy_after}")
+        self.assertNotEqual(apy_after, 0)
+        self.assertLess(apy_after, apy_before)
 
-    # def test_supply_rate_decrease_alloc(self) -> None:
-    #     print("----==== test_supply_rate_decrease_alloc ====----")
+    def test_supply_rate_decrease_alloc(self) -> None:
+        print("----==== test_supply_rate_decrease_alloc ====----")
 
-    #     pool = CompoundV3Pool(
-    #         contract_address=self.ctoken_address,
-    #         user_address=self.user_address,
-    #     )  # type: ignore[]
+        pool = MorphoVault(
+            contract_address=self.vault_address,
+            user_address=self.user_address,
+        )  # type: ignore[]
 
-    #     pool.sync(self.w3)
+        pool.sync(self.w3)
 
-    #     # get current balance of the user
-    #     current_balance = pool._ctoken_contract.functions.balanceOf(self.user_address).call()
-    #     new_balance = current_balance - int(1000000e6)
+        # get current balance of the user
+        curr_user_shares = retry_with_backoff(pool._vault_contract.functions.balanceOf(self.user_address).call)
+        current_balance = retry_with_backoff(pool._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        new_balance = current_balance - int(1000000e6)
 
-    #     apy_before = pool.supply_rate(current_balance)
-    #     print(f"apy before supplying: {apy_before}")
+        apy_before = pool.supply_rate(self.user_address, self.w3, current_balance)
+        print(f"apy before supplying: {apy_before}")
 
-    #     # calculate predicted future supply rate after removing 1000000 USDC
-    #     apy_after = pool.supply_rate(new_balance)
-    #     print(f"apy after removing 1000000 USDC: {apy_after}")
-    #     self.assertNotEqual(apy_after, 0)
-    #     self.assertGreater(apy_after, apy_before)
+        # calculate predicted future supply rate after removing 1000000 USDC
+        apy_after = pool.supply_rate(self.user_address, self.w3, new_balance)
+        print(f"apy after removing 1000000 USDC: {apy_after}")
+        self.assertNotEqual(apy_after, 0)
+        self.assertGreater(apy_after, apy_before)
 
 
 if __name__ == "__main__":
