@@ -11,6 +11,7 @@ from sturdy.pools import (
     CompoundV3Pool,
     DaiSavingsRate,
     VariableInterestSturdySiloStrategy,
+    get_minimum_allocation,
 )
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 
@@ -57,29 +58,21 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
             case _:
                 pass
 
-    # check the amounts that have been borrowed from the pools - and account for them
+     # check the amounts that have been borrowed from the pools - and account for them
     minimums = {}
     for pool_uid, pool in pools.items():
-        match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                minimums[pool_uid] = pool._totalBorrow
-            case POOL_TYPES.AAVE:
-                minimums[pool_uid] = pool._nextTotalStableDebt + pool._totalVariableDebt
-            case POOL_TYPES.COMPOUND_V3:
-                minimums[pool_uid] = pool._total_borrow
-            case POOL_TYPES.SYNTHETIC:
-                minimums[pool_uid] = pool.borrow_amount
-            case _:
-                # we assume this is fine for default case
-                minimums[pool_uid] = total_assets_available // len(pools)
+        minimums[pool_uid] = get_minimum_allocation(pool)
 
     total_assets_available -= sum(minimums.values())
-    balance = int(total_assets_available)
-    # obtain supply rates of pools - aave pool and sturdy silo
+    balance = int(total_assets_available)    # obtain supply rates of pools - aave pool and sturdy silo
     # rates are determined by making on chain calls to smart contracts
     for pool in pools.values():
         match pool.pool_type:
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.COMPOUND_V3, POOL_TYPES.AAVE):
+            case POOL_TYPES.AAVE:
+                apy = pool.supply_rate(synapse.user_address, balance // len(pools))  # type: ignore[]
+                supply_rates[pool.contract_address] = apy
+                supply_rate_sum += apy
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.COMPOUND_V3, POOL_TYPES.MORPHO):
                 apy = pool.supply_rate(balance // len(pools))  # type: ignore[]
                 supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy

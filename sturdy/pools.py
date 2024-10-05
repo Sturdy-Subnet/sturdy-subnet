@@ -52,6 +52,38 @@ class POOL_TYPES(IntEnum):
     MORPHO = 5
 
 
+def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
+    borrow_amount = 0
+    our_supply = 0
+    assets_available = 0
+    match pool.pool_type:
+        case POOL_TYPES.STURDY_SILO:
+            borrow_amount = pool._totalBorrow
+            our_supply = pool._curr_deposit_amount
+            assets_available = pool._totalAssets - borrow_amount
+        case POOL_TYPES.AAVE:
+            # borrow amount for aave pools is total_stable_debt + total_variable_debt
+            borrow_amount = ((pool._nextTotalStableDebt * int(1e18)) // int(10**pool._decimals)) + (
+                (pool._totalVariableDebt * int(1e18)) // int(10**pool._decimals)
+            )
+            our_supply = pool._scaled_collateral_amount
+            assets_available = ((pool._total_supplied * int(1e18)) // int(10**pool._decimals)) - borrow_amount
+        case POOL_TYPES.COMPOUND_V3:
+            borrow_amount = pool._total_borrow
+            our_supply = pool._deposit_amount
+            assets_available = pool._total_supply - borrow_amount
+        case POOL_TYPES.MORPHO:
+            borrow_amount = pool._scaled_curr_borrows
+            our_supply = pool._scaled_user_assets
+            assets_available = pool._scaled_curr_assets - borrow_amount
+        case POOL_TYPES.DAI_SAVINGS:
+            pass  # TODO: is there a more appropriate way to go about this?
+        case _:  # we assume it is a synthetic pool
+            borrow_amount = pool.borrow_amount
+
+    return 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
+
+
 def check_allocations(
     assets_and_pools: dict,
     allocations: dict[str, int],
@@ -102,31 +134,7 @@ def check_allocations(
     # check if allocations are above the borrow amounts
     for pool_uid, pool in pools.items():
         allocation = allocations.get(pool_uid, 0)
-        borrow_amount = 0
-        our_supply = 0
-        assets_available = 0
-        match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                borrow_amount = pool._totalBorrow
-                our_supply = pool._curr_deposit_amount
-                assets_available = pool._totalAssets - borrow_amount
-            case POOL_TYPES.AAVE:
-                # borrow amount for aave pools is total_stable_debt + total_variable_debt
-                borrow_amount = ((pool._nextTotalStableDebt * int(1e18)) // int(10**pool._decimals)) + (
-                    (pool._totalVariableDebt * int(1e18)) // int(10**pool._decimals)
-                )
-                our_supply = pool._scaled_collateral_amount
-                assets_available = ((pool._total_supplied * int(1e18)) // int(10**pool._decimals)) - borrow_amount
-            case POOL_TYPES.COMPOUND_V3:
-                borrow_amount = pool._total_borrow
-                our_supply = pool._deposit_amount
-                assets_available = pool._total_supply - borrow_amount
-            case POOL_TYPES.DAI_SAVINGS:
-                pass  # TODO: is there a more appropriate way to go about this?
-            case _:  # we assume it is a synthetic pool
-                borrow_amount = pool.borrow_amount
-
-        min_alloc = 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
+        min_alloc = get_minimum_allocation(pool)
 
         if allocation < min_alloc:
             return False
@@ -333,7 +341,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 
     def pool_init(self, web3_provider: Web3) -> None:
         try:
-            assert web3_provider.is_connected()  # noqa: S101
+            assert web3_provider.is_connected()
         except Exception as err:
             bt.logging.error("Failed to connect to Web3 instance!")
             bt.logging.error(err)  # type: ignore[]
@@ -531,7 +539,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
 
     def pool_init(self, user_addr: str, web3_provider: Web3) -> None:  # noqa: ARG002
         try:
-            assert web3_provider.is_connected()  # noqa: S101
+            assert web3_provider.is_connected()
         except Exception as err:
             bt.logging.error("Failed to connect to Web3 instance!")
             bt.logging.error(err)  # type: ignore[]
@@ -816,7 +824,12 @@ class MorphoVault(ChainBasedPoolModel):
     _irm_abi: str = PrivateAttr()
     _decimals: int = PrivateAttr()
     _DECIMALS_OFFSET: int = PrivateAttr()
+    # TODO: update unit tests to check these :^)
     _irm_contracts: dict = PrivateAttr(default={})
+    _scaled_curr_assets: int = PrivateAttr()
+    _scaled_user_assets: int = PrivateAttr()
+    _scaled_curr_borrows: int = PrivateAttr()
+    _asset_decimals: int = PrivateAttr()
 
     _VIRTUAL_SHARES: ClassVar[int] = 1e6
     _VIRTUAL_ASSETS: ClassVar[int] = 1
@@ -851,6 +864,7 @@ class MorphoVault(ChainBasedPoolModel):
 
         self._decimals = retry_with_backoff(self._vault_contract.functions.decimals().call)
         self._DECIMALS_OFFSET = retry_with_backoff(self._vault_contract.functions.DECIMALS_OFFSET().call)
+        self._asset_decimals = self._decimals - self._DECIMALS_OFFSET
 
         irm_abi_file_path = Path(__file__).parent / "abi/AdaptiveCurveIrm.json"
         irm_abi_file = irm_abi_file_path.open()
@@ -868,14 +882,27 @@ class MorphoVault(ChainBasedPoolModel):
             retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
         ]
 
-        # get irm contracts
+        total_scaled_borrows = 0
+        # get irm contracts and borrows
         for market_id in market_ids:
             # calculate current supply apy
+            # TODO: can we make this more efficient by making this not be called twice?
+            market = retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
             market_params = retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
             irm_address = market_params.irm
             irm_contract_raw = web3_provider.eth.contract(abi=self._irm_abi, decode_tuples=True)
             irm_contract = retry_with_backoff(irm_contract_raw, address=irm_address)
             self._irm_contracts[market_id] = irm_contract
+
+            scaled_borrow = (market.totalBorrowAssets * int(1e18)) // int(10**self._asset_decimals)
+            total_scaled_borrows += scaled_borrow
+
+        curr_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
+        curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
+        curr_user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        self._scaled_curr_assets = ((curr_assets) * int(1e18)) // int(10**self._asset_decimals)
+        self._scaled_user_assets = ((curr_user_assets) * int(1e18)) // int(10**self._asset_decimals)
+        self._scaled_curr_borrows = ((curr_assets) * int(1e18)) // int(10**self._asset_decimals)
 
     @classmethod
     def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
@@ -888,20 +915,12 @@ class MorphoVault(ChainBasedPoolModel):
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: int) -> int:
-
-        user_addr = self.user_address
         supply_queue_length = retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
         market_ids = [
             retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
         ]
 
-        curr_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
-        curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(user_addr).call)
-        curr_user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
-        asset_decimals = self._decimals - self._DECIMALS_OFFSET
-        scaled_curr_assets = ((curr_assets) * int(1e18)) // int(10**asset_decimals)
-        scaled_user_assets = ((curr_user_assets) * int(1e18)) // int(10**asset_decimals)
-        total_asset_delta = amount - scaled_user_assets
+        total_asset_delta = amount - self._scaled_user_assets
 
         # apys in each market
         current_supply_apys = []
@@ -936,14 +955,16 @@ class MorphoVault(ChainBasedPoolModel):
             allocated_assets_raw = self.shares_to_assets_down(
                 position.supplyShares, market.totalSupplyAssets, market.totalSupplyShares
             )
-            scaled_allocated_assets = ((allocated_assets_raw) * int(1e18)) // int(10**asset_decimals)
+            scaled_allocated_assets = ((allocated_assets_raw) * int(1e18)) // int(10**self._asset_decimals)
             current_assets.append(scaled_allocated_assets)
 
         curr_agg_apy = sum([wei_mul(current_assets[i], current_supply_apys[i]) for i in range(supply_queue_length)]) / sum(
             current_assets
         )
 
-        return int((wei_mul(curr_agg_apy, scaled_curr_assets) / (scaled_curr_assets + total_asset_delta)) * (int(1e36)))
+        return int(
+            (wei_mul(curr_agg_apy, self._scaled_curr_assets) / (self._scaled_curr_assets + total_asset_delta)) * (int(1e36))
+        )
 
 
 def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:

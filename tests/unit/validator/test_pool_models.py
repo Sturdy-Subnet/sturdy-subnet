@@ -12,8 +12,8 @@ from sturdy.pools import (
     AaveV3DefaultInterestRatePool,
     CompoundV3Pool,
     DaiSavingsRate,
-    VariableInterestSturdySiloStrategy,
     MorphoVault,
+    VariableInterestSturdySiloStrategy,
 )
 from sturdy.utils.misc import retry_with_backoff
 
@@ -531,8 +531,20 @@ class TestMorphoVault(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_DECIMALS_OFFSET"))
         self.assertTrue(isinstance(pool._DECIMALS_OFFSET, int))
 
+        self.assertTrue(hasattr(pool, "_scaled_user_assets"))
+        self.assertTrue(isinstance(pool._scaled_user_assets, int))
+
+        self.assertTrue(hasattr(pool, "_scaled_curr_borrows"))
+        self.assertTrue(isinstance(pool._scaled_curr_borrows, int))
+
+        self.assertTrue(hasattr(pool, "_asset_decimals"))
+        self.assertTrue(isinstance(pool._asset_decimals, int))
+
         # check pool supply_rate
         print(pool.supply_rate(0))
+
+        self.assertTrue(hasattr(pool, "_irm_contracts"))
+        self.assertTrue(isinstance(pool._irm_contracts, dict))
 
     def test_supply_rate_increase_alloc(self) -> None:
         print("----==== test_supply_rate_increase_alloc ====----")
