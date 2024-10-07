@@ -248,7 +248,7 @@ And the corresponding response(example) format from the subnet:
     "request_uuid":"1e09d3f1ce574921bd13a2461607f5fe",
     "allocations":{
         "1":{ # miner uid
-            "apy":62133011236204113, # apy of miner's allocations in wei. 
+            "apy":62133011236204113, # apy of miner's allocations in 18 decimal precision because the asset has the same precision. 
             "allocations":{ # allocations to pools in wei
                 "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":114864688949643874140160,
                 "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":1109027125282399872,
