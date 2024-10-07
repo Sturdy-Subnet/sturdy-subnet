@@ -229,7 +229,7 @@ class TestRewardFunctions(unittest.TestCase):
         result = check_allocations(assets_and_pools, allocations)
         self.assertTrue(result)
 
-    def test_check_allocations_valid_compound(self) -> None:
+    def test_check_allocations_compound(self) -> None:
         A = "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
         # assuming block # is: 20233401
         allocations = {A: int(5e26)}
@@ -274,6 +274,56 @@ class TestRewardFunctions(unittest.TestCase):
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._total_borrow = int(97e14)
         pool_a._deposit_amount = int(1e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertTrue(result)
+
+    def test_check_allocations_morpho(self) -> None:
+        A = "0xd63070114470f685b75B74D60EEc7c1113d33a3D"
+        # assuming block # is: 20233401
+        allocations = {A: 0}
+        assets_and_pools = {
+            "total_assets": int(200e14),
+            "pools": {
+                A: MorphoVault(
+                    user_address=ADDRESS_ZERO,
+                    contract_address=A,
+                ),
+            },
+        }
+
+        pool_a: MorphoVault = assets_and_pools["pools"][A]
+        pool_a.sync(self.w3)
+
+        # case: borrow_amount <= assets_available, deposit_amount < assets_available
+        pool_a._total_assets = int(100e14)
+        pool_a._curr_borrows = int(10e14)
+        pool_a._user_assets = int(5e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertTrue(result)
+
+        # case: borrow_amount > assets_available, deposit_amount >= assets_available
+        pool_a._curr_borrows = int(97e14)
+        pool_a._user_assets = int(5e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertFalse(result)
+
+        # should return True
+        pool_a._curr_borrows = int(97e14)
+        pool_a._user_assets = int(5e14)
+        allocations[A] = int(4e14)
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertTrue(result)
+
+        # case: borrow_amount > assets_available, deposit_amount < assets_available
+        pool_a._curr_borrows = int(97e14)
+        pool_a._user_assets = int(1e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations)

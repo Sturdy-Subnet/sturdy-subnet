@@ -531,14 +531,15 @@ class TestMorphoVault(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_DECIMALS_OFFSET"))
         self.assertTrue(isinstance(pool._DECIMALS_OFFSET, int))
 
-        self.assertTrue(hasattr(pool, "_scaled_user_assets"))
-        self.assertTrue(isinstance(pool._scaled_user_assets, int))
-
-        self.assertTrue(hasattr(pool, "_scaled_curr_borrows"))
-        self.assertTrue(isinstance(pool._scaled_curr_borrows, int))
-
         self.assertTrue(hasattr(pool, "_asset_decimals"))
         self.assertTrue(isinstance(pool._asset_decimals, int))
+
+        self.assertTrue(hasattr(pool, "_total_assets"))
+        self.assertTrue(isinstance(pool._total_assets, int))
+        self.assertTrue(hasattr(pool, "_user_assets"))
+        self.assertTrue(isinstance(pool._user_assets, int))
+        self.assertTrue(hasattr(pool, "_curr_borrows"))
+        self.assertTrue(isinstance(pool._curr_borrows, int))
 
         # check pool supply_rate
         print(pool.supply_rate(0))

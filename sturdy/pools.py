@@ -73,9 +73,9 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
             our_supply = pool._deposit_amount
             assets_available = pool._total_supply - borrow_amount
         case POOL_TYPES.MORPHO:
-            borrow_amount = pool._scaled_curr_borrows
-            our_supply = pool._scaled_user_assets
-            assets_available = pool._scaled_curr_assets - borrow_amount
+            borrow_amount = pool._curr_borrows
+            our_supply = pool._user_assets
+            assets_available = pool._total_assets - borrow_amount
         case POOL_TYPES.DAI_SAVINGS:
             pass  # TODO: is there a more appropriate way to go about this?
         case _:  # we assume it is a synthetic pool
@@ -826,9 +826,9 @@ class MorphoVault(ChainBasedPoolModel):
     _DECIMALS_OFFSET: int = PrivateAttr()
     # TODO: update unit tests to check these :^)
     _irm_contracts: dict = PrivateAttr(default={})
-    _scaled_curr_assets: int = PrivateAttr()
-    _scaled_user_assets: int = PrivateAttr()
-    _scaled_curr_borrows: int = PrivateAttr()
+    _total_assets: int = PrivateAttr()
+    _user_assets: int = PrivateAttr()
+    _curr_borrows: int = PrivateAttr()
     _asset_decimals: int = PrivateAttr()
 
     _VIRTUAL_SHARES: ClassVar[int] = 1e6
@@ -882,7 +882,7 @@ class MorphoVault(ChainBasedPoolModel):
             retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
         ]
 
-        total_scaled_borrows = 0
+        total_borrows = 0
         # get irm contracts and borrows
         for market_id in market_ids:
             # calculate current supply apy
@@ -894,15 +894,12 @@ class MorphoVault(ChainBasedPoolModel):
             irm_contract = retry_with_backoff(irm_contract_raw, address=irm_address)
             self._irm_contracts[market_id] = irm_contract
 
-            scaled_borrow = (market.totalBorrowAssets * int(1e18)) // int(10**self._asset_decimals)
-            total_scaled_borrows += scaled_borrow
+            total_borrows += market.totalBorrowAssets
 
-        curr_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
+        self._total_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
         curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
-        curr_user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
-        self._scaled_curr_assets = ((curr_assets) * int(1e18)) // int(10**self._asset_decimals)
-        self._scaled_user_assets = ((curr_user_assets) * int(1e18)) // int(10**self._asset_decimals)
-        self._scaled_curr_borrows = ((curr_assets) * int(1e18)) // int(10**self._asset_decimals)
+        self._user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        self._curr_borrows = total_borrows
 
     @classmethod
     def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
@@ -920,7 +917,7 @@ class MorphoVault(ChainBasedPoolModel):
             retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
         ]
 
-        total_asset_delta = amount - self._scaled_user_assets
+        total_asset_delta = amount - self._user_assets
 
         # apys in each market
         current_supply_apys = []
@@ -948,22 +945,22 @@ class MorphoVault(ChainBasedPoolModel):
             borrow_apy_raw = math.exp(borrow_rate * seconds_per_year / 1e18) - 1
             supply_apy_raw = borrow_apy_raw * utilization * (1 - (market.fee / 1e18))
 
-            current_supply_apys.append(int(supply_apy_raw * int(1e18)))
+            current_supply_apys.append(int(supply_apy_raw * 1e18))
 
             # calculate current assets allocated to the market
             position = retry_with_backoff(self._morpho_contract.functions.position(market_id, self.contract_address).call)
-            allocated_assets_raw = self.shares_to_assets_down(
+            allocated_assets = self.shares_to_assets_down(
                 position.supplyShares, market.totalSupplyAssets, market.totalSupplyShares
             )
-            scaled_allocated_assets = ((allocated_assets_raw) * int(1e18)) // int(10**self._asset_decimals)
-            current_assets.append(scaled_allocated_assets)
+            current_assets.append(allocated_assets)
 
-        curr_agg_apy = sum([wei_mul(current_assets[i], current_supply_apys[i]) for i in range(supply_queue_length)]) / sum(
-            current_assets
-        )
+        curr_agg_apy = sum(
+            [(current_assets[i] * current_supply_apys[i]) // int(10**self._asset_decimals) for i in range(supply_queue_length)]
+        ) / sum(current_assets)
 
         return int(
-            (wei_mul(curr_agg_apy, self._scaled_curr_assets) / (self._scaled_curr_assets + total_asset_delta)) * (int(1e36))
+            (wei_mul(curr_agg_apy, self._total_assets) / (self._total_assets + total_asset_delta))
+            * 10 ** (self._asset_decimals * 2)
         )
 
 
