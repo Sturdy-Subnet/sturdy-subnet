@@ -196,7 +196,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._total_supplied = int(100e6)
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(10e6)
-        pool_a._scaled_collateral_amount = int(5e18)
+        pool_a._collateral_amount = int(5e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations)
@@ -205,7 +205,7 @@ class TestRewardFunctions(unittest.TestCase):
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._scaled_collateral_amount = int(5e18)
+        pool_a._collateral_amount = int(5e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations)
@@ -214,7 +214,7 @@ class TestRewardFunctions(unittest.TestCase):
         # should return True
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._scaled_collateral_amount = int(5e18)
+        pool_a._collateral_amount = int(5e18)
         allocations[A] = int(4e18)
 
         result = check_allocations(assets_and_pools, allocations)
@@ -223,7 +223,7 @@ class TestRewardFunctions(unittest.TestCase):
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._scaled_collateral_amount = int(1e18)
+        pool_a._collateral_amount = int(1e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations)

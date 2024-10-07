@@ -66,7 +66,7 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
             borrow_amount = ((pool._nextTotalStableDebt * int(1e18)) // int(10**pool._decimals)) + (
                 (pool._totalVariableDebt * int(1e18)) // int(10**pool._decimals)
             )
-            our_supply = pool._scaled_collateral_amount
+            our_supply = pool._collateral_amount
             assets_available = ((pool._total_supplied * int(1e18)) // int(10**pool._decimals)) - borrow_amount
         case POOL_TYPES.COMPOUND_V3:
             borrow_amount = pool._total_borrow
@@ -320,7 +320,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _totalVariableDebt = PrivateAttr()
     _reserveFactor = PrivateAttr()
     _collateral_amount: int = PrivateAttr()
-    _scaled_collateral_amount: int = PrivateAttr()
+    _collateral_amount: int = PrivateAttr()
     _total_supplied: int = PrivateAttr()
     _decimals: int = PrivateAttr()
 
@@ -466,9 +466,6 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             self._collateral_amount = retry_with_backoff(
                 self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(user_addr)).call
             )
-            self._scaled_collateral_amount = int(
-                self._collateral_amount * 10**self._decimals // 1e18,
-            )
 
         except Exception as err:
             bt.logging.error("Failed to sync to chain!")
@@ -479,7 +476,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
-            already_deposited = self._scaled_collateral_amount
+            already_deposited = self._collateral_amount
             delta = amount - already_deposited
             to_deposit = max(0, delta)
             to_remove = abs(delta) if delta < 0 else 0
@@ -601,8 +598,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
-        scaledAmount = (amount * int(10**self._decimals)) // int(1e18)
-        delta = scaledAmount - self._curr_deposit_amount
+        delta = amount - self._curr_deposit_amount
 
         """Returns supply rate given new deposit amount"""
         util_rate = int((self._util_prec * self._totalBorrow) // (self._totalAssets + delta))
@@ -715,11 +711,10 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
     def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
-        scaledAmount = (amount * int(10**self._base_decimals)) // int(1e18)
         # get pool supply rate (base token)
         already_in_pool = self._deposit_amount
 
-        delta = scaledAmount - already_in_pool
+        delta = amount - already_in_pool
         new_supply = self._total_supply + delta
         current_borrows = self._total_borrow
 
