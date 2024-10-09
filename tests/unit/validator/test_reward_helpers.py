@@ -39,7 +39,7 @@ class TestRewardFunctions(unittest.TestCase):
     def test_check_allocations_valid(self) -> None:
         allocations = {ADDRESS_ZERO: int(5e18), BEEF: int(3e18)}
         assets_and_pools = {
-            "total_assets": int(10e18),
+            "total_assets": int(8e18),
             "pools": {
                 ADDRESS_ZERO: BasePool(
                     contract_address=ADDRESS_ZERO,
@@ -95,7 +95,36 @@ class TestRewardFunctions(unittest.TestCase):
         self.assertFalse(result)
 
     def test_check_allocations_below_borrow(self) -> None:
-        allocations = {ADDRESS_ZERO: int(10e18), BEEF: int(3e18)}
+        allocations = {ADDRESS_ZERO: int(1e18), BEEF: 0}
+        assets_and_pools = {
+            "total_assets": int(10e18),
+            "pools": {
+                ADDRESS_ZERO: BasePool(
+                    contract_address=ADDRESS_ZERO,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(2e18),
+                    reserve_size=0,
+                ),
+                BEEF: BasePool(
+                    contract_address=BEEF,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(1e18),
+                    reserve_size=0,
+                ),
+            },
+        }
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertFalse(result)
+
+    def test_check_allocations_below_alloc_threshold(self) -> None:
+        allocations = {ADDRESS_ZERO: int(4e18), BEEF: int(4e18)}
         assets_and_pools = {
             "total_assets": int(10e18),
             "pools": {
@@ -147,7 +176,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._curr_deposit_amount = int(5e23)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
@@ -163,7 +192,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._curr_deposit_amount = int(5e23)
         allocations[A] = int(4e23)
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
@@ -171,7 +200,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._curr_deposit_amount = int(1e23)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
     def test_check_allocations_aave(self) -> None:
@@ -199,7 +228,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._collateral_amount = int(5e18)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
@@ -208,7 +237,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._collateral_amount = int(5e18)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertFalse(result)
 
         # should return True
@@ -217,7 +246,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._collateral_amount = int(5e18)
         allocations[A] = int(4e18)
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
@@ -226,7 +255,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._collateral_amount = int(1e18)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
     def test_check_allocations_compound(self) -> None:
@@ -252,7 +281,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._deposit_amount = int(5e14)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
@@ -260,7 +289,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._deposit_amount = int(5e14)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertFalse(result)
 
         # should return True
@@ -268,7 +297,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._deposit_amount = int(5e14)
         allocations[A] = int(4e26)
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
@@ -276,7 +305,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._deposit_amount = int(1e14)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
     def test_check_allocations_morpho(self) -> None:
@@ -302,7 +331,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._user_assets = int(5e14)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
@@ -310,7 +339,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._user_assets = int(5e14)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertFalse(result)
 
         # should return True
@@ -318,7 +347,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._user_assets = int(5e14)
         allocations[A] = int(4e14)
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
@@ -326,7 +355,7 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._user_assets = int(1e14)
         allocations[A] = 1
 
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
     def test_format_allocations(self) -> None:

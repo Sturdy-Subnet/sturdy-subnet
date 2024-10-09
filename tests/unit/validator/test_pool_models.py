@@ -66,6 +66,23 @@ class TestAavePool(unittest.TestCase):
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
+    @classmethod
+    def tearDownClass(cls) -> None:
+        # run this after tests to restore original forked state
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+        w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20892138,
+                    },
+                },
+            ],
+        )
+
     def setUp(self) -> None:
         self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
@@ -238,6 +255,24 @@ class TestSturdySiloStrategy(unittest.TestCase):
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        # run this after tests to restore original forked state
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+        w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20892138,
+                    },
+                },
+            ],
+        )
+
     def setUp(self) -> None:
         self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
@@ -315,6 +350,23 @@ class TestCompoundV3Pool(unittest.TestCase):
 
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        # run this after tests to restore original forked state
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+        w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20892138,
+                    },
+                },
+            ],
+        )
 
     def setUp(self) -> None:
         self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
@@ -432,6 +484,23 @@ class TestDaiSavingsRate(unittest.TestCase):
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
+    @classmethod
+    def tearDownClass(cls) -> None:
+        # run this after tests to restore original forked state
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+        w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20892138,
+                    },
+                },
+            ],
+        )
+
     def setUp(self) -> None:
         self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {self.snapshot_id}")
@@ -500,6 +569,23 @@ class TestMorphoVault(unittest.TestCase):
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
 
         print(f"snapshot id: {cls.snapshot_id}")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        # run this after tests to restore original forked state
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+        w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20892138,
+                    },
+                },
+            ],
+        )
 
     def setUp(self) -> None:
         self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
@@ -598,3 +684,4 @@ class TestMorphoVault(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -15,7 +15,6 @@ module.exports = {
         url: process.env.WEB3_PROVIDER_URL,
         // blockNumber: 20233401,
         // blockNumber: 20825292,
-        // TODO: figure out allocations issue
         // blockNumber: 20874859
         // latest
         blockNumber: 20892138

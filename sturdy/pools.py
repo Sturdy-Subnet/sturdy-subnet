@@ -87,6 +87,7 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
 def check_allocations(
     assets_and_pools: dict,
     allocations: dict[str, int],
+    alloc_threshold: float = TOTAL_ALLOC_THRESHOLD
 ) -> bool:
     """
     Checks allocations from miner.
@@ -110,6 +111,7 @@ def check_allocations(
 
     to_allocate = Decimal(str(to_allocate))
     total_allocated = Decimal(0)
+    total_assets = assets_and_pools["total_assets"]
 
     # Check allocations
     for allocation in allocations.values():
@@ -126,8 +128,8 @@ def check_allocations(
         if total_allocated > to_allocate:
             return False
 
-    # Ensure total allocated does not exceed the total assets
-    if total_allocated > to_allocate:
+    # Ensure total allocated does not exceed the total assets, and that most assets have been allocated
+    if total_allocated > to_allocate or total_allocated < int(alloc_threshold * total_assets):
         return False
 
     pools = assets_and_pools["pools"]
