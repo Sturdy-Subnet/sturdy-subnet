@@ -18,7 +18,6 @@
 
 import time
 from collections.abc import Callable
-from decimal import Decimal
 from functools import lru_cache, update_wrapper
 from math import floor
 from typing import Any
@@ -66,7 +65,7 @@ def retry_with_backoff(func, *args: Any, **kwargs: Any) -> Any:
         except Exception as e:
             if "Rate limited" in str(e):
                 delay = min(base_delay * 2**retries, max_delay)
-                jitter = np.random.uniform(delay / 2, delay * 1.5)  # noqa: NPY002
+                jitter = np.random.uniform(delay / 2, delay * 1.5)
                 time.sleep(jitter)
                 retries += 1
             else:

@@ -115,7 +115,7 @@ There are three core files.
     Validators can optionally run an API server and sell their bandwidth to outside users to send
     their own pools (organic requests) to the subnet. For more information on this process - please read
     [docs/validator.md](docs/validator.md)
-- **NOTE: Validators use units of [wei](https://www.alchemy.com/blog/what-is-wei) for handling some
+- **NOTE: Validators use large numbers ([by following the ERC20 `decimal` convention](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/e203e025234a102406c266d1e798ce1ba00b5d6d/contracts/token/ERC20/ERC20.sol#L65-L77)) for handling some
   pool parameters and miner allocations.**
 
 - The miners, after receiving these pools from validators, must then attempt to allocate the

@@ -104,23 +104,19 @@ class MockDendrite(bt.dendrite):
                 if process_time < timeout:
                     s.dendrite.process_time = str(time.time() - start_time)
                     # Update the status code and status message of the dendrite to match the axon
-                    # s.dummy_output = s.dummy_input * 2
                     s.dendrite.status_code = 200
                     s.dendrite.status_message = "OK"
                     synapse.dendrite.process_time = str(process_time)
 
                     if self.custom_allocs:
                         alloc_values = generate_array_with_sum(
-                            np.random,
-                            len(s.assets_and_pools["pools"]),
-                            s.assets_and_pools["total_assets"]
+                            np.random, len(s.assets_and_pools["pools"]), s.assets_and_pools["total_assets"]
                         )
                         contract_addrs = [pool.contract_address for pool in s.assets_and_pools["pools"].values()]
                         allocations = {contract_addrs[i]: alloc_values[i] for i in range(len(s.assets_and_pools["pools"]))}
 
                         s.allocations = allocations
                 else:
-                    # s.dummy_output = 0
                     s.dendrite.status_code = 408
                     s.dendrite.status_message = "Timeout"
                     synapse.dendrite.process_time = str(timeout)
@@ -128,8 +124,8 @@ class MockDendrite(bt.dendrite):
                 # Return the updated synapse object after deserializing if requested
                 if deserialize:
                     return s.deserialize()
-                else:
-                    return s
+
+                return s
 
             if isinstance(axons, bt.AxonInfo):
                 return await single_axon_response(0, axons)
