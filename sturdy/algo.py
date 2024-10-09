@@ -15,7 +15,7 @@ from sturdy.pools import (
 )
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 
-THRESHOLD = 0.98 # used to avoid over-allocations
+THRESHOLD = 0.99 # used to avoid over-allocations
 
 # NOTE: THIS IS JUST AN EXAMPLE - THIS IS NOT VERY OPTIMIZED
 def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
