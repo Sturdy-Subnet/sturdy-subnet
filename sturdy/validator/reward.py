@@ -97,7 +97,10 @@ def dynamic_normalize_zscore(rewards, z_threshold: float = 1.0, q: float = 0.25,
     # No upper bound, only clip the lower bound
     clipped_data = torch.clip(rewards, lower_bound)
 
-    return (clipped_data - clipped_data.min()) / (clipped_data.max() - clipped_data.min() + epsilon)
+    dynamic_normed = (clipped_data - clipped_data.min()) / (clipped_data.max() - clipped_data.min() + epsilon)
+    squared = torch.pow(dynamic_normed, 2)
+
+    return (squared - squared.min()) / (squared.max() - squared.min() + epsilon)
 
 
 def calculate_penalties(
