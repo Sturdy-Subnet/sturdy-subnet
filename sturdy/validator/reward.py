@@ -439,9 +439,12 @@ def get_rewards(
 
     sorted_axon_times = dict(sorted(axon_times.items(), key=lambda item: item[1]))
 
-    bt.logging.debug(f"sorted apys: {sorted_apys}")
-    bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
+    bt.logging.debug(f"sorted apys:\n{sorted_apys}")
+    bt.logging.debug(f"sorted axon times:\n{sorted_axon_times}")
     bt.logging.debug(f"sorted filtered allocs:\n{sorted_filtered_allocs}")
+
+    self.sorted_apys = sorted_apys
+    self.sorted_axon_times = sorted_axon_times
 
     # Get all the reward results by iteratively calling your reward() function.
     return (
