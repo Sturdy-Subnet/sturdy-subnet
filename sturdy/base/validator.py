@@ -82,6 +82,8 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info("Building validation weights.")
         self.scores = torch.zeros(self.metagraph.n, dtype=torch.float32, device=self.device)
         self.similarity_penalties = {}
+        self.sorted_apys = {}
+        self.sorted_axon_times = {}
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -190,8 +192,16 @@ class BaseValidatorNeuron(BaseNeuron):
                             sim_penalties = {
                                 f"similarity_penalties/uid_{uid}": score for uid, score in self.similarity_penalties.items()
                             }
+                            apys = {
+                                f"apys/uid_{uid}": apy for uid, apy in self.sorted_apys.items()
+                            }
+                            axon_times = {
+                                f"axon_times/uid_{uid}": axon_time for uid, axon_time in self.sorted_axon_times.items()
+                            }
                             metrics_to_log.update(other_metrics)
                             metrics_to_log.update(sim_penalties)
+                            metrics_to_log.update(apys)
+                            metrics_to_log.update(axon_times)
                             self.wandb.log(metrics_to_log, step=self.block)
                             self.wandb_run_log_count += 1
                             bt.logging.info(

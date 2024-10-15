@@ -97,7 +97,10 @@ def dynamic_normalize_zscore(rewards, z_threshold: float = 1.0, q: float = 0.25,
     # No upper bound, only clip the lower bound
     clipped_data = torch.clip(rewards, lower_bound)
 
-    return (clipped_data - clipped_data.min()) / (clipped_data.max() - clipped_data.min() + epsilon)
+    dynamic_normed = (clipped_data - clipped_data.min()) / (clipped_data.max() - clipped_data.min() + epsilon)
+    squared = torch.pow(dynamic_normed, 2)
+
+    return (squared - squared.min()) / (squared.max() - squared.min() + epsilon)
 
 
 def calculate_penalties(
@@ -270,14 +273,10 @@ def calculate_apy(
     for uid, pool in pools.items():
         allocation = allocations[uid]
         match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                pool_yield = wei_mul(allocation, pool.supply_rate(amount=allocation))
             case POOL_TYPES.DAI_SAVINGS:
                 pool_yield = wei_mul(allocation, pool.supply_rate())
-            case POOL_TYPES.COMPOUND_V3:
-                pool_yield = wei_mul(allocation, pool.supply_rate(amount=allocation))
             case _:
-                pool_yield = wei_mul(allocation, pool.supply_rate(user_addr=pool.user_address, amount=allocation))
+                pool_yield = wei_mul(allocation, pool.supply_rate(amount=allocation))
         pct_yield += pool_yield
 
     return wei_div(pct_yield, initial_balance)
@@ -341,7 +340,7 @@ def get_rewards(
     # update reserves given allocations
     for pool in pools_to_scan.values():
         match pool.pool_type:
-            case T if T in (POOL_TYPES.AAVE, POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3):
+            case T if T in (POOL_TYPES.AAVE, POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3, POOL_TYPES.MORPHO):
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
                 pool.sync(pool.user_address, self.w3)
@@ -440,9 +439,12 @@ def get_rewards(
 
     sorted_axon_times = dict(sorted(axon_times.items(), key=lambda item: item[1]))
 
-    bt.logging.debug(f"sorted apys: {sorted_apys}")
-    bt.logging.debug(f"sorted axon times: {sorted_axon_times}")
+    bt.logging.debug(f"sorted apys:\n{sorted_apys}")
+    bt.logging.debug(f"sorted axon times:\n{sorted_axon_times}")
     bt.logging.debug(f"sorted filtered allocs:\n{sorted_filtered_allocs}")
+
+    self.sorted_apys = sorted_apys
+    self.sorted_axon_times = sorted_axon_times
 
     # Get all the reward results by iteratively calling your reward() function.
     return (

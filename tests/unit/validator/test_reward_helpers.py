@@ -39,7 +39,7 @@ class TestRewardFunctions(unittest.TestCase):
     def test_check_allocations_valid(self) -> None:
         allocations = {ADDRESS_ZERO: int(5e18), BEEF: int(3e18)}
         assets_and_pools = {
-            "total_assets": int(10e18),
+            "total_assets": int(8e18),
             "pools": {
                 ADDRESS_ZERO: BasePool(
                     contract_address=ADDRESS_ZERO,
@@ -95,7 +95,7 @@ class TestRewardFunctions(unittest.TestCase):
         self.assertFalse(result)
 
     def test_check_allocations_below_borrow(self) -> None:
-        allocations = {ADDRESS_ZERO: int(10e18), BEEF: int(3e18)}
+        allocations = {ADDRESS_ZERO: int(1e18), BEEF: 0}
         assets_and_pools = {
             "total_assets": int(10e18),
             "pools": {
@@ -123,68 +123,93 @@ class TestRewardFunctions(unittest.TestCase):
         result = check_allocations(assets_and_pools, allocations)
         self.assertFalse(result)
 
-    def test_check_allocations_valid_sturdy(self) -> None:
-        A = "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
-        B = "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b"
-        VAULT = "0x73E4C11B670Ef9C025A030A20b72CB9150E54523"
-        # assuming block # is: 20233401
-        allocations = {A: int(6e23), B: int(6e22)}
+    def test_check_allocations_below_alloc_threshold(self) -> None:
+        allocations = {ADDRESS_ZERO: int(4e18), BEEF: int(4e18)}
         assets_and_pools = {
-            "total_assets": int(7e23),
+            "total_assets": int(10e18),
             "pools": {
-                A: VariableInterestSturdySiloStrategy(
-                    user_address=VAULT,
-                    contract_address=A,
+                ADDRESS_ZERO: BasePool(
+                    contract_address=ADDRESS_ZERO,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(2e18),
+                    reserve_size=0,
                 ),
-                B: VariableInterestSturdySiloStrategy(
-                    user_address=VAULT,
-                    contract_address=B,
+                BEEF: BasePool(
+                    contract_address=BEEF,
+                    base_rate=0,
+                    base_slope=0,
+                    kink_slope=0,
+                    optimal_util_rate=0,
+                    borrow_amount=int(1e18),
+                    reserve_size=0,
                 ),
             },
         }
-
-        pool_a: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][A]
-        pool_b: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][B]
-        pool_a.sync(VAULT, web3_provider=self.w3)
-        pool_b.sync(VAULT, web3_provider=self.w3)
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertTrue(result)
-
-    def test_check_allocations_invalid_sturdy(self) -> None:
-        A = "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
-        B = "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b"
-        VAULT = "0x73E4C11B670Ef9C025A030A20b72CB9150E54523"
-        # assuming block # is: 20233401
-        allocations = {A: int(5e23), B: int(6e22)}
-        assets_and_pools = {
-            "total_assets": int(7e23),
-            "pools": {
-                A: VariableInterestSturdySiloStrategy(
-                    user_address=VAULT,
-                    contract_address=A,
-                ),
-                B: VariableInterestSturdySiloStrategy(
-                    user_address=VAULT,
-                    contract_address=B,
-                ),
-            },
-        }
-
-        pool_a: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][A]
-        pool_b: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][B]
-        pool_a.sync(VAULT, web3_provider=self.w3)
-        pool_b.sync(VAULT, web3_provider=self.w3)
 
         result = check_allocations(assets_and_pools, allocations)
         self.assertFalse(result)
 
-    def test_check_allocations_valid_aave(self) -> None:
-        A = "0x018008bfb33d285247A21d44E50697654f754e63"
+    def test_check_allocations_sturdy(self) -> None:
+        A = "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
+        VAULT = "0x73E4C11B670Ef9C025A030A20b72CB9150E54523"
         # assuming block # is: 20233401
-        allocations = {A: int(1.5e26)}
+        allocations = {A: int(6e23)}
         assets_and_pools = {
-            "total_assets": int(2e26),
+            "total_assets": int(100e23),
+            "pools": {
+                A: VariableInterestSturdySiloStrategy(
+                    user_address=VAULT,
+                    contract_address=A,
+                ),
+            },
+        }
+
+        pool_a: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][A]
+        pool_a.sync(VAULT, web3_provider=self.w3)
+
+        # case: borrow_amount <= assets_available, deposit_amount < assets_available
+        pool_a._totalAssets = int(100e23)
+        pool_a._totalBorrow = int(10e23)
+        pool_a._curr_deposit_amount = int(5e23)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+        # case: borrow_amount > assets_available, deposit_amount >= assets_available
+        pool_a._totalBorrow = int(97e23)
+        pool_a._curr_deposit_amount = int(5e23)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations)
+        self.assertFalse(result)
+
+        # should return True
+        pool_a._totalBorrow = int(97e23)
+        pool_a._curr_deposit_amount = int(5e23)
+        allocations[A] = int(4e23)
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+        # case: borrow_amount > assets_available, deposit_amount < assets_available
+        pool_a._totalBorrow = int(10e23)
+        pool_a._curr_deposit_amount = int(1e23)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+    def test_check_allocations_aave(self) -> None:
+        # aUSDC (Aave USDC)
+        A = "0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c"
+        # assuming block # is: 20233401
+        allocations = {A: int(1e17)}
+        assets_and_pools = {
+            "total_assets": int(200e18),
             "pools": {
                 A: AaveV3DefaultInterestRatePool(
                     user_address=ADDRESS_ZERO,
@@ -194,37 +219,51 @@ class TestRewardFunctions(unittest.TestCase):
         }
 
         pool_a: AaveV3DefaultInterestRatePool = assets_and_pools["pools"][A]
-        pool_a.sync(self.w3)
+        pool_a.sync(ADDRESS_ZERO, self.w3)
 
-        result = check_allocations(assets_and_pools, allocations)
+        # case: borrow_amount <= assets_available, deposit_amount < assets_available
+        pool_a._total_supplied = int(100e6)
+        pool_a._nextTotalStableDebt = 0
+        pool_a._totalVariableDebt = int(10e6)
+        pool_a._collateral_amount = int(5e18)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
-    def test_check_allocations_invalid_aave(self) -> None:
-        A = "0x018008bfb33d285247A21d44E50697654f754e63"
-        # assuming block # is: 20233401
-        allocations = {A: int(1e26)}
-        assets_and_pools = {
-            "total_assets": int(2e26),
-            "pools": {
-                A: AaveV3DefaultInterestRatePool(
-                    user_address=ADDRESS_ZERO,
-                    contract_address=A,
-                ),
-            },
-        }
+        # case: borrow_amount > assets_available, deposit_amount >= assets_available
+        pool_a._nextTotalStableDebt = 0
+        pool_a._totalVariableDebt = int(97e6)
+        pool_a._collateral_amount = int(5e18)
+        allocations[A] = 1
 
-        pool_a: AaveV3DefaultInterestRatePool = assets_and_pools["pools"][A]
-        pool_a.sync(self.w3)
-
-        result = check_allocations(assets_and_pools, allocations)
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertFalse(result)
 
-    def test_check_allocations_valid_compound(self) -> None:
+        # should return True
+        pool_a._nextTotalStableDebt = 0
+        pool_a._totalVariableDebt = int(97e6)
+        pool_a._collateral_amount = int(5e18)
+        allocations[A] = int(4e18)
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+        # case: borrow_amount > assets_available, deposit_amount < assets_available
+        pool_a._nextTotalStableDebt = 0
+        pool_a._totalVariableDebt = int(97e6)
+        pool_a._collateral_amount = int(1e18)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+    def test_check_allocations_compound(self) -> None:
         A = "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
         # assuming block # is: 20233401
-        allocations = {A: int(5e14)}
+        allocations = {A: int(5e26)}
         assets_and_pools = {
-            "total_assets": int(6e14),
+            "total_assets": int(100e26),
             "pools": {
                 A: CompoundV3Pool(
                     user_address=ADDRESS_ZERO,
@@ -236,28 +275,88 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a: CompoundV3Pool = assets_and_pools["pools"][A]
         pool_a.sync(self.w3)
 
-        result = check_allocations(assets_and_pools, allocations)
+        # case: borrow_amount <= assets_available, deposit_amount < assets_available
+        pool_a._total_supply = int(100e14)
+        pool_a._total_borrow = int(10e14)
+        pool_a._deposit_amount = int(5e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
-    def test_check_allocations_invalid_compound(self) -> None:
-        A = "0xc3d688B66703497DAA19211EEdff47f25384cdc3"
+        # case: borrow_amount > assets_available, deposit_amount >= assets_available
+        pool_a._total_borrow = int(97e14)
+        pool_a._deposit_amount = int(5e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertFalse(result)
+
+        # should return True
+        pool_a._total_borrow = int(97e14)
+        pool_a._deposit_amount = int(5e14)
+        allocations[A] = int(4e26)
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+        # case: borrow_amount > assets_available, deposit_amount < assets_available
+        pool_a._total_borrow = int(97e14)
+        pool_a._deposit_amount = int(1e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+    def test_check_allocations_morpho(self) -> None:
+        A = "0xd63070114470f685b75B74D60EEc7c1113d33a3D"
         # assuming block # is: 20233401
-        allocations = {A: int(4e14)}
+        allocations = {A: 0}
         assets_and_pools = {
-            "total_assets": int(6e14),
+            "total_assets": int(200e14),
             "pools": {
-                A: CompoundV3Pool(
+                A: MorphoVault(
                     user_address=ADDRESS_ZERO,
                     contract_address=A,
                 ),
             },
         }
 
-        pool_a: CompoundV3Pool = assets_and_pools["pools"][A]
+        pool_a: MorphoVault = assets_and_pools["pools"][A]
         pool_a.sync(self.w3)
 
-        result = check_allocations(assets_and_pools, allocations)
+        # case: borrow_amount <= assets_available, deposit_amount < assets_available
+        pool_a._total_assets = int(100e14)
+        pool_a._curr_borrows = int(10e14)
+        pool_a._user_assets = int(5e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+        # case: borrow_amount > assets_available, deposit_amount >= assets_available
+        pool_a._curr_borrows = int(97e14)
+        pool_a._user_assets = int(5e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertFalse(result)
+
+        # should return True
+        pool_a._curr_borrows = int(97e14)
+        pool_a._user_assets = int(5e14)
+        allocations[A] = int(4e14)
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+        # case: borrow_amount > assets_available, deposit_amount < assets_available
+        pool_a._curr_borrows = int(97e14)
+        pool_a._user_assets = int(1e14)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
 
     def test_format_allocations(self) -> None:
         allocations = {"1": int(5e18), "2": int(3e18)}

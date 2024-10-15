@@ -20,7 +20,7 @@ import math
 from decimal import Decimal
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import bittensor as bt
 import numpy as np
@@ -49,11 +49,45 @@ class POOL_TYPES(IntEnum):
     AAVE = 2
     DAI_SAVINGS = 3
     COMPOUND_V3 = 4
+    MORPHO = 5
+
+
+def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
+    borrow_amount = 0
+    our_supply = 0
+    assets_available = 0
+    match pool.pool_type:
+        case POOL_TYPES.STURDY_SILO:
+            borrow_amount = pool._totalBorrow
+            our_supply = pool._curr_deposit_amount
+            assets_available = pool._totalAssets - borrow_amount
+        case POOL_TYPES.AAVE:
+            # borrow amount for aave pools is total_stable_debt + total_variable_debt
+            borrow_amount = ((pool._nextTotalStableDebt * int(1e18)) // int(10**pool._decimals)) + (
+                (pool._totalVariableDebt * int(1e18)) // int(10**pool._decimals)
+            )
+            our_supply = pool._collateral_amount
+            assets_available = ((pool._total_supplied * int(1e18)) // int(10**pool._decimals)) - borrow_amount
+        case POOL_TYPES.COMPOUND_V3:
+            borrow_amount = pool._total_borrow
+            our_supply = pool._deposit_amount
+            assets_available = pool._total_supply - borrow_amount
+        case POOL_TYPES.MORPHO:
+            borrow_amount = pool._curr_borrows
+            our_supply = pool._user_assets
+            assets_available = pool._total_assets - borrow_amount
+        case POOL_TYPES.DAI_SAVINGS:
+            pass  # TODO: is there a more appropriate way to go about this?
+        case _:  # we assume it is a synthetic pool
+            borrow_amount = pool.borrow_amount
+
+    return 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
 
 
 def check_allocations(
     assets_and_pools: dict,
     allocations: dict[str, int],
+    alloc_threshold: float = TOTAL_ALLOC_THRESHOLD
 ) -> bool:
     """
     Checks allocations from miner.
@@ -77,6 +111,7 @@ def check_allocations(
 
     to_allocate = Decimal(str(to_allocate))
     total_allocated = Decimal(0)
+    total_assets = assets_and_pools["total_assets"]
 
     # Check allocations
     for allocation in allocations.values():
@@ -93,29 +128,17 @@ def check_allocations(
         if total_allocated > to_allocate:
             return False
 
-    # Ensure total allocated does not exceed the total assets
-    if total_allocated > to_allocate:
+    # Ensure total allocated does not exceed the total assets, and that most assets have been allocated
+    if total_allocated > to_allocate or total_allocated < int(alloc_threshold * total_assets):
         return False
 
     pools = assets_and_pools["pools"]
     # check if allocations are above the borrow amounts
     for pool_uid, pool in pools.items():
         allocation = allocations.get(pool_uid, 0)
-        borrow_amount = 0
-        match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                borrow_amount = pool._totalBorrow.amount
-            case POOL_TYPES.AAVE:
-                # borrow amount for aave pools is total_stable_debt + total_variable_debt
-                borrow_amount = pool._nextTotalStableDebt + pool._totalVariableDebt
-            case POOL_TYPES.COMPOUND_V3:
-                borrow_amount = pool._total_borrow
-            case POOL_TYPES.DAI_SAVINGS:
-                pass  # TODO: is there a more appropriate way to go about this?
-            case _:  # we assume it is a synthetic pool
-                borrow_amount = pool.borrow_amount
+        min_alloc = get_minimum_allocation(pool)
 
-        if allocation < borrow_amount:
+        if allocation < min_alloc:
             return False
 
     return True
@@ -276,6 +299,8 @@ class PoolFactory:
                 return DaiSavingsRate(**kwargs)
             case POOL_TYPES.COMPOUND_V3:
                 return CompoundV3Pool(**kwargs)
+            case POOL_TYPES.MORPHO:
+                return MorphoVault(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
@@ -296,6 +321,9 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _variable_debt_token_contract = PrivateAttr()
     _totalVariableDebt = PrivateAttr()
     _reserveFactor = PrivateAttr()
+    _collateral_amount: int = PrivateAttr()
+    _collateral_amount: int = PrivateAttr()
+    _total_supplied: int = PrivateAttr()
     _decimals: int = PrivateAttr()
 
     class Config:
@@ -315,7 +343,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 
     def pool_init(self, web3_provider: Web3) -> None:
         try:
-            assert web3_provider.is_connected()  # noqa: S101
+            assert web3_provider.is_connected()
         except Exception as err:
             bt.logging.error("Failed to connect to Web3 instance!")
             bt.logging.error(err)  # type: ignore[]
@@ -357,13 +385,15 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
                 address=self._underlying_asset_address,
             )
 
+            self._total_supplied = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
+
             self._initted = True
 
         except Exception as err:
             bt.logging.error("Failed to load contract!")
             bt.logging.error(err)  # type: ignore[]
 
-    def sync(self, web3_provider: Web3) -> None:
+    def sync(self, user_addr: str, web3_provider: Web3) -> None:
         """Syncs with chain"""
         if not self._initted:
             self.pool_init(web3_provider)
@@ -435,6 +465,9 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             reserveConfiguration = self._reserve_data.configuration
             self._reserveFactor = getReserveFactor(reserveConfiguration)
             self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
+            self._collateral_amount = retry_with_backoff(
+                self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(user_addr)).call
+            )
 
         except Exception as err:
             bt.logging.error("Failed to sync to chain!")
@@ -442,15 +475,10 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, user_addr: str, amount: int) -> int:
+    def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
-            already_deposited = int(
-                retry_with_backoff(self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(user_addr)).call)
-                * 10**self._decimals
-                // 1e18,
-            )
-
+            already_deposited = self._collateral_amount
             delta = amount - already_deposited
             to_deposit = max(0, delta)
             to_remove = abs(delta) if delta < 0 else 0
@@ -494,6 +522,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _current_rate_info = PrivateAttr()
     _rate_prec: int = PrivateAttr()
     _block: BlockData = PrivateAttr()
+    _decimals: int = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
@@ -509,7 +538,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
 
     def pool_init(self, user_addr: str, web3_provider: Web3) -> None:  # noqa: ARG002
         try:
-            assert web3_provider.is_connected()  # noqa: S101
+            assert web3_provider.is_connected()
         except Exception as err:
             bt.logging.error("Failed to connect to Web3 instance!")
             bt.logging.error(err)  # type: ignore[]
@@ -540,6 +569,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             rate_model_contract_address = retry_with_backoff(self._pair_contract.functions.rateContract().call)
             rate_model_contract = web3_provider.eth.contract(abi=rate_model_abi, decode_tuples=True)
             self._rate_model_contract = retry_with_backoff(rate_model_contract, address=rate_model_contract_address)
+            self._decimals = retry_with_backoff(self._pair_contract.functions.decimals().call)
 
             self._initted = True
 
@@ -558,7 +588,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._util_prec = constants[2]
         self._fee_prec = constants[3]
         self._totalAssets: Any = retry_with_backoff(self._pair_contract.functions.totalAssets().call)
-        self._totalBorrow: Any = retry_with_backoff(self._pair_contract.functions.totalBorrow().call)
+        self._totalBorrow: Any = retry_with_backoff(self._pair_contract.functions.totalBorrow().call).amount
 
         self._block = web3_provider.eth.get_block("latest")
 
@@ -569,10 +599,11 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: int) -> int:
+        # amount scaled down to the asset's decimals from 18 decimals (wei)
         delta = amount - self._curr_deposit_amount
 
         """Returns supply rate given new deposit amount"""
-        util_rate = int((self._util_prec * self._totalBorrow.amount) // (self._totalAssets + delta))
+        util_rate = int((self._util_prec * self._totalBorrow) // (self._totalAssets + delta))
 
         last_update_timestamp = self._current_rate_info.lastTimestamp
         current_timestamp = self._block["timestamp"]
@@ -612,6 +643,8 @@ class CompoundV3Pool(ChainBasedPoolModel):
     _reward_token_price: float = PrivateAttr()
     _base_decimals: int = PrivateAttr()
     _total_borrow: int = PrivateAttr()
+    _deposit_amount: int = PrivateAttr()
+    _total_supply: int = PrivateAttr()
 
     _CompoundTokenMap: dict = {
         "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # WETH -> ETH
@@ -675,13 +708,16 @@ class CompoundV3Pool(ChainBasedPoolModel):
             retry_with_backoff(self._reward_oracle_contract.functions.latestAnswer().call) / 10**reward_decimals
         )
 
+        self._deposit_amount = retry_with_backoff(self._ctoken_contract.functions.balanceOf(self.user_address).call)
+        self._total_supply = retry_with_backoff(self._ctoken_contract.functions.totalSupply().call)
+
     def supply_rate(self, amount: int) -> int:
+        # amount scaled down to the asset's decimals from 18 decimals (wei)
         # get pool supply rate (base token)
-        current_supply = retry_with_backoff(self._ctoken_contract.functions.totalSupply().call)
-        already_in_pool = retry_with_backoff(self._ctoken_contract.functions.balanceOf(self.user_address).call)
+        already_in_pool = self._deposit_amount
 
         delta = amount - already_in_pool
-        new_supply = current_supply + delta
+        new_supply = self._total_supply + delta
         current_borrows = self._total_borrow
 
         utilization = wei_div(current_borrows, new_supply)
@@ -757,6 +793,172 @@ class DaiSavingsRate(ChainBasedPoolModel):
         seconds_per_year = 31536000
         x = (dsr / RAY) ** seconds_per_year
         return int(math.floor((x - 1) * 1e18))
+
+
+class MorphoVault(ChainBasedPoolModel):
+    # TODO: remove
+    """Model for Morpho Vaults
+    NOTE:
+    This pool type is a bit different from other pools
+    pools = {
+        ...
+        "0x0...1": { # <--- this is the index of the market in the morpho vault's "supplyQueue"
+            "contract_address": "0x....", # <---- this is the address of the morpho vault
+            ...
+        }
+        ...
+    }
+
+    new_pools = []
+    for pool_uid, pool in pools.items():
+        new_pool = MorphoVault(contract_address=pool["contract_address"], market_idx=pool_uid ...)
+    """
+
+    pool_type: POOL_TYPES = Field(POOL_TYPES.MORPHO, const=True, description="type of pool")
+
+    _vault_contract: Contract = PrivateAttr()
+    _morpho_contract: Contract = PrivateAttr()
+    _irm_abi: str = PrivateAttr()
+    _decimals: int = PrivateAttr()
+    _DECIMALS_OFFSET: int = PrivateAttr()
+    # TODO: update unit tests to check these :^)
+    _irm_contracts: dict = PrivateAttr(default={})
+    _total_assets: int = PrivateAttr()
+    _user_assets: int = PrivateAttr()
+    _curr_borrows: int = PrivateAttr()
+    _asset_decimals: int = PrivateAttr()
+
+    _VIRTUAL_SHARES: ClassVar[int] = 1e6
+    _VIRTUAL_ASSETS: ClassVar[int] = 1
+
+    def __hash__(self) -> int:
+        return hash(self._vault_contract.address)
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, MorphoVault):
+            return NotImplemented
+        # Compare the attributes for equality
+        return self._vault_contract.address == other._vault_contract.address  # type: ignore[]
+
+    def pool_init(self, web3_provider: Web3) -> None:
+        vault_abi_file_path = Path(__file__).parent / "abi/MetaMorpho.json"
+        vault_abi_file = vault_abi_file_path.open()
+        vault_abi = json.load(vault_abi_file)
+        vault_abi_file.close()
+
+        vault_contract = web3_provider.eth.contract(abi=vault_abi, decode_tuples=True)
+        self._vault_contract = retry_with_backoff(vault_contract, address=self.contract_address)
+
+        morpho_abi_file_path = Path(__file__).parent / "abi/Morpho.json"
+        morpho_abi_file = morpho_abi_file_path.open()
+        morpho_abi = json.load(morpho_abi_file)
+        morpho_abi_file.close()
+
+        morpho_address = retry_with_backoff(self._vault_contract.functions.MORPHO().call)
+
+        morpho_contract = web3_provider.eth.contract(abi=morpho_abi, decode_tuples=True)
+        self._morpho_contract = retry_with_backoff(morpho_contract, address=morpho_address)
+
+        self._decimals = retry_with_backoff(self._vault_contract.functions.decimals().call)
+        self._DECIMALS_OFFSET = retry_with_backoff(self._vault_contract.functions.DECIMALS_OFFSET().call)
+        self._asset_decimals = self._decimals - self._DECIMALS_OFFSET
+
+        irm_abi_file_path = Path(__file__).parent / "abi/AdaptiveCurveIrm.json"
+        irm_abi_file = irm_abi_file_path.open()
+        self._irm_abi = json.load(irm_abi_file)
+        irm_abi_file.close()
+
+        self._initted = True
+
+    def sync(self, web3_provider: Web3) -> None:
+        if not self._initted:
+            self.pool_init(web3_provider)
+
+        supply_queue_length = retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
+        market_ids = [
+            retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
+        ]
+
+        total_borrows = 0
+        # get irm contracts and borrows
+        for market_id in market_ids:
+            # calculate current supply apy
+            # TODO: can we make this more efficient by making this not be called twice?
+            market = retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
+            market_params = retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
+            irm_address = market_params.irm
+            irm_contract_raw = web3_provider.eth.contract(abi=self._irm_abi, decode_tuples=True)
+            irm_contract = retry_with_backoff(irm_contract_raw, address=irm_address)
+            self._irm_contracts[market_id] = irm_contract
+
+            total_borrows += market.totalBorrowAssets
+
+        self._total_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
+        curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
+        self._user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        self._curr_borrows = total_borrows
+
+    @classmethod
+    def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
+        return (assets * (total_shares + cls._VIRTUAL_SHARES)) // (total_assets + cls._VIRTUAL_ASSETS)
+
+    @classmethod
+    def shares_to_assets_down(cls, shares: int, total_assets: int, total_shares: int) -> int:
+        return (shares * (total_assets + cls._VIRTUAL_ASSETS)) // (total_shares + cls._VIRTUAL_SHARES)
+
+    # last 256 unique calls to this will be cached for the next 60 seconds
+    @ttl_cache(maxsize=256, ttl=60)
+    def supply_rate(self, amount: int) -> int:
+        supply_queue_length = retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
+        market_ids = [
+            retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
+        ]
+
+        total_asset_delta = amount - self._user_assets
+
+        # apys in each market
+        current_supply_apys = []
+        # current assets allocated to each market
+        current_assets = []
+
+        # calculate the supply apys for each market
+        for market_id in market_ids:
+            # calculate current supply apy
+            market = retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
+            market_params = retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
+            irm_contract = self._irm_contracts[market_id]
+            irm_address = irm_contract.address
+
+            if irm_address == ADDRESS_ZERO:
+                current_supply_apys.append(0)
+                current_assets.append(0)
+                continue
+
+            borrow_rate = retry_with_backoff(irm_contract.functions.borrowRateView(market_params, market).call)
+
+            seconds_per_year = 31536000
+            utilization = market.totalBorrowAssets / market.totalSupplyAssets
+
+            borrow_apy_raw = math.exp(borrow_rate * seconds_per_year / 1e18) - 1
+            supply_apy_raw = borrow_apy_raw * utilization * (1 - (market.fee / 1e18))
+
+            current_supply_apys.append(int(supply_apy_raw * 1e18))
+
+            # calculate current assets allocated to the market
+            position = retry_with_backoff(self._morpho_contract.functions.position(market_id, self.contract_address).call)
+            allocated_assets = self.shares_to_assets_down(
+                position.supplyShares, market.totalSupplyAssets, market.totalSupplyShares
+            )
+            current_assets.append(allocated_assets)
+
+        curr_agg_apy = sum(
+            [(current_assets[i] * current_supply_apys[i]) // int(10**self._asset_decimals) for i in range(supply_queue_length)]
+        ) / sum(current_assets)
+
+        return int(
+            (wei_mul(curr_agg_apy, self._total_assets) / (self._total_assets + total_asset_delta))
+            * 10 ** (self._asset_decimals * 2)
+        )
 
 
 def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
