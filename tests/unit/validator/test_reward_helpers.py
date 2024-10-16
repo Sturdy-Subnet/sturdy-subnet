@@ -1,7 +1,9 @@
+import os
 import unittest
 
 import numpy as np
 import torch
+from dotenv import load_dotenv
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
@@ -15,6 +17,9 @@ from sturdy.validator.reward import (
     format_allocations,
     get_similarity_matrix,
 )
+
+load_dotenv()
+WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 
 BEEF = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
 
@@ -35,6 +40,25 @@ class TestRewardFunctions(unittest.TestCase):
                 "netuid": 420,
             }
         )
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20976304,
+                    },
+                },
+            ],
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+        print(f"snapshot id: {cls.snapshot_id}")
+
+    def tearDown(self) -> None:
+        # Optional: Revert to the original snapshot after each test
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
     def test_check_allocations_valid(self) -> None:
         allocations = {ADDRESS_ZERO: int(5e18), BEEF: int(3e18)}
@@ -204,6 +228,18 @@ class TestRewardFunctions(unittest.TestCase):
         self.assertTrue(result)
 
     def test_check_allocations_aave(self) -> None:
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20233401,
+                    },
+                },
+            ],
+        )
+
         # aUSDC (Aave USDC)
         A = "0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c"
         # assuming block # is: 20233401
@@ -309,6 +345,18 @@ class TestRewardFunctions(unittest.TestCase):
         self.assertTrue(result)
 
     def test_check_allocations_morpho(self) -> None:
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20874859,
+                    },
+                },
+            ],
+        )
+
         A = "0xd63070114470f685b75B74D60EEc7c1113d33a3D"
         # assuming block # is: 20233401
         allocations = {A: 0}
@@ -354,6 +402,47 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a._curr_borrows = int(97e14)
         pool_a._user_assets = int(1e14)
         allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+    def test_check_allocations_yearn(self) -> None:
+        A = "0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204"
+        # assuming block # is: 20233401
+        allocations = {A: 0}
+        assets_and_pools = {
+            "total_assets": int(1e12),
+            "pools": {
+                A: YearnV3Vault(
+                    user_address=ADDRESS_ZERO,
+                    contract_address=A,
+                ),
+            },
+        }
+
+        pool_a: MorphoVault = assets_and_pools["pools"][A]
+        pool_a.sync(self.w3)
+
+        # case: max withdraw = deposit amount
+        pool_a._max_withdraw = int(1e9)
+        pool_a._curr_deposit = int(1e9)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertTrue(result)
+
+        # case: max withdraw = 0
+        pool_a._max_withdraw = 0
+        pool_a._curr_deposit = int(1e9)
+        allocations[A] = 1
+
+        result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
+        self.assertFalse(result)
+
+        # should return True
+        pool_a._max_withdraw = int(1e9)
+        pool_a._curr_deposit = int(5e9)
+        allocations[A] = int(4e9)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
