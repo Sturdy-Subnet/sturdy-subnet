@@ -340,7 +340,7 @@ def get_rewards(
     # update reserves given allocations
     for pool in pools_to_scan.values():
         match pool.pool_type:
-            case T if T in (POOL_TYPES.AAVE, POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3, POOL_TYPES.MORPHO):
+            case T if T in (POOL_TYPES.AAVE, POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
                 pool.sync(pool.user_address, self.w3)

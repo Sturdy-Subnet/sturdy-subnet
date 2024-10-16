@@ -302,6 +302,8 @@ class PoolFactory:
                 return CompoundV3Pool(**kwargs)
             case POOL_TYPES.MORPHO:
                 return MorphoVault(**kwargs)
+            case POOL_TYPES.YEARN_V3:
+                return YearnV3Vault(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
