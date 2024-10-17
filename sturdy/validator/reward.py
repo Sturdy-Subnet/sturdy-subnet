@@ -20,7 +20,9 @@ import copy
 from typing import Any, cast
 
 import bittensor as bt
+import gmpy2
 import numpy as np
+import numpy.typing as npt
 import torch
 
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
@@ -135,6 +137,12 @@ def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties) ->
     return rewards
 
 
+def get_distance(alloc_a: npt.NDArray, alloc_b: npt.NDArray, total_assets: int) -> float:
+    diff = alloc_a - alloc_b
+    norm = gmpy2.sqrt(sum(x**2 for x in diff))
+    return norm / gmpy2.sqrt(float(2 * total_assets**2))
+
+
 def get_similarity_matrix(
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
@@ -168,8 +176,7 @@ def get_similarity_matrix(
     for miner_a, info_a in apys_and_allocations.items():
         _alloc_a = cast(AllocationsDict, info_a["allocations"])
         alloc_a = np.array(
-            list(format_allocations(_alloc_a, assets_and_pools).values()),
-            dtype=np.float32,
+            [gmpy2.mpz(x) for x in list(format_allocations(_alloc_a, assets_and_pools).values())],
         )
         similarity_matrix[miner_a] = {}
         for miner_b, info_b in apys_and_allocations.items():
@@ -179,10 +186,9 @@ def get_similarity_matrix(
                     similarity_matrix[miner_a][miner_b] = float("inf")
                     continue
                 alloc_b = np.array(
-                    list(format_allocations(_alloc_b, assets_and_pools).values()),
-                    dtype=np.float32,
+                    [gmpy2.mpz(x) for x in list(format_allocations(_alloc_b, assets_and_pools).values())],
                 )
-                similarity_matrix[miner_a][miner_b] = np.linalg.norm(alloc_a - alloc_b) / np.sqrt(float(2 * total_assets**2))
+                similarity_matrix[miner_a][miner_b] = get_distance(alloc_a, alloc_b, total_assets)
 
     return similarity_matrix
 
@@ -340,7 +346,13 @@ def get_rewards(
     # update reserves given allocations
     for pool in pools_to_scan.values():
         match pool.pool_type:
-            case T if T in (POOL_TYPES.AAVE, POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
+            case T if T in (
+                POOL_TYPES.AAVE,
+                POOL_TYPES.DAI_SAVINGS,
+                POOL_TYPES.COMPOUND_V3,
+                POOL_TYPES.MORPHO,
+                POOL_TYPES.YEARN_V3,
+            ):
                 pool.sync(self.w3)
             case POOL_TYPES.STURDY_SILO:
                 pool.sync(pool.user_address, self.w3)
