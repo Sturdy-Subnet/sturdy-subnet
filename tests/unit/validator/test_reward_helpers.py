@@ -72,7 +72,6 @@ class TestGetDistance(unittest.TestCase):
         )
         self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
 
-
     def test_different_lengths(self) -> None:
         # Test case with differing lengths should raise an error
         alloc_a = np.array([100, 200], dtype=object)
@@ -80,6 +79,101 @@ class TestGetDistance(unittest.TestCase):
         total_assets = 600
         with self.assertRaises(ValueError):  # noqa: PT027
             get_distance(alloc_a, alloc_b, total_assets)
+
+
+class TestDynamicNormalizeZScore(unittest.TestCase):
+    def test_basic_normalization(self) -> None:
+        # Test a simple AllocationsDict with large values
+        apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 2e16}, "3": {"apy": 3e16}, "4": {"apy": 4e16}}
+        normalized = dynamic_normalize_zscore(apys_and_allocations)
+
+        # Check if output is normalized between 0 and 1
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
+
+    def test_with_low_outliers(self) -> None:
+        # Test with low outliers in AllocationsDict
+        apys_and_allocations = {
+            "1": {"apy": 1e16},
+            "2": {"apy": 1e16},
+            "3": {"apy": 1e16},
+            "4": {"apy": 5e16},
+            "5": {"apy": 1e17},
+        }
+        normalized = dynamic_normalize_zscore(apys_and_allocations)
+
+        # Check that outliers don't affect the overall normalization
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
+
+    def test_with_high_outliers(self) -> None:
+        # Test with high outliers in AllocationsDict
+        apys_and_allocations = {
+            "1": {"apy": 5e16},
+            "2": {"apy": 6e16},
+            "3": {"apy": 7e16},
+            "4": {"apy": 1e17},
+            "5": {"apy": 2e17},
+        }
+        normalized = dynamic_normalize_zscore(apys_and_allocations)
+
+        # Check that the function correctly handles high outliers
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
+
+    def test_uniform_values(self) -> None:
+        # Test where all values are the same
+        apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e16}, "3": {"apy": 1e16}, "4": {"apy": 1e16}}
+        normalized = dynamic_normalize_zscore(apys_and_allocations)
+
+        # If all values are the same, the output should also be uniform (or handle gracefully)
+        self.assertTrue(
+            torch.allclose(
+                normalized, torch.zeros_like(torch.tensor([v["apy"] for v in apys_and_allocations.values()])), atol=1e-8
+            )
+        )
+
+    def test_low_variance(self) -> None:
+        # Test with low variance data (values are close to each other)
+        apys_and_allocations = {
+            "1": {"apy": 1e16},
+            "2": {"apy": 1.01e16},
+            "3": {"apy": 1.02e16},
+            "4": {"apy": 1.03e16},
+            "5": {"apy": 1.04e16},
+        }
+        normalized = dynamic_normalize_zscore(apys_and_allocations)
+
+        # Check if normalization happens correctly
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
+
+    def test_high_variance(self) -> None:
+        # Test with high variance data
+        apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e17}, "3": {"apy": 5e17}, "4": {"apy": 1e18}}
+        normalized = dynamic_normalize_zscore(apys_and_allocations)
+
+        # Ensure that the normalization works even with high variance
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
+
+    def test_quantile_logic(self) -> None:
+        # Test a case where the lower quartile range affects the lower bound decision
+        apys_and_allocations = {
+            "1": {"apy": 1e16},
+            "2": {"apy": 2e16},
+            "3": {"apy": 3e16},
+            "4": {"apy": 4e16},
+            "5": {"apy": 1e17},
+            "6": {"apy": 2e17},
+            "7": {"apy": 3e17},
+            "8": {"apy": 4e17},
+        }
+        normalized = dynamic_normalize_zscore(apys_and_allocations)
+
+        # Ensure that quantile-based clipping works as expected
+        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
+        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
 
 
 class TestRewardFunctions(unittest.TestCase):
@@ -541,68 +635,6 @@ class TestRewardFunctions(unittest.TestCase):
         result = format_allocations(allocations, assets_and_pools)
 
         self.assertEqual(result, expected_output)
-
-    def test_basic_normalization(self) -> None:
-        # Test a simple tensor with a standard range of values
-        rewards = torch.tensor([10.0, 20.0, 30.0, 40.0, 50.0])
-        normalized = dynamic_normalize_zscore(rewards)
-
-        # Check if output is normalized between 0 and 1
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_with_low_outliers(self) -> None:
-        # Test with low outliers
-        rewards = torch.tensor([1.0, 1.0, 1.0, 50.0, 100.0, 200.0])
-        normalized = dynamic_normalize_zscore(rewards)
-
-        # Check that outliers don't affect the overall normalization
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_with_high_outliers(self) -> None:
-        # Test with high outliers
-        rewards = torch.tensor([50.0, 60.0, 70.0, 1000.0, 2000.0])
-        normalized = dynamic_normalize_zscore(rewards)
-
-        # Check that the function correctly handles high outliers
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_uniform_values(self) -> None:
-        # Test where all values are the same
-        rewards = torch.tensor([10.0, 10.0, 10.0, 10.0])
-        normalized = dynamic_normalize_zscore(rewards)
-
-        # If all values are the same, the output should also be uniform (or handle gracefully)
-        self.assertTrue(torch.allclose(normalized, torch.zeros_like(rewards), atol=1e-8))
-
-    def test_low_variance(self) -> None:
-        # Test with low variance data (values are close to each other)
-        rewards = torch.tensor([100.0, 101.0, 102.0, 103.0, 104.0])
-        normalized = dynamic_normalize_zscore(rewards)
-
-        # Check if normalization happens correctly
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_high_variance(self) -> None:
-        # Test with high variance data
-        rewards = torch.tensor([1.0, 100.0, 500.0, 1000.0])
-        normalized = dynamic_normalize_zscore(rewards)
-
-        # Ensure that the normalization works even with high variance
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_quantile_logic(self) -> None:
-        # Test a case where the lower quartile range affects the lower bound decision
-        rewards = torch.tensor([1.0, 2.0, 3.0, 4.0, 100.0, 200.0, 300.0, 400.0])
-        normalized = dynamic_normalize_zscore(rewards)
-
-        # Ensure that quantile-based clipping works as expected
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
 
     def test_get_similarity_matrix(self) -> None:
         apys_and_allocations = {
