@@ -1,6 +1,7 @@
 import os
 import unittest
 
+import gmpy2
 import numpy as np
 import torch
 from dotenv import load_dotenv
@@ -15,6 +16,7 @@ from sturdy.validator.reward import (
     calculate_rewards_with_adjusted_penalties,
     dynamic_normalize_zscore,
     format_allocations,
+    get_distance,
     get_similarity_matrix,
 )
 
@@ -22,6 +24,62 @@ load_dotenv()
 WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 
 BEEF = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
+
+
+class TestGetDistance(unittest.TestCase):
+    def test_identical_allocations(self) -> None:
+        # Test case where allocations are identical, expecting 0 distance
+        alloc_a = np.array([100, 200, 300], dtype=object)
+        alloc_b = np.array([100, 200, 300], dtype=object)
+        total_assets = 600
+        self.assertEqual(get_distance(alloc_a, alloc_b, total_assets), 0.0)
+
+    def test_positive_allocations(self) -> None:
+        # Test case with positive values, expecting a non-zero distance
+        alloc_a = np.array([100, 200, 300], dtype=object)
+        alloc_b = np.array([50, 150, 250], dtype=object)
+        total_assets = 600
+        expected_distance = gmpy2.sqrt(sum((x - y) ** 2 for x, y in zip(alloc_a, alloc_b, strict=False))) / gmpy2.sqrt(
+            float(2 * total_assets**2)
+        )
+        self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
+
+    def test_zero_allocations(self) -> None:
+        # Test case where one allocation is all zeros
+        alloc_a = np.array([100, 200, 300], dtype=object)
+        alloc_b = np.array([0, 0, 0], dtype=object)
+        total_assets = 600
+        expected_distance = gmpy2.sqrt(sum(x**2 for x in alloc_a)) / gmpy2.sqrt(float(2 * total_assets**2))
+        self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
+
+    def test_large_numbers(self) -> None:
+        # Test case with very large numbers to ensure precision
+        alloc_a = np.array([2**100, 2**100, 2**100], dtype=object)
+        alloc_b = np.array([2**99, 2**99, 2**99], dtype=object)
+        total_assets = 2**100
+        expected_distance = gmpy2.sqrt(sum((x - y) ** 2 for x, y in zip(alloc_a, alloc_b, strict=False))) / gmpy2.sqrt(
+            float(2 * total_assets**2)
+        )
+        self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
+
+    def test_large_numbers_gap(self) -> None:
+        # Test case with very large numbers to ensure precision
+        alloc_a = np.array([1e100, 1e100, 1e100], dtype=object)
+        alloc_b = np.array([1e21, 1e21, 1e21], dtype=object)
+        total_assets = 1e101
+        expected_distance = gmpy2.sqrt(sum((x - y) ** 2 for x, y in zip(alloc_a, alloc_b, strict=False))) / gmpy2.sqrt(
+            float(2 * total_assets**2)
+        )
+        self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
+
+
+    def test_different_lengths(self) -> None:
+        # Test case with differing lengths should raise an error
+        alloc_a = np.array([100, 200], dtype=object)
+        alloc_b = np.array([100, 200, 300], dtype=object)
+        total_assets = 600
+        with self.assertRaises(ValueError):  # noqa: PT027
+            get_distance(alloc_a, alloc_b, total_assets)
 
 
 class TestRewardFunctions(unittest.TestCase):
@@ -54,7 +112,6 @@ class TestRewardFunctions(unittest.TestCase):
         )
 
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
-        print(f"snapshot id: {cls.snapshot_id}")
 
     def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
@@ -516,7 +573,6 @@ class TestRewardFunctions(unittest.TestCase):
         # Test where all values are the same
         rewards = torch.tensor([10.0, 10.0, 10.0, 10.0])
         normalized = dynamic_normalize_zscore(rewards)
-        print(normalized)
 
         # If all values are the same, the output should also be uniform (or handle gracefully)
         self.assertTrue(torch.allclose(normalized, torch.zeros_like(rewards), atol=1e-8))
