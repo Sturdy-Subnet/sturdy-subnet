@@ -31,10 +31,15 @@ POOL_RESERVE_SIZE = int(1000e18)  # 1000
 QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 45  # timeout (seconds)
 
+TOTAL_ALLOC_THRESHOLD = 0.98
+
 # The following constants are for different pool models
 # Aave
 RESERVE_FACTOR_START_BIT_POSITION = 64
 RESERVE_FACTOR_MASK = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFF
 SIMILARITY_THRESHOLD = 0.1  # similarity threshold for plagiarism checking
 
-TOTAL_ALLOC_THRESHOLD = 0.98
+# yearn finance
+APR_ORACLE = (
+    "0x27aD2fFc74F74Ed27e1C0A19F1858dD0963277aE"  # https://docs.yearn.fi/developers/smart-contracts/V3/periphery/AprOracle
+)

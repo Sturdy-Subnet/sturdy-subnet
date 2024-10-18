@@ -1,0 +1,181 @@
+[
+    {
+        "type": "constructor",
+        "inputs": [
+            {
+                "name": "_governance",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "name": "GovernanceTransferred",
+        "type": "event",
+        "inputs": [
+            {
+                "name": "previousGovernance",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+            },
+            {
+                "name": "newGovernance",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "name": "getCurrentApr",
+        "type": "function",
+        "inputs": [
+            {
+                "name": "_vault",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "apr",
+                "type": "uint256",
+                "internalType": "uint256"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "name": "getExpectedApr",
+        "type": "function",
+        "inputs": [
+            {
+                "name": "_vault",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "_delta",
+                "type": "int256",
+                "internalType": "int256"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "apr",
+                "type": "uint256",
+                "internalType": "uint256"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "name": "getStrategyApr",
+        "type": "function",
+        "inputs": [
+            {
+                "name": "_strategy",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "_debtChange",
+                "type": "int256",
+                "internalType": "int256"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "apr",
+                "type": "uint256",
+                "internalType": "uint256"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "name": "governance",
+        "type": "function",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "name": "oracles",
+        "type": "function",
+        "inputs": [
+            {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "name": "setOracle",
+        "type": "function",
+        "inputs": [
+            {
+                "name": "_strategy",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "_oracle",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "name": "transferGovernance",
+        "type": "function",
+        "inputs": [
+            {
+                "name": "_newGovernance",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "name": "weightedApr",
+        "type": "function",
+        "inputs": [
+            {
+                "name": "_strategy",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint256",
+                "internalType": "uint256"
+            }
+        ],
+        "stateMutability": "view"
+    }
+]

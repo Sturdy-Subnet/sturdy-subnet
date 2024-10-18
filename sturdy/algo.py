@@ -2,20 +2,19 @@ import math
 from typing import cast
 
 import bittensor as bt
+from web3.constants import ADDRESS_ZERO
 
 from sturdy.base.miner import BaseMinerNeuron
 from sturdy.pools import (
     POOL_TYPES,
-    AaveV3DefaultInterestRatePool,
     BasePool,
-    CompoundV3Pool,
-    DaiSavingsRate,
-    VariableInterestSturdySiloStrategy,
+    PoolFactory,
     get_minimum_allocation,
 )
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 
-THRESHOLD = 0.99 # used to avoid over-allocations
+THRESHOLD = 0.99  # used to avoid over-allocations
+
 
 # NOTE: THIS IS JUST AN EXAMPLE - THIS IS NOT VERY OPTIMIZED
 def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
@@ -23,18 +22,15 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     pools = cast(dict, synapse.assets_and_pools["pools"])
     match synapse.request_type:
         case REQUEST_TYPES.ORGANIC:
-            for uid in pools:
-                match pools[uid].pool_type:
-                    case POOL_TYPES.AAVE:
-                        pools[uid] = AaveV3DefaultInterestRatePool(**pools[uid].dict())
-                    case POOL_TYPES.STURDY_SILO:
-                        pools[uid] = VariableInterestSturdySiloStrategy(**pools[uid].dict())
-                    case POOL_TYPES.DAI_SAVINGS:
-                        pools[uid] = DaiSavingsRate(**pools[uid].dict())
-                    case POOL_TYPES.COMPOUND_V3:
-                        pools[uid] = CompoundV3Pool(**pools[uid].dict())
-                    case _:
-                        pass
+            for uid, pool in pools:
+                pools[uid] = PoolFactory.create_pool(
+                    pool_type=pool.pool_type,
+                    web3_provider=self.w3,  # type: ignore[]
+                    user_address=(
+                        pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
+                    ),  # TODO: is there a cleaner way to do this?
+                    contract_address=pool.contract_address,
+                )
 
         case _:  # we assume it is a synthetic request
             for uid in pools:
@@ -58,13 +54,13 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
             case _:
                 pass
 
-     # check the amounts that have been borrowed from the pools - and account for them
+    # check the amounts that have been borrowed from the pools - and account for them
     minimums = {}
     for pool_uid, pool in pools.items():
         minimums[pool_uid] = get_minimum_allocation(pool)
 
     total_assets_available -= sum(minimums.values())
-    balance = int(total_assets_available)    # obtain supply rates of pools - aave pool and sturdy silo
+    balance = int(total_assets_available)  # obtain supply rates of pools - aave pool and sturdy silo
     # rates are determined by making on chain calls to smart contracts
     for pool in pools.values():
         match pool.pool_type:
@@ -72,7 +68,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
                 apy = pool.supply_rate(synapse.user_address, balance // len(pools))  # type: ignore[]
                 supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.COMPOUND_V3, POOL_TYPES.MORPHO):
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.COMPOUND_V3, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
                 apy = pool.supply_rate(balance // len(pools))  # type: ignore[]
                 supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy

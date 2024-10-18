@@ -8,12 +8,14 @@ from eth_account import Account
 from web3 import Web3
 from web3.contract.contract import Contract
 
+from sturdy.constants import APR_ORACLE
 from sturdy.pools import (
     AaveV3DefaultInterestRatePool,
     CompoundV3Pool,
     DaiSavingsRate,
     MorphoVault,
     VariableInterestSturdySiloStrategy,
+    YearnV3Vault,
 )
 from sturdy.utils.misc import retry_with_backoff
 
@@ -77,7 +79,7 @@ class TestAavePool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20892138,
+                        "blockNumber": 20976304,
                     },
                 },
             ],
@@ -255,7 +257,6 @@ class TestSturdySiloStrategy(unittest.TestCase):
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
         print(f"snapshot id: {cls.snapshot_id}")
 
-
     @classmethod
     def tearDownClass(cls) -> None:
         # run this after tests to restore original forked state
@@ -267,7 +268,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20892138,
+                        "blockNumber": 20976304,
                     },
                 },
             ],
@@ -362,7 +363,7 @@ class TestCompoundV3Pool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20892138,
+                        "blockNumber": 20976304,
                     },
                 },
             ],
@@ -495,7 +496,7 @@ class TestDaiSavingsRate(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20892138,
+                        "blockNumber": 20976304,
                     },
                 },
             ],
@@ -581,7 +582,7 @@ class TestMorphoVault(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20892138,
+                        "blockNumber": 20976304,
                     },
                 },
             ],
@@ -682,6 +683,136 @@ class TestMorphoVault(unittest.TestCase):
         self.assertGreater(apy_after, apy_before)
 
 
+class TestYearnV3Vault(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # runs tests on local mainnet fork at block: 20233401
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20976304,
+                    },
+                },
+            ],
+        )
+
+        # USDC Vault
+        cls.vault_address = "0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204"
+        # yearn usdc vault whale (yearn treasury)
+        cls.user_address = "0x93A62dA5a14C80f265DAbC077fCEE437B1a0Efde"
+        # Create a funded account for testing
+        cls.account = Account.create()
+        cls.w3.eth.send_transaction(
+            {
+                "to": cls.account.address,
+                "from": cls.w3.eth.accounts[0],
+                "value": cls.w3.to_wei(200000, "ether"),
+            }
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+
+        print(f"snapshot id: {cls.snapshot_id}")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        # run this after tests to restore original forked state
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+        w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 20976304,
+                    },
+                },
+            ],
+        )
+
+    def setUp(self) -> None:
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+        print(f"snapshot id: {self.snapshot_id}")
+
+    def tearDown(self) -> None:
+        # Optional: Revert to the original snapshot after each test
+        print("reverting to original evm snapshot")
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+
+    def test_vault_pool_model(self) -> None:
+        print("----==== TestYearnV3Vault | test_vault_pool_model ====----")
+        pool = YearnV3Vault(
+            contract_address=self.vault_address,
+            user_address=self.user_address,
+        )  # type: ignore[]
+
+        pool.sync(self.w3)
+
+        self.assertTrue(hasattr(pool, "_vault_contract"))
+        self.assertTrue(isinstance(pool._vault_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_apr_oracle"))
+        self.assertTrue(isinstance(pool._apr_oracle, Contract))
+        self.assertEqual(pool._apr_oracle.address, APR_ORACLE)
+
+        # check pool supply_rate
+        print(pool.supply_rate(0))
+
+    def test_supply_rate_increase_alloc(self) -> None:
+        print("----==== TestYearnV3Vault | test_supply_rate_increase_alloc ====----")
+
+        pool = YearnV3Vault(
+            contract_address=self.vault_address,
+            user_address=self.user_address,
+        )  # type: ignore[]
+
+        pool.sync(self.w3)
+
+        # get current balance of the user
+        curr_user_shares = retry_with_backoff(pool._vault_contract.functions.balanceOf(self.user_address).call)
+        current_balance = retry_with_backoff(pool._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        new_balance = current_balance + int(1000000e6)
+
+        apy_before = pool.supply_rate(current_balance)
+        print(f"apy before supplying: {apy_before}")
+
+        # calculate predicted future supply rate after supplying 1000000 USDC
+        apy_after = pool.supply_rate(new_balance)
+        print(f"apy after supplying 1000000 USDC: {apy_after}")
+        self.assertNotEqual(apy_after, 0)
+        self.assertLess(apy_after, apy_before)
+
+    def test_supply_rate_decrease_alloc(self) -> None:
+        print("----==== TestYearnV3Vault | test_supply_rate_decrease_alloc ====----")
+
+        pool = YearnV3Vault(
+            contract_address=self.vault_address,
+            user_address=self.user_address,
+        )  # type: ignore[]
+
+        pool.sync(self.w3)
+
+        # get current balance of the user
+        curr_user_shares = retry_with_backoff(pool._vault_contract.functions.balanceOf(self.user_address).call)
+        current_balance = retry_with_backoff(pool._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        new_balance = current_balance - int(1000000e6)
+
+        apy_before = pool.supply_rate(current_balance)
+        print(f"apy before supplying: {apy_before}")
+
+        # calculate predicted future supply rate after removing 1000000 USDC
+        apy_after = pool.supply_rate(new_balance)
+        print(f"apy after removing 1000000 USDC: {apy_after}")
+        self.assertNotEqual(apy_after, 0)
+        self.assertGreater(apy_after, apy_before)
+
+
 if __name__ == "__main__":
     unittest.main()
-
