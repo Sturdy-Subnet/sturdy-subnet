@@ -82,7 +82,7 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
         case POOL_TYPES.DAI_SAVINGS:
             pass  # TODO: is there a more appropriate way to go about this?
         case _:  # we assume it is a synthetic pool
-            borrow_amount = pool.borrow_amount
+            return pool.borrow_amount
 
     return 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
 
