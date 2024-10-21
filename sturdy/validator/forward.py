@@ -78,7 +78,7 @@ async def query_and_score_miners(
     if request_type == REQUEST_TYPES.ORGANIC:
         self.simulator.initialize(timesteps=1)
     else:
-        self.simulator.initialize(timesteps=1)
+        self.simulator.initialize()
 
     # initialize simulator data
     # if there is no "organic" info then generate synthetic info

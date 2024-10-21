@@ -29,12 +29,23 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         assets_and_pools = generate_assets_and_pools(np.random.RandomState(seed=420))
 
+        cls.contract_addresses: list[str] = list(assets_and_pools["pools"].keys())  # type: ignore[]
+
+        assets_and_pools["pools"][cls.contract_addresses[0]].borrow_amount = int(75e18)
+        assets_and_pools["pools"][cls.contract_addresses[1]].borrow_amount = int(50e18)
+        assets_and_pools["pools"][cls.contract_addresses[2]].borrow_amount = int(85e18)
+        assets_and_pools["pools"][cls.contract_addresses[3]].borrow_amount = int(25e18)
+        assets_and_pools["pools"][cls.contract_addresses[4]].borrow_amount = int(90e18)
+        assets_and_pools["pools"][cls.contract_addresses[5]].borrow_amount = int(25e18)
+        assets_and_pools["pools"][cls.contract_addresses[6]].borrow_amount = int(25e18)
+        assets_and_pools["pools"][cls.contract_addresses[7]].borrow_amount = int(40e18)
+        assets_and_pools["pools"][cls.contract_addresses[8]].borrow_amount = int(45e18)
+        assets_and_pools["pools"][cls.contract_addresses[9]].borrow_amount = int(80e18)
+
         cls.assets_and_pools = {
             "pools": assets_and_pools["pools"],
             "total_assets": int(1000e18),
         }
-
-        cls.contract_addresses: list[str] = list(assets_and_pools["pools"].keys())  # type: ignore[]
 
         cls.allocations: AllocationsDict = {
             cls.contract_addresses[0]: int(100e18),
@@ -42,11 +53,11 @@ class TestValidator(IsolatedAsyncioTestCase):
             cls.contract_addresses[2]: int(200e18),
             cls.contract_addresses[3]: int(50e18),
             cls.contract_addresses[4]: int(200e18),
-            cls.contract_addresses[5]: int(25e18),
-            cls.contract_addresses[6]: int(25e18),
+            cls.contract_addresses[5]: int(45e18),
+            cls.contract_addresses[6]: int(45e18),
             cls.contract_addresses[7]: int(50e18),
             cls.contract_addresses[8]: int(50e18),
-            cls.contract_addresses[9]: int(200e18),
+            cls.contract_addresses[9]: int(160e18),
         }
 
         cls.validator.simulator.initialize(timesteps=50)
@@ -98,15 +109,16 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         print(f"allocs: {allocs}")
 
-        # rewards should not all be the same
-        to_compare = torch.empty(rewards.shape)
-        torch.fill(to_compare, rewards[0])
-        self.assertFalse(torch.equal(rewards, to_compare))
 
         rewards_dict = {active_uids[k]: v for k, v in enumerate(list(rewards))}
         sorted_rewards = dict(sorted(rewards_dict.items(), key=lambda item: item[1], reverse=True))  # type: ignore[]
 
         print(f"sorted rewards: {sorted_rewards}")
+
+        # rewards should not all be the same
+        to_compare = torch.empty(rewards.shape)
+        torch.fill(to_compare, rewards[0])
+        self.assertFalse(torch.equal(rewards, to_compare))
 
     async def test_get_rewards_punish(self) -> None:
         print("----==== test_get_rewards_punish ====----")
