@@ -1,11 +1,11 @@
-import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
-from sturdy.utils.ethmath import wei_div, wei_mul
-from sturdy.validator.simulator import Simulator
-from sturdy.utils.misc import borrow_rate
 from sturdy.constants import *
+from sturdy.utils.ethmath import wei_div, wei_mul
+from sturdy.utils.misc import borrow_rate
+from sturdy.validator.simulator import Simulator
 
 """
 This is a script which can be used to play around with the simulator.
@@ -13,7 +13,7 @@ It comes with a function to plot pool borrow rates, etc. over timestamps
 """
 
 
-def plot_simulation_results(simulator):
+def plot_simulation_results(simulator) -> None:
     borrow_amount_history = []
     borrow_rate_history = []
     utilization_rate_history = []
@@ -102,7 +102,8 @@ def plot_simulation_results(simulator):
     axs[0, 1].set_title("Simulated Borrow Amounts Over Time")
     axs[0, 1].set_xlabel("Time Step")
     axs[0, 1].set_ylabel("Borrow Amount")
-    axs[0, 1].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
+    # axs[0, 1].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
+    axs[0, 1].get_legend().remove()
 
     # Plot utilization rates
     utilization_rate_history_df.plot(ax=axs[1, 0])
@@ -110,13 +111,15 @@ def plot_simulation_results(simulator):
     axs[1, 0].set_xlabel("Time Step")
     axs[1, 0].set_ylabel("Utilization Rate")
     axs[1, 0].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
+    # axs[1, 0].get_legend().remove()
 
     # Plot supply rates
     supply_rate_history_df.plot(ax=axs[1, 1])
     axs[1, 1].set_title("Simulated Supply Rates Over Time")
     axs[1, 1].set_xlabel("Time Step")
     axs[1, 1].set_ylabel("Supply Rate")
-    axs[1, 1].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
+    # axs[1, 1].legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
+    axs[1, 1].get_legend().remove()
 
     # Create a new axis that spans the entire bottom row
     ax_interest_rates = fig.add_subplot(3, 1, 3)
@@ -130,7 +133,7 @@ def plot_simulation_results(simulator):
     ax_interest_rates.set_title("Interest Rate Curves for the Pools")
     ax_interest_rates.set_xlabel("Utilization Rate")
     ax_interest_rates.set_ylabel("Borrow Rate")
-    ax_interest_rates.legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
+    # ax_interest_rates.legend(title="Pools", bbox_to_anchor=(1.05, 1), loc="upper left")
 
     # Ensure labels don't overlap and improve layout
     plt.tight_layout(rect=[0, 0, 1, 0.96])
@@ -138,14 +141,15 @@ def plot_simulation_results(simulator):
 
 
 # Usage
-np.random.seed(69)
-num_sims = 5
-for i in range(num_sims):
-    sim = Simulator(
-        seed=np.random.randint(0, 1000),
-    )
-    sim.initialize()
-    sim.init_data()
-    sim.run()
+if __name__ == "__main__":
+    np.random.seed(69)
+    num_sims = 10
+    for _ in range(num_sims):
+        sim = Simulator(
+            seed=np.random.randint(0, 1000),
+        )
+        sim.initialize()
+        sim.init_data()
+        sim.run()
 
-    plot_simulation_results(sim)
+        plot_simulation_results(sim)

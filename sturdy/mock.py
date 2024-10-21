@@ -9,13 +9,16 @@ import numpy as np
 from sturdy.constants import QUERY_TIMEOUT
 
 
-def generate_array_with_sum(rng_gen: np.random.RandomState, length: int, total_sum: int) -> list:
+def generate_array_with_sum(rng_gen: np.random.RandomState, total_sum: int, min_amounts: [int]) -> list:
+    length = len(min_amounts)
     # Generate an array of random numbers
     random_numbers = rng_gen.rand(length)
+    min_sum = sum(min_amounts)
+    delta_sum = total_sum - min_sum
 
     # Scale the numbers so that they add up to the desired sum
     total_random_sum = sum(random_numbers)
-    scaled_numbers = [int((num / total_random_sum) * total_sum) for num in random_numbers]
+    scaled_numbers = [min_amounts[idx] + int((num / total_random_sum) * delta_sum) for idx, num in enumerate(random_numbers)]
 
     # Adjust the last element to ensure the sum is exactly total_sum
     difference = total_sum - sum(scaled_numbers)
@@ -108,9 +111,13 @@ class MockDendrite(bt.dendrite):
                     s.dendrite.status_message = "OK"
                     synapse.dendrite.process_time = str(process_time)
 
+
                     if self.custom_allocs:
+                        pools = synapse.assets_and_pools["pools"]
+                        min_amounts = [pool.borrow_amount for pool in pools.values()]
+
                         alloc_values = generate_array_with_sum(
-                            np.random, len(s.assets_and_pools["pools"]), s.assets_and_pools["total_assets"]
+                            np.random, s.assets_and_pools["total_assets"], min_amounts
                         )
                         contract_addrs = [pool.contract_address for pool in s.assets_and_pools["pools"].values()]
                         allocations = {contract_addrs[i]: alloc_values[i] for i in range(len(s.assets_and_pools["pools"]))}
