@@ -1,18 +1,18 @@
 import copy
 from typing import Any
 
+import gmpy2
 import numpy as np
 
 from sturdy.constants import *
 from sturdy.pools import (
     BasePoolModel,
     ChainBasedPoolModel,
-    check_allocations,
     generate_assets_and_pools,
     generate_initial_allocations_for_pools,
 )
 from sturdy.protocol import AllocationsDict
-from sturdy.utils.ethmath import wei_mul_arrays
+from sturdy.utils.ethmath import wei_div, wei_mul
 
 
 class Simulator:
@@ -127,13 +127,34 @@ class Simulator:
         curr_borrow_rates = np.array([pool.borrow_rate for _, pool in latest_pool_data.items()])
         curr_borrow_amounts = np.array([pool.borrow_amount for _, pool in latest_pool_data.items()])
         curr_reserve_sizes = np.array([pool.reserve_size for _, pool in latest_pool_data.items()])
+        optimal_util_rates = np.array([pool.optimal_util_rate for _, pool in latest_pool_data.items()])
+        base_slopes = np.array([pool.base_slope for _, pool in latest_pool_data.items()])
+        kink_slopes = np.array([pool.kink_slope for _, pool in latest_pool_data.items()])
 
         median_rate = np.median(curr_borrow_rates)  # Calculate the median borrow rate
         noise = self.rng_state_container.normal(0, self.stochasticity * 1e18, len(curr_borrow_rates))  # Add some random noise
         rate_changes = (-self.reversion_speed * (curr_borrow_rates - median_rate)) + noise  # Mean reversion principle
-        new_borrow_amounts = curr_borrow_amounts + wei_mul_arrays(
-            rate_changes, curr_borrow_amounts,
-        )  # Update the borrow amounts
+
+        new_borrow_amounts = []
+        # Update the borrow amounts
+        for i in range(len(curr_borrow_rates)):
+            opt_util = optimal_util_rates[i]
+            curr_util = wei_div(curr_borrow_amounts[i], curr_reserve_sizes[i])
+            borrow_delta = 0
+            if curr_util < opt_util:
+                borrow_delta = wei_div(wei_mul(curr_reserve_sizes[i], opt_util), base_slopes[i])
+            else:
+                borrow_delta = wei_div(
+                    wei_mul(curr_reserve_sizes[i], int(1e18) - optimal_util_rates[i]),
+                    kink_slopes[i],
+                )
+
+            new_borrow_amount = curr_borrow_amounts[i] + wei_mul(borrow_delta, int(rate_changes[i]))
+
+            new_borrow_amounts.append(new_borrow_amount)
+
+        new_borrow_amounts = np.array(new_borrow_amounts)
+
         amounts = np.clip(new_borrow_amounts, 0, curr_reserve_sizes)  # Ensure borrow amounts do not exceed reserves
         pool_uids = list(latest_pool_data.keys())
 
@@ -143,7 +164,6 @@ class Simulator:
             pool.borrow_amount = amounts[idx]
 
         return {pool_uids[uid]: pool for uid, pool in enumerate(new_pools)}
-
 
     # run simulation
     def run(self) -> None:

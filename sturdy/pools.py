@@ -50,6 +50,7 @@ class POOL_TYPES(IntEnum):
     DAI_SAVINGS = 3
     COMPOUND_V3 = 4
     MORPHO = 5
+    YEARN_V3 = 6
 
 
 def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
@@ -76,18 +77,18 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
             borrow_amount = pool._curr_borrows
             our_supply = pool._user_assets
             assets_available = pool._total_assets - borrow_amount
+        case POOL_TYPES.YEARN_V3:
+            return pool._curr_deposit - pool._max_withdraw
         case POOL_TYPES.DAI_SAVINGS:
             pass  # TODO: is there a more appropriate way to go about this?
         case _:  # we assume it is a synthetic pool
-            borrow_amount = pool.borrow_amount
+            return pool.borrow_amount
 
     return 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
 
 
 def check_allocations(
-    assets_and_pools: dict,
-    allocations: dict[str, int],
-    alloc_threshold: float = TOTAL_ALLOC_THRESHOLD
+    assets_and_pools: dict, allocations: dict[str, int], alloc_threshold: float = TOTAL_ALLOC_THRESHOLD
 ) -> bool:
     """
     Checks allocations from miner.
@@ -301,6 +302,8 @@ class PoolFactory:
                 return CompoundV3Pool(**kwargs)
             case POOL_TYPES.MORPHO:
                 return MorphoVault(**kwargs)
+            case POOL_TYPES.YEARN_V3:
+                return YearnV3Vault(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
@@ -1019,6 +1022,44 @@ def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[
     assets_and_pools["pools"] = pools
 
     return assets_and_pools
+
+
+class YearnV3Vault(ChainBasedPoolModel):
+    pool_type: POOL_TYPES = Field(POOL_TYPES.YEARN_V3, const=True, description="type of pool")
+
+    _vault_contract: Contract = PrivateAttr()
+    _apr_oracle: Contract = PrivateAttr()
+    _max_withdraw: int = PrivateAttr()
+    _curr_deposit: int = PrivateAttr()
+
+    def pool_init(self, web3_provider: Web3) -> None:
+        vault_abi_file_path = Path(__file__).parent / "abi/Yearn_V3_Vault.json"
+        vault_abi_file = vault_abi_file_path.open()
+        vault_abi = json.load(vault_abi_file)
+        vault_abi_file.close()
+
+        vault_contract = web3_provider.eth.contract(abi=vault_abi, decode_tuples=True)
+        self._vault_contract = retry_with_backoff(vault_contract, address=self.contract_address)
+
+        apr_oracle_abi_file_path = Path(__file__).parent / "abi/AprOracle.json"
+        apr_oracle_abi_file = apr_oracle_abi_file_path.open()
+        apr_oracle_abi = json.load(apr_oracle_abi_file)
+        apr_oracle_abi_file.close()
+
+        apr_oracle = web3_provider.eth.contract(abi=apr_oracle_abi, decode_tuples=True)
+        self._apr_oracle = retry_with_backoff(apr_oracle, address=APR_ORACLE)
+
+    def sync(self, web3_provider: Web3) -> None:
+        if not self._initted:
+            self.pool_init(web3_provider)
+
+        self._max_withdraw = retry_with_backoff(self._vault_contract.functions.maxWithdraw(self.user_address).call)
+        user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
+        self._curr_deposit = retry_with_backoff(self._vault_contract.functions.convertToAssets(user_shares).call)
+
+    def supply_rate(self, amount: int) -> int:
+        delta = amount - self._curr_deposit
+        return retry_with_backoff(self._apr_oracle.functions.getExpectedApr(self.contract_address, delta).call)
 
 
 # generate intial allocations for pools
