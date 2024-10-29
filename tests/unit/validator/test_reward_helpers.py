@@ -798,7 +798,7 @@ class TestRewardFunctions(unittest.TestCase):
         rewards_apy = torch.Tensor([0.05 / 0.05, 0.04 / 0.05, 0.03 / 0.05])
         apys_and_allocations = {
             "0": {"apy": 0.05, "allocations": {"asset_1": 200, "asset_2": 300}},
-            "1": {"apy": 0.04, "allocations": {"asset_1": 210, "asset_2": 310}},
+            "1": {"apy": 0.04, "allocations": {"asset_1": 202, "asset_2": 303}},
             "2": {"apy": 0.03, "allocations": {"asset_1": 200, "asset_2": 400}},
         }
         assets_and_pools = {
