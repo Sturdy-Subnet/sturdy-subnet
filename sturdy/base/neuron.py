@@ -90,9 +90,7 @@ class BaseNeuron(ABC):
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
             self.wallet = bt.MockWallet(config=self.config)
-            self.subtensor = MockSubtensor(
-                self.config.netuid, n=self.config.mock_n, wallet=self.wallet
-            )
+            self.subtensor = MockSubtensor(self.config.netuid, n=self.config.mock_n, wallet=self.wallet)
             self.metagraph = MockMetagraph(self.config.netuid, subtensor=self.subtensor)
         else:
             self.wallet = bt.wallet(config=self.config)
@@ -115,12 +113,10 @@ class BaseNeuron(ABC):
         self.step = 0
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
-        ...
+    async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
     @abstractmethod
-    def run(self):
-        ...
+    def run(self): ...
 
     def sync(self):
         """
@@ -133,9 +129,7 @@ class BaseNeuron(ABC):
             try:
                 self.resync_metagraph()
             except Exception as e:
-                bt.logging.error(
-                    "There was an issue with trying to sync with the metagraph! See Error:"
-                )
+                bt.logging.error("There was an issue with trying to sync with the metagraph! See Error:")
                 bt.logging.error(e)
 
         if self.should_set_weights():
@@ -164,9 +158,7 @@ class BaseNeuron(ABC):
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
-        return (
-            self.block - self.metagraph.last_update[self.uid]
-        ) > self.config.neuron.epoch_length
+        return (self.block - self.metagraph.last_update[self.uid]) > self.config.neuron.epoch_length
 
     def should_set_weights(self) -> bool:
         # Don't set weights on initialization.

@@ -79,7 +79,7 @@ class TestAavePool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -268,7 +268,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -363,7 +363,7 @@ class TestCompoundV3Pool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -496,7 +496,7 @@ class TestDaiSavingsRate(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -582,7 +582,7 @@ class TestMorphoVault(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -731,7 +731,7 @@ class TestYearnV3Vault(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],

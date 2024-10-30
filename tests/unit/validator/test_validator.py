@@ -109,7 +109,6 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         print(f"allocs: {allocs}")
 
-
         rewards_dict = {active_uids[k]: v for k, v in enumerate(list(rewards))}
         sorted_rewards = dict(sorted(rewards_dict.items(), key=lambda item: item[1], reverse=True))  # type: ignore[]
 

@@ -59,8 +59,7 @@ class TestSimulator(unittest.TestCase):
         contract_addresses = [addr for addr in self.simulator.assets_and_pools["pools"]]
 
         allocations = {
-            contract_addresses[i]: self.simulator.assets_and_pools["total_assets"]
-            / len(init_pools)
+            contract_addresses[i]: self.simulator.assets_and_pools["total_assets"] / len(init_pools)
             for i in range(len(init_pools))
         }
 
@@ -75,9 +74,7 @@ class TestSimulator(unittest.TestCase):
             # check init pool_history datapoint
             new_pool_hist_init = self.simulator.pool_history[0][uid]
             b_rate_should_be = borrow_rate(
-                wei_div(
-                    new_pool_hist_init.borrow_amount, new_pool_hist_init.reserve_size
-                ),
+                wei_div(new_pool_hist_init.borrow_amount, new_pool_hist_init.reserve_size),
                 new_pool,
             )
             self.assertEqual(reserve_should_be, new_pool_hist_init.reserve_size)
@@ -95,9 +92,7 @@ class TestSimulator(unittest.TestCase):
 
         contract_addresses = [addr for addr in self.simulator.assets_and_pools["pools"]]
 
-        allocs = {
-            contract_addresses[0]: total_assets / 10
-        }  # should be 0.1 if total assets is 1
+        allocs = {contract_addresses[0]: total_assets / 10}  # should be 0.1 if total assets is 1
 
         self.simulator.update_reserves_with_allocs(allocs)
 
@@ -112,9 +107,7 @@ class TestSimulator(unittest.TestCase):
             # check init pool_history datapoint
             new_pool_hist_init = self.simulator.pool_history[0][uid]
             b_rate_should_be = borrow_rate(
-                wei_div(
-                    new_pool_hist_init.borrow_amount, new_pool_hist_init.reserve_size
-                ),
+                wei_div(new_pool_hist_init.borrow_amount, new_pool_hist_init.reserve_size),
                 new_pool,
             )
             self.assertEqual(reserve_should_be, new_pool_hist_init.reserve_size)
@@ -205,17 +198,13 @@ class TestSimulator(unittest.TestCase):
 
         for contract_addr, _ in self.simulator.assets_and_pools["pools"].items():
             borrow_amounts = [
-                self.simulator.pool_history[T][contract_addr].borrow_amount
-                for T in range(1, self.simulator.timesteps)
+                self.simulator.pool_history[T][contract_addr].borrow_amount for T in range(1, self.simulator.timesteps)
             ]
             borrow_rates = [
-                self.simulator.pool_history[T][contract_addr].borrow_rate
-                for T in range(1, self.simulator.timesteps)
+                self.simulator.pool_history[T][contract_addr].borrow_rate for T in range(1, self.simulator.timesteps)
             ]
 
-            self.assertTrue(
-                borrow_amounts.count(borrow_amounts[0]) < len(borrow_amounts)
-            )
+            self.assertTrue(borrow_amounts.count(borrow_amounts[0]) < len(borrow_amounts))
             self.assertTrue(borrow_rates.count(borrow_rates[0]) < len(borrow_rates))
 
         # check if simulation runs the same across "reset()s"

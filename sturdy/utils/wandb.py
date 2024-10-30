@@ -18,10 +18,7 @@ def init_wandb_miner(self, reinit=False):
     if self.config.mock:
         tags.append("mock")
 
-    wandb_config = {
-        key: copy.deepcopy(self.config.get(key, None))
-        for key in ("neuron", "reward", "netuid", "wandb")
-    }
+    wandb_config = {key: copy.deepcopy(self.config.get(key, None)) for key in ("neuron", "reward", "netuid", "wandb")}
 
     if wandb_config["neuron"] is not None:
         wandb_config["neuron"].pop("full_path", None)
@@ -33,11 +30,7 @@ def init_wandb_miner(self, reinit=False):
         entity=self.config.wandb.entity,
         config=wandb_config,
         mode="offline" if self.config.wandb.offline else "online",
-        dir=(
-            self.config.neuron.full_path
-            if self.config.neuron is not None
-            else "wandb_logs"
-        ),
+        dir=(self.config.neuron.full_path if self.config.neuron is not None else "wandb_logs"),
         tags=tags,
         notes=self.config.wandb.notes,
     )
@@ -63,10 +56,7 @@ def init_wandb_validator(self, reinit=False):
     if self.config.neuron.disable_log_rewards:
         tags.append("disable_log_rewards")
 
-    wandb_config = {
-        key: copy.deepcopy(self.config.get(key, None))
-        for key in ("neuron", "reward", "netuid", "wandb")
-    }
+    wandb_config = {key: copy.deepcopy(self.config.get(key, None)) for key in ("neuron", "reward", "netuid", "wandb")}
     wandb_config["neuron"].pop("full_path", None)
 
     self.wandb = wandb.init(

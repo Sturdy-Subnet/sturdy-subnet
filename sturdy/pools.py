@@ -32,6 +32,7 @@ from web3.contract.contract import Contract
 from web3.types import BlockData
 
 from sturdy.constants import *
+from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.utils.ethmath import wei_div, wei_mul
 from sturdy.utils.misc import (
     format_num_prec,
@@ -325,7 +326,6 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _totalVariableDebt = PrivateAttr()
     _reserveFactor = PrivateAttr()
     _collateral_amount: int = PrivateAttr()
-    _collateral_amount: int = PrivateAttr()
     _total_supplied: int = PrivateAttr()
     _decimals: int = PrivateAttr()
 
@@ -517,6 +517,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _silo_strategy_contract: Contract = PrivateAttr()
     _pair_contract: Contract = PrivateAttr()
     _rate_model_contract: Contract = PrivateAttr()
+
     _curr_deposit_amount: int = PrivateAttr()
     _util_prec: int = PrivateAttr()
     _fee_prec: int = PrivateAttr()
@@ -524,8 +525,13 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _totalBorrow: Any = PrivateAttr()
     _current_rate_info = PrivateAttr()
     _rate_prec: int = PrivateAttr()
+
     _block: BlockData = PrivateAttr()
+
     _decimals: int = PrivateAttr()
+    _asset: Contract = PrivateAttr()
+    _user_asset_balance: Contract = PrivateAttr()
+    _user_total_assets: Contract = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
@@ -574,6 +580,15 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             self._rate_model_contract = retry_with_backoff(rate_model_contract, address=rate_model_contract_address)
             self._decimals = retry_with_backoff(self._pair_contract.functions.decimals().call)
 
+            erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
+            erc20_abi_file = erc20_abi_file_path.open()
+            erc20_abi = json.load(erc20_abi_file)
+            erc20_abi_file.close()
+
+            asset_address = retry_with_backoff(self._pair_contract.functions.asset().call)
+            asset_contract = web3_provider.eth.contract(abi=erc20_abi, decode_tuples=True)
+            self._asset = retry_with_backoff(asset_contract, address=asset_address)
+
             self._initted = True
 
         except Exception as e:
@@ -598,6 +613,8 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._current_rate_info = retry_with_backoff(self._pair_contract.functions.currentRateInfo().call)
 
         self._rate_prec = retry_with_backoff(self._rate_model_contract.functions.RATE_PREC().call)
+
+        self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
@@ -970,56 +987,61 @@ def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
     return account.address
 
 
-def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
+def generate_assets_and_pools(
+    rng_gen: np.random.RandomState, web3_provider: Web3
+) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
+    selected_challenge_data = rng_gen.choice(list(POOL_REGISTRY.keys()))
+
+    return assets_pools_for_challenge_data(selected_challenge_data, web3_provider)
+
+
+def assets_pools_for_challenge_data(
+    challenge_data, web3_provider: Web3
+) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
     assets_and_pools = {}
 
-    pools_list = [
-        BasePool(
-            contract_address=generate_eth_public_key(rng_gen=rng_gen),
-            pool_type=POOL_TYPES.SYNTHETIC,
-            base_rate=int(randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen)),
-            base_slope=int(randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen)),
-            kink_slope=int(
-                randrange_float(MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen),
-            ),  # kink rate - kicks in after pool hits optimal util rate
-            optimal_util_rate=int(
-                randrange_float(
-                    MIN_OPTIMAL_RATE,
-                    MAX_OPTIMAL_RATE,
-                    OPTIMAL_UTIL_STEP,
-                    rng_gen=rng_gen,
-                ),
-            ),  # optimal util rate - after which the kink slope kicks in
-            borrow_amount=int(
-                format_num_prec(
-                    wei_mul(
-                        POOL_RESERVE_SIZE,
-                        int(
-                            randrange_float(
-                                MIN_UTIL_RATE,
-                                MAX_UTIL_RATE,
-                                UTIL_RATE_STEP,
-                                rng_gen=rng_gen,
-                            ),
-                        ),
-                    ),
-                ),
-            ),  # initial borrowed amount from pool
-            reserve_size=int(POOL_RESERVE_SIZE),
-        )
-        for _ in range(NUM_POOLS)
-    ]
+    selected_assets_and_pools = challenge_data["assets_and_pools"]
+    selected_pools = selected_assets_and_pools["pools"]
+    user_address = challenge_data["user_address"]
 
-    pools = {str(pool.contract_address): pool for pool in pools_list}
+    pool_list = []
 
-    minimums = [pool.borrow_amount for pool in pools_list]
-    min_total = sum(minimums)
-    assets_and_pools["total_assets"] = int(min_total) + int(
-        math.floor(
-            randrange_float(MIN_TOTAL_ASSETS_OFFSET, MAX_TOTAL_ASSETS_OFFSET, TOTAL_ASSETS_OFFSET_STEP, rng_gen=rng_gen),
+    for pool_dict in selected_pools.values():
+        pool = PoolFactory.create_pool(
+            pool_type=POOL_TYPES._member_map_[pool_dict["pool_type"]],
+            pool_model_disc=pool_dict["pool_model_disc"],
+            user_address=user_address,
+            contract_address=pool_dict["contract_address"],
         )
-    )
+        pool_list.append(pool)
+
+    pools = {str(pool.contract_address): pool for pool in pool_list}
+
+    # we assume that the user address is the same across pools (valid)
+    # and also that the asset contracts are the same across said pools
+    first_pool = pool_list[0]
+    total_assets = 0
+
+    match pool.pool_type:
+        case POOL_TYPES.STURDY_SILO:
+            first_pool.sync(user_address, web3_provider)
+            total_assets = first_pool._user_asset_balance
+        case _:
+            pass
+
+    for pool in pools.values():
+        total_asset = 0
+        match pool.pool_type:
+            case POOL_TYPES.STURDY_SILO:
+                pool.sync(user_address, web3_provider)
+                total_asset += pool._curr_deposit_amount
+            case _:
+                pass
+
+        total_assets += total_asset
+
     assets_and_pools["pools"] = pools
+    assets_and_pools["total_assets"] = total_assets
 
     return assets_and_pools
 

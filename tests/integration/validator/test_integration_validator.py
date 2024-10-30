@@ -27,14 +27,14 @@ class TestValidator(IsolatedAsyncioTestCase):
         # simulator with preset seed
         cls.validator.simulator = Simulator(seed=69)
 
-        assets_and_pools = generate_assets_and_pools(np.random.RandomState(seed=420)) # type: ignore[]
+        assets_and_pools = generate_assets_and_pools(np.random.RandomState(seed=420))  # type: ignore[]
 
         cls.assets_and_pools = {
             "pools": assets_and_pools["pools"],
             "total_assets": int(1000e18),
         }
 
-        cls.contract_addresses = list(assets_and_pools["pools"].keys()) # type: ignore[]
+        cls.contract_addresses = list(assets_and_pools["pools"].keys())  # type: ignore[]
 
         cls.allocations = {
             cls.contract_addresses[0]: 100e18,
@@ -59,7 +59,8 @@ class TestValidator(IsolatedAsyncioTestCase):
         # use user-defined generated assets and pools
         simulator_copy = copy.deepcopy(self.validator.simulator)
         await query_and_score_miners(
-            self.validator, assets_and_pools=copy.deepcopy(self.assets_and_pools),
+            self.validator,
+            assets_and_pools=copy.deepcopy(self.assets_and_pools),
         )
         simulator_copy.initialize()
         simulator_copy.init_data(

@@ -192,9 +192,7 @@ class BaseValidatorNeuron(BaseNeuron):
                             sim_penalties = {
                                 f"similarity_penalties/uid_{uid}": score for uid, score in self.similarity_penalties.items()
                             }
-                            apys = {
-                                f"apys/uid_{uid}": apy for uid, apy in self.sorted_apys.items()
-                            }
+                            apys = {f"apys/uid_{uid}": apy for uid, apy in self.sorted_apys.items()}
                             axon_times = {
                                 f"axon_times/uid_{uid}": axon_time for uid, axon_time in self.sorted_axon_times.items()
                             }

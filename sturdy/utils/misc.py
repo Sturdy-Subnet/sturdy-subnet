@@ -116,7 +116,6 @@ def borrow_rate(util_rate, pool) -> int:
     )
 
 
-
 def supply_rate(util_rate, pool) -> int:
     return wei_mul(util_rate, pool.borrow_rate)
 

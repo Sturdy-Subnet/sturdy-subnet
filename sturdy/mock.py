@@ -111,14 +111,11 @@ class MockDendrite(bt.dendrite):
                     s.dendrite.status_message = "OK"
                     synapse.dendrite.process_time = str(process_time)
 
-
                     if self.custom_allocs:
                         pools = synapse.assets_and_pools["pools"]
                         min_amounts = [pool.borrow_amount for pool in pools.values()]
 
-                        alloc_values = generate_array_with_sum(
-                            np.random, s.assets_and_pools["total_assets"], min_amounts
-                        )
+                        alloc_values = generate_array_with_sum(np.random, s.assets_and_pools["total_assets"], min_amounts)
                         contract_addrs = [pool.contract_address for pool in s.assets_and_pools["pools"].values()]
                         allocations = {contract_addrs[i]: alloc_values[i] for i in range(len(s.assets_and_pools["pools"]))}
 

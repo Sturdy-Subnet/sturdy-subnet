@@ -73,7 +73,6 @@ async def query_and_score_miners(
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
     user_address: str = ADDRESS_ZERO,
 ) -> dict[str, AllocInfo]:
-
     # intialize simulator
     if request_type == REQUEST_TYPES.ORGANIC:
         self.simulator.initialize(timesteps=1)
