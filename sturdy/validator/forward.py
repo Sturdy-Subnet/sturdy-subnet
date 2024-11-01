@@ -26,7 +26,7 @@ from web3.constants import ADDRESS_ZERO
 from sturdy.constants import QUERY_TIMEOUT, SCORING_PERIOD
 from sturdy.pools import generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
-from sturdy.validator.reward import filter_allocations
+from sturdy.validator.reward import filter_allocations, get_rewards
 from sturdy.validator.sql import get_active_allocs, get_db_connection, log_allocations
 
 
@@ -123,11 +123,20 @@ async def query_and_score_miners(
     # score previously suggested miner allocations based on how well they are performing now
 
     # get all the request ids for the pools we should be scoring from the db
-    active_allocs = []
+    active_alloc_rows = []
     with get_db_connection() as conn:
-        active_allocs = get_active_allocs(conn)
+        active_alloc_rows = get_active_allocs(conn)
 
-    bt.logging.debug(f"Active allocs: {active_allocs}")
+    bt.logging.debug(f"Active allocs: {active_alloc_rows}")
+
+    for active_alloc in active_alloc_rows:
+        # calculate rewards for previous active allocations
+        miner_uids, rewards = get_rewards(self, active_alloc)
+        bt.logging.debug(f"miner rewards: {rewards}")
+
+        # update the moving average scores of the miners
+        int_miner_uids = [int(uid) for uid in miner_uids]
+        # self.update_scores(rewards, int_miner_uids)
 
     # before logging latest allocations
     # filter them
@@ -135,16 +144,10 @@ async def query_and_score_miners(
         self,
         query=self.step,
         uids=active_uids,
-        active_allocations=active_allocs,
         responses=responses,
         assets_and_pools=assets_and_pools,
     )
 
-    # calculate rewards for previous active allocations
-
-    # update the moving average scores of the miners
-    # int_active_uids = [int(uid) for uid in active_uids]
-    # self.update_scores(rewards, int_active_uids)
 
     # TODO: sort the miners' by their current scores and return their respective allocations
 

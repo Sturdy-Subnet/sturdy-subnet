@@ -261,7 +261,7 @@ async def get_allocations(
     to_ts: int | None = None,
 ) -> list[dict]:
     with sql.get_db_connection() as conn:
-        allocations = sql.get_filtered_allocations(conn, request_uid, miner_uid, from_ts, to_ts)
+        allocations = sql.get_miner_responses(conn, request_uid, miner_uid, from_ts, to_ts)
     if not allocations:
         raise HTTPException(status_code=404, detail="No allocations found")
     return allocations

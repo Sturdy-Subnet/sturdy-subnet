@@ -199,6 +199,7 @@ def log_allocations(
     conn.commit()
 
 
+# TODO: rename function and database table?
 def get_active_allocs(
     conn: sqlite3.Connection,
 ) -> list:
@@ -221,12 +222,12 @@ def get_active_allocs(
     return [dict(row) for row in rows]
 
 
-def get_filtered_allocations(
+def get_miner_responses(
     conn: sqlite3.Connection,
-    request_uid: str | None,
-    miner_uid: str | None,
-    from_ts: int | None,
-    to_ts: int | None,
+    request_uid: str | None = None,
+    miner_uid: str | None = None,
+    from_ts: int | None = None,
+    to_ts: int | None = None,
 ) -> list[dict]:
     query = f"""
     SELECT * FROM {ALLOCATIONS_TABLE}
@@ -257,9 +258,9 @@ def get_filtered_allocations(
 
 def get_request_info(
     conn: sqlite3.Connection,
-    request_uid: str | None,
-    from_ts: int | None,
-    to_ts: int | None,
+    request_uid: str | None = None,
+    from_ts: int | None = None,
+    to_ts: int | None = None,
 ) -> list[dict]:
     query = f"""
     SELECT * FROM {ALLOCATION_REQUESTS_TABLE}

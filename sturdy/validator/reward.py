@@ -16,7 +16,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import copy
+import json
 from typing import Any, cast
 
 import bittensor as bt
@@ -27,8 +27,9 @@ import torch
 
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, check_allocations
-from sturdy.protocol import REQUEST_TYPES, AllocationsDict, AllocInfo
+from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div, wei_mul
+from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
 
 def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, float]:
@@ -265,8 +266,6 @@ def _get_rewards(
     - adjusted_rewards: The reward values for the miners.
     """
 
-    # raw_apys = torch.Tensor([apys_and_allocations[uid]["apy"] for uid in uids])
-
     rewards_apy = dynamic_normalize_zscore(apys_and_allocations).to(self.device)
 
     return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
@@ -325,7 +324,6 @@ def filter_allocations(
     self,
     query: int,  # noqa: ARG001
     uids: list[str],
-    active_allocations: list, # row of allocations from database
     responses: list,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
 ) -> dict[str, AllocInfo]:
@@ -345,7 +343,6 @@ def filter_allocations(
     axon_times = get_response_times(uids=uids, responses=responses, timeout=QUERY_TIMEOUT)
 
     for response_idx, response in enumerate(responses):
-
         allocations = response.allocations
 
         # validator miner allocations before running simulation
@@ -381,4 +378,38 @@ def filter_allocations(
     # Get all the reward results by iteratively calling your reward() function.
     return axon_times, curr_filtered_allocs
 
-# def get_rewards()
+
+def get_rewards(self, active_allocation) -> tuple[list, dict]:
+    # a dictionary, miner uids -> apy and allocations
+    apys_and_allocations = {}
+    miner_uids = []
+    axon_times = []
+
+    # TODO: rename this here and in the database schema?
+    request_uid = active_allocation["request_uid"]
+    assets_and_pools = None
+    miners = None
+
+    with get_db_connection() as conn:
+        # get assets and pools that are used to benchmark miner
+        assets_and_pools = get_request_info(conn, request_uid=request_uid)
+
+        # obtain the miner responses for each request
+        miners = get_miner_responses(conn, request_uid=request_uid)
+        bt.logging.debug(f"filtered allocations: {miners}")
+
+    # TODO: this probably needs more work
+    # TODO: would it be better here to use metrics i.e. liquidityIndex for aave pools?
+    # calculate the "adjusted" yields of the allocations
+    for miner in miners:
+        allocations = json.loads(miner["allocation"])["allocations"]
+        miner_uid = miner["miner_uid"]
+        miner_apy = calculate_apy(allocations, assets_and_pools)
+        miner_axon_time = miner["axon_time"]
+
+        miner_uids.append(miner_uid)
+        axon_times.append(miner_axon_time)
+        apys_and_allocations[miner_uid] = {"apy": miner_apy, "allocations": allocations}
+
+    # get rewards given the apys and allocations(s) with _get_rewards (???)
+    return (miner_uids, _get_rewards(self, apys_and_allocations, assets_and_pools, miner_uids, axon_times))
