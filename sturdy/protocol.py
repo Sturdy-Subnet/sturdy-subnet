@@ -25,7 +25,7 @@ from typing_extensions import TypedDict
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
-from sturdy.pools import BasePoolModel, ChainBasedPoolModel
+from sturdy.pools import ChainBasedPoolModel
 
 
 class REQUEST_TYPES(IntEnum):
@@ -41,16 +41,13 @@ class AllocInfo(TypedDict):
     allocations: AllocationsDict | None
 
 
-PoolModel = Annotated[ChainBasedPoolModel | BasePoolModel, Field(discriminator="pool_model_disc")]
-
-
 class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
         smart_union = True
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: dict[str, dict[str, PoolModel] | int] = Field(
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
@@ -108,7 +105,7 @@ class AllocateAssetsBase(BaseModel):
         smart_union = True
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: dict[str, dict[str, PoolModel] | int] = Field(
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )

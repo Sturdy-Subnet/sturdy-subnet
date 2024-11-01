@@ -52,7 +52,6 @@ from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
 from sturdy.validator import forward, query_and_score_miners, sql
-from sturdy.validator.simulator import Simulator
 
 
 class Validator(BaseValidatorNeuron):
@@ -74,7 +73,6 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info("load_state()")
         self.load_state()
         self.uid_to_response = {}
-        self.simulator = Simulator()
 
     async def forward(self) -> Any:
         """
@@ -217,29 +215,15 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     new_pools = {}
     for uid, pool in pools.items():
-        match synapse.request_type:
-            case REQUEST_TYPES.SYNTHETIC:
-                new_pool = PoolFactory.create_pool(
-                    pool_type=pool.pool_type,
-                    contract_address=pool.contract_address,
-                    base_rate=pool.base_rate,
-                    base_slope=pool.base_slope,
-                    kink_slope=pool.kink_slope,
-                    optimal_util_rate=pool.optimal_util_rate,
-                    borrow_amount=pool.borrow_amount,
-                    reserve_size=pool.reserve_size,
-                )
-                new_pools[uid] = new_pool
-            case _:  # TODO: We assume this is an "organic request"
-                new_pool = PoolFactory.create_pool(
-                    pool_type=pool.pool_type,
-                    web3_provider=core_validator.w3,  # type: ignore[]
-                    user_address=(
-                        pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
-                    ),  # TODO: is there a cleaner way to do this?
-                    contract_address=pool.contract_address,
-                )
-                new_pools[uid] = new_pool
+        new_pool = PoolFactory.create_pool(
+            pool_type=pool.pool_type,
+            web3_provider=core_validator.w3,  # type: ignore[]
+            user_address=(
+                pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
+            ),  # TODO: is there a cleaner way to do this?
+            contract_address=pool.contract_address,
+        )
+        new_pools[uid] = new_pool
 
     synapse.assets_and_pools["pools"] = new_pools
 

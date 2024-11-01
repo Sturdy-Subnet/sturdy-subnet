@@ -103,8 +103,7 @@ async def query_and_score_miners(
 
     synapse = AllocateAssets(
         request_type=request_type,
-        assets_and_pools=self.simulator.assets_and_pools,
-        allocations=self.simulator.allocations,
+        assets_and_pools=assets_and_pools,
         user_address=user_address,
     )
 

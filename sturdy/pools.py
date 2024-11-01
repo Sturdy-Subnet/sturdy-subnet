@@ -35,9 +35,7 @@ from sturdy.constants import *
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.utils.ethmath import wei_div, wei_mul
 from sturdy.utils.misc import (
-    format_num_prec,
     getReserveFactor,
-    randrange_float,
     rayMul,
     retry_with_backoff,
     ttl_cache,
@@ -45,7 +43,6 @@ from sturdy.utils.misc import (
 
 
 class POOL_TYPES(IntEnum):
-    SYNTHETIC = 0
     STURDY_SILO = 1
     AAVE = 2
     DAI_SAVINGS = 3
@@ -146,94 +143,6 @@ def check_allocations(
     return True
 
 
-class BasePoolModel(BaseModel):
-    """This model will primarily be used for synthetic requests"""
-
-    class Config:
-        use_enum_values = True  # This will use the enum's value instead of the enum itself
-        smart_union = True
-
-    pool_model_disc: Literal["SYNTHETIC"] = Field(default="SYNTHETIC", description="pool type discriminator")
-    contract_address: str = Field(..., description='the "contract address" of the pool - used here as a uid')
-    pool_type: POOL_TYPES | int | str = Field(default=POOL_TYPES.SYNTHETIC, const=True, description="type of pool")
-    base_rate: int = Field(..., description="base interest rate")
-    base_slope: int = Field(..., description="base interest rate slope")
-    kink_slope: int = Field(..., description="kink slope")
-    optimal_util_rate: int = Field(..., description="optimal utilisation rate")
-    borrow_amount: int = Field(..., description="borrow amount in wei")
-    reserve_size: int = Field(..., description="pool reserve size in wei")
-
-    @validator("pool_type", pre=True)
-    def validator_pool_type(cls, value) -> POOL_TYPES | int | str:
-        if isinstance(value, POOL_TYPES):
-            return value
-        if isinstance(value, int):
-            return POOL_TYPES(value)
-        if isinstance(value, str):
-            try:
-                return POOL_TYPES[value]
-            except KeyError:
-                raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
-        raise ValueError(f"Invalid value: {value}")
-
-    @root_validator
-    def check_params(cls, values):  # noqa: ANN201
-        if not Web3.is_address(values.get("contract_address")):
-            raise ValueError("pool address is invalid!")
-        if values.get("base_rate") < 0:
-            raise ValueError("base rate is negative")
-        if values.get("base_slope") < 0:
-            raise ValueError("base slope is negative")
-        if values.get("kink_slope") < 0:
-            raise ValueError("kink slope is negative")
-        if values.get("optimal_util_rate") < 0:
-            raise ValueError("optimal utilization rate is negative")
-        if values.get("borrow_amount") < 0:
-            raise ValueError("borrow amount is negative")
-        if values.get("reserve_size") < 0:
-            raise ValueError("reserve size is negative")
-        return values
-
-
-class BasePool(BasePoolModel):
-    """This class defines the base pool type
-
-    Args:
-        contract_address: (str),
-        base_rate: (int),
-        base_slope: (int),
-        kink_slope: (int),
-        optimal_util_rate: (int),
-        borrow_amount: (int),
-        reserve_size: (int),
-    """
-
-    @property
-    def util_rate(self) -> int:
-        return wei_div(self.borrow_amount, self.reserve_size)
-
-    @property
-    def borrow_rate(self) -> int:
-        util_rate = self.util_rate
-        return (
-            self.base_rate + wei_mul(wei_div(util_rate, self.optimal_util_rate), self.base_slope)
-            if util_rate < self.optimal_util_rate
-            else self.base_rate
-            + self.base_slope
-            + wei_mul(
-                wei_div(
-                    (util_rate - self.optimal_util_rate),
-                    int(1e18 - self.optimal_util_rate),
-                ),
-                self.kink_slope,
-            )
-        )
-
-    @property
-    def supply_rate(self) -> int:
-        return wei_mul(self.util_rate, self.borrow_rate)
-
-
 class ChainBasedPoolModel(BaseModel):
     """This serves as the base model of pools which need to pull data from on-chain
 
@@ -289,10 +198,8 @@ class ChainBasedPoolModel(BaseModel):
 
 class PoolFactory:
     @staticmethod
-    def create_pool(pool_type: POOL_TYPES, **kwargs: Any) -> ChainBasedPoolModel | BasePoolModel:
+    def create_pool(pool_type: POOL_TYPES, **kwargs: Any) -> ChainBasedPoolModel:
         match pool_type:
-            case POOL_TYPES.SYNTHETIC:
-                return BasePool(**kwargs)
             case POOL_TYPES.AAVE:
                 return AaveV3DefaultInterestRatePool(**kwargs)
             case POOL_TYPES.STURDY_SILO:
@@ -989,8 +896,8 @@ def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
 
 def generate_challenge_data(
     web3_provider: Web3,
-    rng_gen: np.random.RandomState = np.random.RandomState()  # noqa: B008
-) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
+    rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
+) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
     selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
     bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
 
@@ -999,7 +906,7 @@ def generate_challenge_data(
 
 def assets_pools_for_challenge_data(
     selected_entry, web3_provider: Web3
-) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
+) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
     challenge_data = {}
 
     selected_assets_and_pools = selected_entry["assets_and_pools"]
@@ -1088,13 +995,14 @@ class YearnV3Vault(ChainBasedPoolModel):
         return retry_with_backoff(self._apr_oracle.functions.getExpectedApr(self.contract_address, delta).call)
 
 
-# generate intial allocations for pools
-def generate_initial_allocations_for_pools(assets_and_pools: dict) -> dict:
-    total_assets: int = assets_and_pools["total_assets"]
-    pools: dict[str, BasePool] = assets_and_pools["pools"]
-    allocs = {}
-    for pool_uid, pool in pools.items():
-        alloc = pool.borrow_amount if pool.pool_type == POOL_TYPES.SYNTHETIC else total_assets // len(pools)
-        allocs[pool_uid] = alloc
+# TODO: remove this?
+# # generate intial allocations for pools
+# def generate_initial_allocations_for_pools(assets_and_pools: dict) -> dict:
+#     total_assets: int = assets_and_pools["total_assets"]
+#     pools: dict[str, Chain] = assets_and_pools["pools"]
+#     allocs = {}
+#     for pool_uid, pool in pools.items():
+#         alloc = pool.borrow_amount if pool.pool_type == POOL_TYPES.SYNTHETIC else total_assets // len(pools)
+#         allocs[pool_uid] = alloc
 
-    return allocs
+#     return allocs

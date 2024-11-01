@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from fastapi.encoders import jsonable_encoder
 
-from sturdy.protocol import AllocInfo, PoolModel
+from sturdy.protocol import AllocInfo, ChainBasedPoolModel
 
 BALANCE = "balance"
 KEY = "key"
@@ -153,7 +153,7 @@ def to_json_string(input_data) -> str:
 def log_allocations(
     conn: sqlite3.Connection,
     request_uid: str,
-    assets_and_pools: dict[str, dict[str, PoolModel] | int],
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     allocations: dict[str, AllocInfo],
     axon_times: list,
     request_type: REQUEST_TYPE,

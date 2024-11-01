@@ -26,7 +26,7 @@ import numpy.typing as npt
 import torch
 
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
-from sturdy.pools import POOL_TYPES, BasePoolModel, ChainBasedPoolModel, check_allocations
+from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, check_allocations
 from sturdy.protocol import REQUEST_TYPES, AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div, wei_mul
 
@@ -153,7 +153,7 @@ def get_distance(alloc_a: npt.NDArray, alloc_b: npt.NDArray, total_assets: int) 
 
 def get_similarity_matrix(
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
 ) -> dict[str, dict[str, float]]:
     """
     Calculates the similarity matrix for the allocation strategies of miners using normalized Euclidean distance.
@@ -205,7 +205,7 @@ def adjust_rewards_for_plagiarism(
     self,
     rewards_apy: torch.Tensor,
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     uids: list,
     axon_times: dict[str, float],
     similarity_threshold: float = SIMILARITY_THRESHOLD,
@@ -253,7 +253,7 @@ def adjust_rewards_for_plagiarism(
 def _get_rewards(
     self,
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     uids: list[str],
     axon_times: dict[str, float],
 ) -> torch.Tensor:
@@ -274,7 +274,7 @@ def _get_rewards(
 
 def calculate_apy(
     allocations: AllocationsDict,
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
 ) -> int:
     """
     Calculates immediate projected yields given intial assets and pools, pool history, and number of timesteps
@@ -298,7 +298,7 @@ def calculate_apy(
 
 def calculate_aggregate_apy(
     allocations: AllocationsDict,
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     timesteps: int,
     pool_history: list[dict[str, Any]],
 ) -> int:
@@ -327,7 +327,7 @@ def filter_allocations(
     uids: list[str],
     active_allocations: list, # row of allocations from database
     responses: list,
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
 ) -> dict[str, AllocInfo]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -365,9 +365,9 @@ def filter_allocations(
         # used to filter out miners who timed out
         # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
-        if responses.allocations is not None or axon_times[uids[response_idx]] < QUERY_TIMEOUT:
+        if response.allocations is not None or axon_times[uids[response_idx]] < QUERY_TIMEOUT:
             filtered_allocs[uids[response_idx]] = {
-                "allocations": responses[response_idx].allocations,
+                "allocations": response.allocations,
             }
 
     curr_filtered_allocs = dict(sorted(filtered_allocs.items(), key=lambda item: int(item[0])))
