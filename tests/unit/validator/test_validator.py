@@ -8,7 +8,7 @@ import torch
 from neurons.validator import Validator
 from sturdy.constants import QUERY_TIMEOUT
 from sturdy.mock import MockDendrite
-from sturdy.pools import generate_assets_and_pools
+from sturdy.pools import generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocationsDict
 from sturdy.validator.reward import get_rewards
 
@@ -27,7 +27,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         # TODO: this doesn't work?
         # cls.validator.simulator = Simulator(69)
 
-        assets_and_pools = generate_assets_and_pools(np.random.RandomState(seed=420))
+        assets_and_pools = generate_challenge_data(np.random.RandomState(seed=420))
 
         cls.contract_addresses: list[str] = list(assets_and_pools["pools"].keys())  # type: ignore[]
 

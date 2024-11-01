@@ -987,22 +987,24 @@ def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
     return account.address
 
 
-def generate_assets_and_pools(
-    rng_gen: np.random.RandomState, web3_provider: Web3
+def generate_challenge_data(
+    web3_provider: Web3,
+    rng_gen: np.random.RandomState = np.random.RandomState()  # noqa: B008
 ) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
-    selected_challenge_data = rng_gen.choice(list(POOL_REGISTRY.keys()))
+    selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
+    bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
 
-    return assets_pools_for_challenge_data(selected_challenge_data, web3_provider)
+    return assets_pools_for_challenge_data(selected_entry, web3_provider)
 
 
 def assets_pools_for_challenge_data(
-    challenge_data, web3_provider: Web3
+    selected_entry, web3_provider: Web3
 ) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
-    assets_and_pools = {}
+    challenge_data = {}
 
-    selected_assets_and_pools = challenge_data["assets_and_pools"]
+    selected_assets_and_pools = selected_entry["assets_and_pools"]
     selected_pools = selected_assets_and_pools["pools"]
-    user_address = challenge_data["user_address"]
+    user_address = selected_entry["user_address"]
 
     pool_list = []
 
@@ -1040,10 +1042,12 @@ def assets_pools_for_challenge_data(
 
         total_assets += total_asset
 
-    assets_and_pools["pools"] = pools
-    assets_and_pools["total_assets"] = total_assets
+    challenge_data["assets_and_pools"] = {}
+    challenge_data["assets_and_pools"]["pools"] = pools
+    challenge_data["assets_and_pools"]["total_assets"] = total_assets
+    challenge_data["user_address"] = user_address
 
-    return assets_and_pools
+    return challenge_data
 
 
 class YearnV3Vault(ChainBasedPoolModel):

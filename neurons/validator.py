@@ -36,6 +36,7 @@ from web3.constants import ADDRESS_ZERO
 
 # import base validator class which takes care of most of the boilerplate
 from sturdy.base.validator import BaseValidatorNeuron
+from sturdy.constants import SCORING_PERIOD
 
 # Bittensor Validator Template:
 from sturdy.pools import PoolFactory
@@ -242,7 +243,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     synapse.assets_and_pools["pools"] = new_pools
 
-    result = await query_and_score_miners(
+    axon_times, result = await query_and_score_miners(
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
         request_type=synapse.request_type,
@@ -250,10 +251,20 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     )
     request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
-    to_ret = dict(list(result.items())[:body.num_allocs])
+    to_ret = dict(list(result.items())[: body.num_allocs])
     ret = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
+    to_log = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
     with sql.get_db_connection() as conn:
-        sql.log_allocations(conn, ret.request_uuid, synapse.assets_and_pools, ret.allocations)
+        # TODO: make challenge period variable and based on user input
+        sql.log_allocations(
+            conn,
+            to_log.request_uuid,
+            synapse.assets_and_pools,
+            to_log.allocations,
+            axon_times,
+            REQUEST_TYPES.ORGANIC,
+            SCORING_PERIOD,
+        )
 
     return ret
 

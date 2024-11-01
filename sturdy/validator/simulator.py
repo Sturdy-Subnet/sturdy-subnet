@@ -8,7 +8,7 @@ from sturdy.constants import *
 from sturdy.pools import (
     BasePoolModel,
     ChainBasedPoolModel,
-    generate_assets_and_pools,
+    generate_challenge_data,
     generate_initial_allocations_for_pools,
 )
 from sturdy.protocol import AllocationsDict
@@ -39,7 +39,7 @@ class Simulator:
             raise RuntimeError("You must have first initialize()-ed the simulation if you'd like to initialize some data")
 
         if init_assets_and_pools is None:
-            self.assets_and_pools: Any = generate_assets_and_pools(
+            self.assets_and_pools: Any = generate_challenge_data(
                 rng_gen=self.rng_state_container,
             )
         else:

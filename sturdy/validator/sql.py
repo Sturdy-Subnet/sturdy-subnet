@@ -22,7 +22,9 @@ CREATED_AT = "created_at"
 # allocations table
 ALLOCATION_REQUESTS_TABLE = "allocation_requests"
 ALLOCATIONS_TABLE = "allocations"
+ACTIVE_ALLOCS = "active_allocs"
 REQUEST_UID = "request_uid"
+REQUEST_TYPE = "request_type"
 MINER_UID = "miner_uid"
 USER_ADDRESS = "user_address"
 ALLOCATION = "allocation"
@@ -153,31 +155,70 @@ def log_allocations(
     request_uid: str,
     assets_and_pools: dict[str, dict[str, PoolModel] | int],
     allocations: dict[str, AllocInfo],
+    axon_times: list,
+    request_type: REQUEST_TYPE,
+    scoring_period: int,
 ) -> None:
     ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
+    challenge_end = ts_now + scoring_period
+    scoring_period_end = datetime.fromtimestamp(challenge_end)  # noqa: DTZ006
+    datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
     conn.execute(
-        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?)",
+        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?, ?)",
         (
             request_uid,
             json.dumps(jsonable_encoder(assets_and_pools)),
-            datetime.fromtimestamp(ts_now),  # noqa: DTZ006
+            datetime_now,
+            request_type,
+        ),
+    )
+
+    conn.execute(
+        f"INSERT INTO {ACTIVE_ALLOCS} VALUES (?, json(?), ?, ?)",
+        (
+            request_uid,
+            True,
+            scoring_period_end,
+            datetime_now,
         ),
     )
 
     to_insert = []
-    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
     for miner_uid, miner_allocation in allocations.items():
         row = (
             request_uid,
             miner_uid,
             to_json_string(miner_allocation),
-            datetime.fromtimestamp(ts_now),  # noqa: DTZ006
+            datetime_now,
+            axon_times[miner_uid]
         )
         to_insert.append(row)
 
-    conn.executemany(f"INSERT INTO {ALLOCATIONS_TABLE} VALUES (?, ?, json(?), ?)", to_insert)
+    conn.executemany(f"INSERT INTO {ALLOCATIONS_TABLE} VALUES (?, ?, json(?), ?, ?)", to_insert)
 
     conn.commit()
+
+
+def get_active_allocs(
+    conn: sqlite3.Connection,
+) -> list:
+
+    # TODO: change the logic of handling "active allocations"
+    # for now we simply get ones which are still in their "challenge"
+    # period, and consider them to determine the score of miners
+    # TODO: the existance "active" column may be redundant
+    query = f"""
+    SELECT * FROM {ACTIVE_ALLOCS}
+    WHERE scoring_period_end >= ?
+    AND active == True
+    """
+    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
+    datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
+
+    cur = conn.execute(query, [datetime_now])
+    rows = cur.fetchall()
+
+    return [dict(row) for row in rows]
 
 
 def get_filtered_allocations(

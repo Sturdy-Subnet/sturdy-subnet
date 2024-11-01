@@ -321,13 +321,14 @@ def calculate_aggregate_apy(
     return int(pct_yield // timesteps)  # for simplicity each timestep is a day in the simulator
 
 
-def get_rewards(
+def filter_allocations(
     self,
     query: int,  # noqa: ARG001
     uids: list[str],
+    active_allocations: list, # row of allocations from database
     responses: list,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BasePoolModel] | int],
-) -> tuple[torch.Tensor, dict[str, AllocInfo]]:
+) -> dict[str, AllocInfo]:
     """
     Returns a tensor of rewards for the given query and responses.
 
@@ -340,37 +341,10 @@ def get_rewards(
     - allocs: miner allocations along with their respective yields
     """
 
-    # maximum yield to scale all rewards by
-    # total apys of allocations per miner
-    max_apy = 0
-    apys = {}
+    filtered_allocs = {}
+    axon_times = get_response_times(uids=uids, responses=responses, timeout=QUERY_TIMEOUT)
 
-    init_assets_and_pools = copy.deepcopy(assets_and_pools)
-
-    bt.logging.debug(f"Running simulator for {self.simulator.timesteps} timesteps for each allocation...")
-
-    # TODO: assuming that we are only getting immediate apy for organic chainbasedpool requests
-    pools_to_scan = cast(dict, init_assets_and_pools["pools"])
-    # update reserves given allocations
-    for pool in pools_to_scan.values():
-        match pool.pool_type:
-            case T if T in (
-                POOL_TYPES.AAVE,
-                POOL_TYPES.DAI_SAVINGS,
-                POOL_TYPES.COMPOUND_V3,
-                POOL_TYPES.MORPHO,
-                POOL_TYPES.YEARN_V3,
-            ):
-                pool.sync(self.w3)
-            case POOL_TYPES.STURDY_SILO:
-                pool.sync(pool.user_address, self.w3)
-            case _:
-                pass
-
-    resulting_apy = 0
     for response_idx, response in enumerate(responses):
-        # reset simulator for next run
-        self.simulator.reset()
 
         allocations = response.allocations
 
@@ -378,102 +352,33 @@ def get_rewards(
         # is the miner cheating w.r.t allocations?
         cheating = True
         try:
-            cheating = not check_allocations(init_assets_and_pools, allocations)
+            cheating = not check_allocations(assets_and_pools, allocations)
         except Exception as e:
             bt.logging.error(e)  # type: ignore[]
 
         # score response very low if miner is cheating somehow or returns allocations with incorrect format
         if cheating:
             miner_uid = uids[response_idx]
-            bt.logging.warning(f"CHEATER DETECTED  - MINER WITH UID {miner_uid} - PUNISHING 👊😠")
-            apys[miner_uid] = 0
+            bt.logging.warning(f"CHEATER DETECTED | UID {miner_uid}")
             continue
 
-        try:
-            if response.request_type == REQUEST_TYPES.SYNTHETIC:
-                # miner does not appear to be cheating - so we init simulator data
-                self.simulator.init_data(
-                    init_assets_and_pools=copy.deepcopy(init_assets_and_pools),
-                    init_allocations=allocations,
-                )
-                self.simulator.update_reserves_with_allocs()
-
-                self.simulator.run()
-
-                resulting_apy = calculate_aggregate_apy(
-                    allocations,
-                    init_assets_and_pools,
-                    self.simulator.timesteps,
-                    self.simulator.pool_history,
-                )
-
-            else:
-                resulting_apy = calculate_apy(
-                    allocations,
-                    init_assets_and_pools,
-                )
-        except Exception as e:
-            bt.logging.error(e)  # type: ignore[]
-            bt.logging.error("Failed to calculate apy - PENALIZING MINER")
-            miner_uid = uids[response_idx]
-            apys[miner_uid] = 0
-            continue
-
-        if resulting_apy > max_apy:
-            max_apy = resulting_apy
-
-        apys[uids[response_idx]] = resulting_apy
-
-    axon_times = get_response_times(uids=uids, responses=responses, timeout=QUERY_TIMEOUT)
-
-    # set apys for miners that took longer than the timeout to minimum
-    # TODO: cleaner way to do this?
-    for uid in uids:
-        if axon_times[uid] >= QUERY_TIMEOUT:
-            apys[uid] = 0
-
-    # TODO: should probably move some things around later down the road
-    allocs = {}
-    filtered_allocs = {}
-    for idx in range(len(responses)):
+        # used to filter out miners who timed out
+        # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
-        if responses[idx].allocations is None or axon_times[uids[idx]] >= QUERY_TIMEOUT:
-            allocs[uids[idx]] = {
-                "apy": 0,
-                "allocations": None,
-            }
-        else:
-            allocs[uids[idx]] = {
-                "apy": apys[uids[idx]],
-                "allocations": responses[idx].allocations,
+        if responses.allocations is not None or axon_times[uids[response_idx]] < QUERY_TIMEOUT:
+            filtered_allocs[uids[response_idx]] = {
+                "allocations": responses[response_idx].allocations,
             }
 
-            filtered_allocs[uids[idx]] = {
-                "apy": apys[uids[idx]],
-                "allocations": responses[idx].allocations,
-            }
-
-    sorted_filtered_allocs = dict(sorted(filtered_allocs.items(), key=lambda item: item[1]["apy"], reverse=True))
-
-    sorted_apys = dict(sorted(apys.items(), key=lambda item: item[1], reverse=True))
-
+    curr_filtered_allocs = dict(sorted(filtered_allocs.items(), key=lambda item: int(item[0])))
     sorted_axon_times = dict(sorted(axon_times.items(), key=lambda item: item[1]))
 
-    bt.logging.debug(f"sorted apys:\n{sorted_apys}")
     bt.logging.debug(f"sorted axon times:\n{sorted_axon_times}")
-    bt.logging.debug(f"sorted filtered allocs:\n{sorted_filtered_allocs}")
+    bt.logging.debug(f"sorted filtered allocs:\n{curr_filtered_allocs}")
 
-    self.sorted_apys = sorted_apys
     self.sorted_axon_times = sorted_axon_times
 
     # Get all the reward results by iteratively calling your reward() function.
-    return (
-        _get_rewards(
-            self,
-            apys_and_allocations=allocs,
-            assets_and_pools=init_assets_and_pools,  # type: ignore[]
-            uids=uids,
-            axon_times=axon_times,
-        ),
-        sorted_filtered_allocs,
-    )
+    return axon_times, curr_filtered_allocs
+
+# def get_rewards()

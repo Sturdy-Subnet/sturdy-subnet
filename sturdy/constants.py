@@ -33,6 +33,10 @@ QUERY_TIMEOUT = 45  # timeout (seconds)
 
 TOTAL_ALLOC_THRESHOLD = 0.98
 
+
+# TODO: make scoring period variable and random?
+SCORING_PERIOD = 120
+
 # The following constants are for different pool models
 # Aave
 RESERVE_FACTOR_START_BIT_POSITION = 64

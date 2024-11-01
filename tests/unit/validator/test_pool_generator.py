@@ -83,8 +83,8 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
         keys = list(POOL_REGISTRY.keys())[:2]
         for idx in range(2):
             key = keys[idx]
-            challenge_data = POOL_REGISTRY[key]
-            generated = assets_pools_for_challenge_data(challenge_data, self.w3)
+            selected_entry = POOL_REGISTRY[key]
+            generated = assets_pools_for_challenge_data(selected_entry, self.w3)
             print(generated)
 
             # check the member variables of the returned value

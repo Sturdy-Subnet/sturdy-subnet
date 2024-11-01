@@ -5,7 +5,7 @@ from unittest import IsolatedAsyncioTestCase
 import numpy as np
 
 from neurons.validator import Validator
-from sturdy.pools import generate_assets_and_pools
+from sturdy.pools import generate_challenge_data
 from sturdy.validator.forward import query_and_score_miners
 from sturdy.validator.simulator import Simulator
 
@@ -27,7 +27,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         # simulator with preset seed
         cls.validator.simulator = Simulator(seed=69)
 
-        assets_and_pools = generate_assets_and_pools(np.random.RandomState(seed=420))  # type: ignore[]
+        assets_and_pools = generate_challenge_data(np.random.RandomState(seed=420))  # type: ignore[]
 
         cls.assets_and_pools = {
             "pools": assets_and_pools["pools"],

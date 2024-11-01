@@ -17,15 +17,17 @@
 # DEALINGS IN THE SOFTWARE.
 
 import asyncio
-import copy
+import uuid
 from typing import Any
 
 import bittensor as bt
 from web3.constants import ADDRESS_ZERO
 
-from sturdy.constants import QUERY_TIMEOUT
+from sturdy.constants import QUERY_TIMEOUT, SCORING_PERIOD
+from sturdy.pools import generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
-from sturdy.validator.reward import get_rewards
+from sturdy.validator.reward import filter_allocations
+from sturdy.validator.sql import get_active_allocs, get_db_connection, log_allocations
 
 
 async def forward(self) -> Any:
@@ -39,7 +41,27 @@ async def forward(self) -> Any:
 
     """
     # initialize pools and assets
-    await query_and_score_miners(self)
+
+    challenge_data = generate_challenge_data(web3_provider=self.w3)
+    request_uuid = str(uuid.uuid4()).replace("-", "")
+
+    axon_times, allocations = await query_and_score_miners(
+        self,
+        assets_and_pools=challenge_data["assets_and_pools"],
+        request_type=REQUEST_TYPES.SYNTHETIC,
+        user_address=challenge_data["user_address"],
+    )
+
+    with get_db_connection() as conn:
+        log_allocations(
+            conn,
+            request_uuid,
+            challenge_data["assets_and_pools"],
+            allocations,
+            axon_times,
+            REQUEST_TYPES.SYNTHETIC,
+            SCORING_PERIOD
+        )
 
 
 async def query_miner(
@@ -72,21 +94,7 @@ async def query_and_score_miners(
     assets_and_pools: Any = None,
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
     user_address: str = ADDRESS_ZERO,
-) -> dict[str, AllocInfo]:
-    # intialize simulator
-    if request_type == REQUEST_TYPES.ORGANIC:
-        self.simulator.initialize(timesteps=1)
-    else:
-        self.simulator.initialize()
-
-    # initialize simulator data
-    # if there is no "organic" info then generate synthetic info
-    if assets_and_pools is not None:
-        self.simulator.init_data(init_assets_and_pools=copy.deepcopy(assets_and_pools))
-    else:
-        self.simulator.init_data()
-        assets_and_pools = self.simulator.assets_and_pools
-
+) -> tuple[list, dict[str, AllocInfo]]:
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
     active_uids = [str(uid) for uid in range(self.metagraph.n.item()) if self.metagraph.axons[uid].is_serving]
@@ -100,28 +108,45 @@ async def query_and_score_miners(
         user_address=user_address,
     )
 
+    # query all miners
     responses = await query_multiple_miners(
         self,
         synapse,
         active_uids,
     )
+
     allocations = {uid: responses[idx].allocations for idx, uid in enumerate(active_uids)}  # type: ignore[]
 
     # Log the results for monitoring purposes.
     bt.logging.debug(f"Assets and pools: {synapse.assets_and_pools}")
     bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
-    # Adjust the scores based on responses from miners.
-    rewards, allocs = get_rewards(
+    # score previously suggested miner allocations based on how well they are performing now
+
+    # get all the request ids for the pools we should be scoring from the db
+    active_allocs = []
+    with get_db_connection() as conn:
+        active_allocs = get_active_allocs(conn)
+
+    bt.logging.debug(f"Active allocs: {active_allocs}")
+
+    # before logging latest allocations
+    # filter them
+    axon_times, filtered_allocs = filter_allocations(
         self,
         query=self.step,
         uids=active_uids,
+        active_allocations=active_allocs,
         responses=responses,
         assets_and_pools=assets_and_pools,
     )
 
-    bt.logging.info(f"Scored responses: {rewards}")
+    # calculate rewards for previous active allocations
 
-    int_active_uids = [int(uid) for uid in active_uids]
-    self.update_scores(rewards, int_active_uids)
-    return allocs
+    # update the moving average scores of the miners
+    # int_active_uids = [int(uid) for uid in active_uids]
+    # self.update_scores(rewards, int_active_uids)
+
+    # TODO: sort the miners' by their current scores and return their respective allocations
+
+    return axon_times, filtered_allocs
