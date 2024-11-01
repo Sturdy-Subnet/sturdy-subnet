@@ -131,7 +131,7 @@ There are three core files.
   contracts of user-defined pools on the Ethereum Network to calculate the miners' allocation's
   yields. The scores of miners are determined based on their relative aggregate
   yields, and miners which have similar allocations to other miners will be penalized if they are
-  not perceived as being original. If miners fail to respond in ~10 seconds after receiving the
+  not perceived as being original. If miners fail to respond in ~45 seconds after receiving the
   request they are scored
   poorly.
   The best allocating miner will receive the most emissions. For more information on how
