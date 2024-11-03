@@ -185,13 +185,7 @@ def log_allocations(
 
     to_insert = []
     for miner_uid, miner_allocation in allocations.items():
-        row = (
-            request_uid,
-            miner_uid,
-            to_json_string(miner_allocation),
-            datetime_now,
-            axon_times[miner_uid]
-        )
+        row = (request_uid, miner_uid, to_json_string(miner_allocation), datetime_now, axon_times[miner_uid])
         to_insert.append(row)
 
     conn.executemany(f"INSERT INTO {ALLOCATIONS_TABLE} VALUES (?, ?, json(?), ?, ?)", to_insert)
@@ -203,7 +197,6 @@ def log_allocations(
 def get_active_allocs(
     conn: sqlite3.Connection,
 ) -> list:
-
     # TODO: change the logic of handling "active allocations"
     # for now we simply get ones which are still in their "challenge"
     # period, and consider them to determine the score of miners

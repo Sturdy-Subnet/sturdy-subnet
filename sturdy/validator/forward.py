@@ -60,7 +60,7 @@ async def forward(self) -> Any:
             allocations,
             axon_times,
             REQUEST_TYPES.SYNTHETIC,
-            SCORING_PERIOD
+            SCORING_PERIOD,
         )
 
 
@@ -151,7 +151,6 @@ async def query_and_score_miners(
         responses=responses,
         assets_and_pools=assets_and_pools,
     )
-
 
     # TODO: sort the miners' by their current scores and return their respective allocations
 
