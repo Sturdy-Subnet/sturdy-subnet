@@ -30,7 +30,6 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
             contract_address=pool.contract_address,
         )
 
-
     total_assets_available = int(THRESHOLD * synapse.assets_and_pools["total_assets"])
     pools = cast(dict, synapse.assets_and_pools["pools"])
 
@@ -40,14 +39,10 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     # sync pool parameters by calling smart contracts on chain
     for pool in pools.values():
         match pool.pool_type:
-            case POOL_TYPES.AAVE:
+            case P if P in (POOL_TYPES.AAVE, POOL_TYPES.STURDY_SILO):
                 pool.sync(synapse.user_address, self.w3)
-            case POOL_TYPES.STURDY_SILO:
-                pool.sync(synapse.user_address, self.w3)
-            case T if T in (POOL_TYPES.DAI_SAVINGS, POOL_TYPES.COMPOUND_V3):
-                pool.sync(self.w3)
             case _:
-                pass
+                pool.sync(self.w3)
 
     # check the amounts that have been borrowed from the pools - and account for them
     minimums = {}

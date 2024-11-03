@@ -134,9 +134,13 @@ async def query_and_score_miners(
         miner_uids, rewards = get_rewards(self, active_alloc)
         bt.logging.debug(f"miner rewards: {rewards}")
 
+        # TODO: there may be a better way to go about this
+        if len(miner_uids) < 1:
+            break
+
         # update the moving average scores of the miners
         int_miner_uids = [int(uid) for uid in miner_uids]
-        # self.update_scores(rewards, int_miner_uids)
+        self.update_scores(rewards, int_miner_uids)
 
     # before logging latest allocations
     # filter them

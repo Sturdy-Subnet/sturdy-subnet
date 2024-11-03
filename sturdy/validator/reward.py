@@ -24,9 +24,10 @@ import gmpy2
 import numpy as np
 import numpy.typing as npt
 import torch
+from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
-from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, check_allocations
+from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div, wei_mul
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
@@ -87,6 +88,11 @@ def dynamic_normalize_zscore(
     apys_and_allocations: AllocationsDict, z_threshold: float = 1.0, q: float = 0.75, epsilon: float = 1e-8
 ) -> torch.Tensor:
     raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
+
+    # TODO: is there a better way to go about this?
+    if len(raw_apys) <= 1:
+        return torch.zeros(len(raw_apys))
+
     sorted_apys_uid = dict(sorted(raw_apys.items(), key=lambda item: item[1]))
     apys = torch.tensor(list(raw_apys.values()))
     sorted_apys = torch.tensor(list(sorted_apys_uid.values()))
@@ -383,7 +389,7 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
     # a dictionary, miner uids -> apy and allocations
     apys_and_allocations = {}
     miner_uids = []
-    axon_times = []
+    axon_times = {}
 
     # TODO: rename this here and in the database schema?
     request_uid = active_allocation["request_uid"]
@@ -392,11 +398,40 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
 
     with get_db_connection() as conn:
         # get assets and pools that are used to benchmark miner
-        assets_and_pools = get_request_info(conn, request_uid=request_uid)
+        # we get the first row entry - we assume that it is the only response from the database
+        try:
+            assets_and_pools = json.loads(get_request_info(conn, request_uid=request_uid)[0]["assets_and_pools"])
+        except Exception:
+            return ([], {})
 
         # obtain the miner responses for each request
         miners = get_miner_responses(conn, request_uid=request_uid)
         bt.logging.debug(f"filtered allocations: {miners}")
+
+    # TODO: see if we can factor this into its own subroutine
+    # if so, do the same with the same one in validator.py
+
+    pools = assets_and_pools["pools"]
+    new_pools = {}
+    for uid, pool in pools.items():
+        new_pool = PoolFactory.create_pool(
+            pool_type=pool["pool_type"],
+            web3_provider=self.w3,  # type: ignore[]
+            user_address=(pool["user_address"]),  # TODO: is there a cleaner way to do this?
+            contract_address=pool["contract_address"],
+        )
+
+        # sync pool
+        # TODO: find these elsewhere and probably factor these into their own method?
+        match new_pool.pool_type:
+            case P if P in (POOL_TYPES.AAVE, POOL_TYPES.STURDY_SILO):
+                new_pool.sync(new_pool.user_address, self.w3)
+            case _:
+                new_pool.sync(self.w3)
+
+        new_pools[uid] = new_pool
+
+    assets_and_pools["pools"] = new_pools
 
     # TODO: this probably needs more work
     # TODO: would it be better here to use metrics i.e. liquidityIndex for aave pools?
@@ -408,8 +443,12 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         miner_axon_time = miner["axon_time"]
 
         miner_uids.append(miner_uid)
-        axon_times.append(miner_axon_time)
+        axon_times[miner_uid] = miner_axon_time
         apys_and_allocations[miner_uid] = {"apy": miner_apy, "allocations": allocations}
+
+    # TODO: there may be a better way to go about this
+    if len(miner_uids) < 1:
+        return ([], {})
 
     # get rewards given the apys and allocations(s) with _get_rewards (???)
     return (miner_uids, _get_rewards(self, apys_and_allocations, assets_and_pools, miner_uids, axon_times))
