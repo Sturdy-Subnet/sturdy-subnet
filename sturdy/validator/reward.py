@@ -84,7 +84,7 @@ def format_allocations(
     return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
 
-def dynamic_normalize_zscore(
+def normalize_squared(
     apys_and_allocations: AllocationsDict, z_threshold: float = 1.0, q: float = 0.75, epsilon: float = 1e-8
 ) -> torch.Tensor:
     raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
@@ -93,29 +93,9 @@ def dynamic_normalize_zscore(
     if len(raw_apys) <= 1:
         return torch.zeros(len(raw_apys))
 
-    sorted_apys_uid = dict(sorted(raw_apys.items(), key=lambda item: item[1]))
     apys = torch.tensor(list(raw_apys.values()))
-    sorted_apys = torch.tensor(list(sorted_apys_uid.values()))
 
-    quantile = np.percentile(sorted_apys.numpy(), q)
-    apy_grad = [abs(sorted_apys[i] - sorted_apys[i - 1]) for i in range(1, len(sorted_apys))]
-    mean_grad = np.mean(apy_grad)
-    std_grad = np.std(apy_grad)
-    apy_grad.insert(0, float("nan"))
-    apy_grad = torch.tensor(apy_grad)
-
-    # Calculate z-scores
-    z_scores = (apy_grad - mean_grad) / std_grad
-
-    # Set a lower bound based on z-score threshold if the lower quartile range is larger than the rest
-    filtered = sorted_apys[(z_scores > z_threshold) & (sorted_apys < quantile)]
-    lower_bound = filtered.min() if len(filtered) > 0 else sorted_apys.min()
-
-    # No upper bound, only clip the lower bound
-    clipped_data = torch.clip(apys, lower_bound)
-
-    dynamic_normed = (clipped_data - clipped_data.min()) / (clipped_data.max() - clipped_data.min() + epsilon)
-    squared = torch.pow(dynamic_normed, 2)
+    squared = torch.pow(apys, 2)
 
     return (squared - squared.min()) / (squared.max() - squared.min() + epsilon)
 
@@ -252,6 +232,7 @@ def adjust_rewards_for_plagiarism(
     # Step 2: Apply penalties considering axon times
     penalties = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
     self.similarity_penalties = penalties
+    bt.logging.debug(f"sim penalities: {self.similarity_penalties}")
 
     # Step 3: Calculate final rewards with adjusted penalties
     return calculate_rewards_with_adjusted_penalties(uids, rewards_apy, penalties)
@@ -272,7 +253,7 @@ def _get_rewards(
     - adjusted_rewards: The reward values for the miners.
     """
 
-    rewards_apy = dynamic_normalize_zscore(apys_and_allocations).to(self.device)
+    rewards_apy = normalize_squared(apys_and_allocations).to(self.device)
 
     return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 

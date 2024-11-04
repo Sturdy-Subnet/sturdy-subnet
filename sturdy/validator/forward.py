@@ -24,7 +24,8 @@ import bittensor as bt
 from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import QUERY_TIMEOUT, SCORING_PERIOD
-from sturdy.pools import generate_challenge_data
+from sturdy.pool_registry.pool_registry import POOL_REGISTRY
+from sturdy.pools import assets_pools_for_challenge_data, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.reward import filter_allocations, get_rewards
 from sturdy.validator.sql import get_active_allocs, get_db_connection, log_allocations
@@ -42,7 +43,10 @@ async def forward(self) -> Any:
     """
     # initialize pools and assets
 
-    challenge_data = generate_challenge_data(web3_provider=self.w3)
+    # challenge_data = generate_challenge_data(web3_provider=self.w3)
+    # TODO: only sturdy pools for now
+    selected_entry = POOL_REGISTRY["Sturdy Crvusd Aggregator"]
+    challenge_data = assets_pools_for_challenge_data(selected_entry, self.w3)
     request_uuid = str(uuid.uuid4()).replace("-", "")
 
     axon_times, allocations = await query_and_score_miners(

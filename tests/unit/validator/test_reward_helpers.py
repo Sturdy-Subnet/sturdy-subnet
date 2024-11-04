@@ -14,7 +14,7 @@ from sturdy.validator.reward import (
     adjust_rewards_for_plagiarism,
     calculate_penalties,
     calculate_rewards_with_adjusted_penalties,
-    dynamic_normalize_zscore,
+    normalize_squared,
     format_allocations,
     get_distance,
     get_similarity_matrix,
@@ -85,7 +85,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_basic_normalization(self) -> None:
         # Test a simple AllocationsDict with large values
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 2e16}, "3": {"apy": 3e16}, "4": {"apy": 4e16}}
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_squared(apys_and_allocations)
 
         # Check if output is normalized between 0 and 1
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -100,7 +100,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 5e16},
             "5": {"apy": 1e17},
         }
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_squared(apys_and_allocations)
 
         # Check that outliers don't affect the overall normalization
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -115,7 +115,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 1e17},
             "5": {"apy": 2e17},
         }
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_squared(apys_and_allocations)
 
         # Check that the function correctly handles high outliers
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -124,7 +124,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_uniform_values(self) -> None:
         # Test where all values are the same
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e16}, "3": {"apy": 1e16}, "4": {"apy": 1e16}}
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_squared(apys_and_allocations)
 
         # If all values are the same, the output should also be uniform (or handle gracefully)
         self.assertTrue(
@@ -142,7 +142,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 1.03e16},
             "5": {"apy": 1.04e16},
         }
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_squared(apys_and_allocations)
 
         # Check if normalization happens correctly
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -151,7 +151,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_high_variance(self) -> None:
         # Test with high variance data
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e17}, "3": {"apy": 5e17}, "4": {"apy": 1e18}}
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_squared(apys_and_allocations)
 
         # Ensure that the normalization works even with high variance
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -169,7 +169,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "7": {"apy": 3e17},
             "8": {"apy": 4e17},
         }
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_squared(apys_and_allocations)
 
         # Ensure that quantile-based clipping works as expected
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
