@@ -32,7 +32,7 @@ QUERY_RATE = 2  # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 45  # timeout (seconds)
 
 TOTAL_ALLOC_THRESHOLD = 0.98
-SIMILARITY_THRESHOLD = 0.0075  # similarity threshold for plagiarism checking
+SIMILARITY_THRESHOLD = 0.01  # similarity threshold for plagiarism checking
 
 # The following constants are for different pool models
 # Aave
