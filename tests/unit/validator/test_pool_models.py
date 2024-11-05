@@ -116,7 +116,7 @@ class TestAavePool(unittest.TestCase):
         )
 
         # sync pool params
-        pool.sync(self.account.address, web3_provider=self.w3)
+        pool.sync(web3_provider=self.w3)
 
         self.assertTrue(hasattr(pool, "_atoken_contract"))
         self.assertTrue(isinstance(pool._atoken_contract, Contract))
@@ -132,7 +132,7 @@ class TestAavePool(unittest.TestCase):
         )
 
         # sync pool params
-        pool.sync(self.account.address, web3_provider=self.w3)
+        pool.sync(web3_provider=self.w3)
 
         reserve_data = retry_with_backoff(pool._pool_contract.functions.getReserveData(pool._underlying_asset_address).call)
 
@@ -149,10 +149,11 @@ class TestAavePool(unittest.TestCase):
         print("----==== test_supply_rate_decrease_alloc ====----")
         pool = AaveV3DefaultInterestRatePool(
             contract_address=self.atoken_address,
+            user_address=self.account.address
         )
 
         # sync pool params
-        pool.sync(self.account.address, web3_provider=self.w3)
+        pool.sync(web3_provider=self.w3)
 
         tx = self.weth_contract.functions.deposit().build_transaction(
             {
@@ -217,7 +218,7 @@ class TestAavePool(unittest.TestCase):
         print(f"apy before rebalancing ether: {apy_before}")
 
         # calculate predicted future supply rate after removing 1000 ETH to end up with 9000 ETH in the pool
-        pool.sync(self.account.address, self.w3)
+        pool.sync(self.w3)
         apy_after = pool.supply_rate(int(9000e18))
         print(f"apy after rebalancing ether: {apy_after}")
         self.assertNotEqual(apy_after, 0)
@@ -237,7 +238,8 @@ class TestSturdySiloStrategy(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20233401,
+                        # "blockNumber": 20233401,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -285,13 +287,14 @@ class TestSturdySiloStrategy(unittest.TestCase):
 
     def test_silo_strategy_contract(self) -> None:
         print("----==== test_pool_contract ====----")
-        # we call the aave3 weth atoken proxy contract in this example
-        pool = VariableInterestSturdySiloStrategy(
-            contract_address=self.contract_address,
-        )  # type: ignore[]
         whale_addr = self.w3.to_checksum_address("0x0669091F451142b3228171aE6aD794cF98288124")
 
-        pool.sync(whale_addr, self.w3)
+        pool = VariableInterestSturdySiloStrategy(
+            contract_address=self.contract_address,
+            user_address=whale_addr
+        )  # type: ignore[]
+
+        pool.sync(self.w3)
 
         self.assertTrue(hasattr(pool, "_silo_strategy_contract"))
         self.assertTrue(isinstance(pool._silo_strategy_contract, Contract))
@@ -304,6 +307,11 @@ class TestSturdySiloStrategy(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_rate_model_contract"))
         self.assertTrue(isinstance(pool._rate_model_contract, Contract))
         print(f"rate model contract: {pool._rate_model_contract.address}")
+
+        self.assertTrue(hasattr(pool, "_price_per_share"))
+        self.assertTrue(isinstance(pool._price_per_share, int))
+        print(f"price per share: {pool._price_per_share}")
+
 
         # don't change deposit amount to pool by much
         prev_supply_rate = pool.supply_rate(int(630e18))

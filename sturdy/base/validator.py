@@ -61,12 +61,12 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        if self.config.organic:
-            w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
-            if w3_provider_url is None:
-                raise ValueError("You must provide a valid web3 provider url as an organic validator!")
+        # set web3 provider url
+        w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
+        if w3_provider_url is None:
+            raise ValueError("You must provide a valid web3 provider url as an organic validator!")
 
-            self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
+        self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         if self.config.mock:

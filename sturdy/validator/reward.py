@@ -232,7 +232,6 @@ def adjust_rewards_for_plagiarism(
     # Step 2: Apply penalties considering axon times
     penalties = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
     self.similarity_penalties = penalties
-    bt.logging.debug(f"sim penalities: {self.similarity_penalties}")
 
     # Step 3: Calculate final rewards with adjusted penalties
     return calculate_rewards_with_adjusted_penalties(uids, rewards_apy, penalties)
@@ -261,6 +260,7 @@ def _get_rewards(
 def calculate_apy(
     allocations: AllocationsDict,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
+    extra_metadata: dict
 ) -> int:
     """
     Calculates immediate projected yields given intial assets and pools, pool history, and number of timesteps
@@ -269,17 +269,20 @@ def calculate_apy(
     # calculate projected yield
     initial_balance = cast(int, assets_and_pools["total_assets"])
     pools = cast(dict[str, ChainBasedPoolModel], assets_and_pools["pools"])
-    pct_yield = 0
-    for uid, pool in pools.items():
-        allocation = allocations[uid]
-        match pool.pool_type:
-            case POOL_TYPES.DAI_SAVINGS:
-                pool_yield = wei_mul(allocation, pool.supply_rate())
-            case _:
-                pool_yield = wei_mul(allocation, pool.supply_rate(amount=allocation))
-        pct_yield += pool_yield
+    total_yield = 0
 
-    return wei_div(pct_yield, initial_balance)
+    for contract_addr, pool in pools.items():
+        allocation = allocations[contract_addr]
+        match pool.pool_type:
+            case POOL_TYPES.STURDY_SILO:
+                last_share_price = extra_metadata[contract_addr]
+                curr_share_price = pool._price_per_share
+                pct_delta = float(last_share_price - curr_share_price) / float(last_share_price)
+                total_yield += int(allocation * pct_delta)
+            case _:
+                total_yield += 0
+
+    return wei_div(total_yield, initial_balance)
 
 
 def calculate_aggregate_apy(
@@ -374,6 +377,7 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
 
     # TODO: rename this here and in the database schema?
     request_uid = active_allocation["request_uid"]
+    request_info = {}
     assets_and_pools = None
     miners = None
 
@@ -381,7 +385,8 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         # get assets and pools that are used to benchmark miner
         # we get the first row entry - we assume that it is the only response from the database
         try:
-            assets_and_pools = json.loads(get_request_info(conn, request_uid=request_uid)[0]["assets_and_pools"])
+            request_info = get_request_info(conn, request_uid=request_uid)[0]
+            assets_and_pools = json.loads(request_info["assets_and_pools"])
         except Exception:
             return ([], {})
 
@@ -403,13 +408,7 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         )
 
         # sync pool
-        # TODO: find these elsewhere and probably factor these into their own method?
-        match new_pool.pool_type:
-            case P if P in (POOL_TYPES.AAVE, POOL_TYPES.STURDY_SILO):
-                new_pool.sync(new_pool.user_address, self.w3)
-            case _:
-                new_pool.sync(self.w3)
-
+        new_pool.sync(self.w3)
         new_pools[uid] = new_pool
 
     assets_and_pools["pools"] = new_pools
@@ -419,8 +418,9 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
     # calculate the "adjusted" yields of the allocations
     for miner in miners:
         allocations = json.loads(miner["allocation"])["allocations"]
+        extra_metadata = json.loads(request_info["metadata"])
         miner_uid = miner["miner_uid"]
-        miner_apy = calculate_apy(allocations, assets_and_pools)
+        miner_apy = calculate_apy(allocations, assets_and_pools, extra_metadata)
         miner_axon_time = miner["axon_time"]
 
         miner_uids.append(miner_uid)

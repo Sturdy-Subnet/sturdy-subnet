@@ -36,7 +36,7 @@ SIMILARITY_THRESHOLD = 0.0075  # similarity threshold for plagiarism checking
 
 
 # TODO: make scoring period variable and random?
-SCORING_PERIOD = 120
+SCORING_PERIOD = 300
 
 # The following constants are for different pool models
 # Aave

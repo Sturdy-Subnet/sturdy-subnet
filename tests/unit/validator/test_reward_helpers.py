@@ -14,10 +14,10 @@ from sturdy.validator.reward import (
     adjust_rewards_for_plagiarism,
     calculate_penalties,
     calculate_rewards_with_adjusted_penalties,
-    normalize_squared,
     format_allocations,
     get_distance,
     get_similarity_matrix,
+    normalize_squared,
 )
 
 load_dotenv()
@@ -211,122 +211,6 @@ class TestRewardFunctions(unittest.TestCase):
         # Optional: Revert to the original snapshot after each test
         self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
-    def test_check_allocations_valid(self) -> None:
-        allocations = {ADDRESS_ZERO: int(5e18), BEEF: int(3e18)}
-        assets_and_pools = {
-            "total_assets": int(8e18),
-            "pools": {
-                ADDRESS_ZERO: BasePool(
-                    contract_address=ADDRESS_ZERO,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(2e18),
-                    reserve_size=0,
-                ),
-                BEEF: BasePool(
-                    contract_address=BEEF,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(1e18),
-                    reserve_size=0,
-                ),
-            },
-        }
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertTrue(result)
-
-    def test_check_allocations_overallocate(self) -> None:
-        allocations = {ADDRESS_ZERO: int(10e18), BEEF: int(3e18)}
-        assets_and_pools = {
-            "total_assets": int(10e18),
-            "pools": {
-                ADDRESS_ZERO: BasePool(
-                    contract_address=ADDRESS_ZERO,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(2e18),
-                    reserve_size=0,
-                ),
-                BEEF: BasePool(
-                    contract_address=BEEF,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(1e18),
-                    reserve_size=0,
-                ),
-            },
-        }
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertFalse(result)
-
-    def test_check_allocations_below_borrow(self) -> None:
-        allocations = {ADDRESS_ZERO: int(1e18), BEEF: 0}
-        assets_and_pools = {
-            "total_assets": int(10e18),
-            "pools": {
-                ADDRESS_ZERO: BasePool(
-                    contract_address=ADDRESS_ZERO,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(2e18),
-                    reserve_size=0,
-                ),
-                BEEF: BasePool(
-                    contract_address=BEEF,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(1e18),
-                    reserve_size=0,
-                ),
-            },
-        }
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertFalse(result)
-
-    def test_check_allocations_below_alloc_threshold(self) -> None:
-        allocations = {ADDRESS_ZERO: int(4e18), BEEF: int(4e18)}
-        assets_and_pools = {
-            "total_assets": int(10e18),
-            "pools": {
-                ADDRESS_ZERO: BasePool(
-                    contract_address=ADDRESS_ZERO,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(2e18),
-                    reserve_size=0,
-                ),
-                BEEF: BasePool(
-                    contract_address=BEEF,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(1e18),
-                    reserve_size=0,
-                ),
-            },
-        }
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertFalse(result)
-
     def test_check_allocations_sturdy(self) -> None:
         A = "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
         VAULT = "0x73E4C11B670Ef9C025A030A20b72CB9150E54523"
@@ -343,7 +227,7 @@ class TestRewardFunctions(unittest.TestCase):
         }
 
         pool_a: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][A]
-        pool_a.sync(VAULT, web3_provider=self.w3)
+        pool_a.sync(web3_provider=self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
         pool_a._totalAssets = int(100e23)
@@ -406,7 +290,7 @@ class TestRewardFunctions(unittest.TestCase):
         }
 
         pool_a: AaveV3DefaultInterestRatePool = assets_and_pools["pools"][A]
-        pool_a.sync(ADDRESS_ZERO, self.w3)
+        pool_a.sync(self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
         pool_a._total_supplied = int(100e6)

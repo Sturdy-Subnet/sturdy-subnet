@@ -87,10 +87,13 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             generated = assets_pools_for_challenge_data(selected_entry, self.w3)
             print(generated)
 
+            pools = generated["assets_and_pools"]["pools"]
+            total_assets = generated["assets_and_pools"]["total_assets"]
+
             # check the member variables of the returned value
-            self.assertEqual(list(generated["pools"].keys()), list(challenge_data["assets_and_pools"]["pools"].keys()))
+            self.assertEqual(list(pools.keys()), list(pools.keys()))
             # check returned total assets
-            self.assertGreater(generated["total_assets"], 0)
+            self.assertGreater(total_assets, 0)
 
 
 if __name__ == "__main__":

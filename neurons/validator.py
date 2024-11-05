@@ -238,12 +238,21 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     to_ret = dict(list(result.items())[: body.num_allocs])
     ret = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
     to_log = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
+
+    metadata = {}
+    pools = synapse.assets_and_pools["pools"]
+
+    for contract_addr, pool in pools.items():
+        pool.sync(core_validator.w3)
+        metadata[contract_addr] = pool._price_per_share
+
     with sql.get_db_connection() as conn:
         # TODO: make challenge period variable and based on user input
         sql.log_allocations(
             conn,
             to_log.request_uuid,
             synapse.assets_and_pools,
+            metadata,
             to_log.allocations,
             axon_times,
             REQUEST_TYPES.ORGANIC,

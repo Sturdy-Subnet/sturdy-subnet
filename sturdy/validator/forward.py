@@ -56,11 +56,20 @@ async def forward(self) -> Any:
         user_address=challenge_data["user_address"],
     )
 
+    assets_and_pools = challenge_data["assets_and_pools"]
+    pools = assets_and_pools["pools"]
+    metadata = {}
+
+    for contract_addr, pool in pools.items():
+        pool.sync(self.w3)
+        metadata[contract_addr] = pool._price_per_share
+
     with get_db_connection() as conn:
         log_allocations(
             conn,
             request_uuid,
-            challenge_data["assets_and_pools"],
+            assets_and_pools,
+            metadata,
             allocations,
             axon_times,
             REQUEST_TYPES.SYNTHETIC,
@@ -95,7 +104,7 @@ async def query_multiple_miners(
 
 async def query_and_score_miners(
     self,
-    assets_and_pools: Any = None,
+    assets_and_pools: Any,
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
     user_address: str = ADDRESS_ZERO,
 ) -> tuple[list, dict[str, AllocInfo]]:
@@ -137,6 +146,7 @@ async def query_and_score_miners(
         # calculate rewards for previous active allocations
         miner_uids, rewards = get_rewards(self, active_alloc)
         bt.logging.debug(f"miner rewards: {rewards}")
+        bt.logging.debug(f"sim penalities: {self.similarity_penalties}")
 
         # TODO: there may be a better way to go about this
         if len(miner_uids) < 1:

@@ -79,8 +79,8 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
             return pool._curr_deposit - pool._max_withdraw
         case POOL_TYPES.DAI_SAVINGS:
             pass  # TODO: is there a more appropriate way to go about this?
-        case _:  # we assume it is a synthetic pool
-            return pool.borrow_amount
+        case _:  # not a valid pool type
+            return 1
 
     return 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
 
@@ -303,7 +303,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             bt.logging.error("Failed to load contract!")
             bt.logging.error(err)  # type: ignore[]
 
-    def sync(self, user_addr: str, web3_provider: Web3) -> None:
+    def sync(self, web3_provider: Web3) -> None:
         """Syncs with chain"""
         if not self._initted:
             self.pool_init(web3_provider)
@@ -376,7 +376,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             self._reserveFactor = getReserveFactor(reserveConfiguration)
             self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
             self._collateral_amount = retry_with_backoff(
-                self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(user_addr)).call
+                self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
             )
 
         except Exception as err:
@@ -437,8 +437,9 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
 
     _decimals: int = PrivateAttr()
     _asset: Contract = PrivateAttr()
-    _user_asset_balance: Contract = PrivateAttr()
-    _user_total_assets: Contract = PrivateAttr()
+    _user_asset_balance: int = PrivateAttr()
+    _user_total_assets: int = PrivateAttr()
+    _price_per_share: Contract = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
@@ -452,7 +453,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             other._pair_contract.address,
         )
 
-    def pool_init(self, user_addr: str, web3_provider: Web3) -> None:  # noqa: ARG002
+    def pool_init(self, web3_provider: Web3) -> None:  # noqa: ARG002
         try:
             assert web3_provider.is_connected()
         except Exception as err:
@@ -501,10 +502,10 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         except Exception as e:
             bt.logging.error(e)  # type: ignore[]
 
-    def sync(self, user_addr: str, web3_provider: Web3) -> None:
+    def sync(self, web3_provider: Web3) -> None:
         """Syncs with chain"""
         if not self._initted:
-            self.pool_init(user_addr, web3_provider)
+            self.pool_init(web3_provider)
 
         user_shares = retry_with_backoff(self._pair_contract.functions.balanceOf(self.contract_address).call)
         self._curr_deposit_amount = retry_with_backoff(self._pair_contract.functions.convertToAssets(user_shares).call)
@@ -522,6 +523,9 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._rate_prec = retry_with_backoff(self._rate_model_contract.functions.RATE_PREC().call)
 
         self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
+
+        # get current price per share
+        self._price_per_share = retry_with_backoff(self._silo_strategy_contract.functions.pricePerShare().call)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
@@ -931,18 +935,18 @@ def assets_pools_for_challenge_data(
     first_pool = pool_list[0]
     total_assets = 0
 
-    match pool.pool_type:
+    match first_pool.pool_type:
         case POOL_TYPES.STURDY_SILO:
-            first_pool.sync(user_address, web3_provider)
+            first_pool.sync(web3_provider)
             total_assets = first_pool._user_asset_balance
         case _:
             pass
 
     for pool in pools.values():
+        pool.sync(web3_provider)
         total_asset = 0
         match pool.pool_type:
             case POOL_TYPES.STURDY_SILO:
-                pool.sync(user_address, web3_provider)
                 total_asset += pool._curr_deposit_amount
             case _:
                 pass

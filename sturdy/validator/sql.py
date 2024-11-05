@@ -154,6 +154,7 @@ def log_allocations(
     conn: sqlite3.Connection,
     request_uid: str,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
+    extra_metadata: dict,
     allocations: dict[str, AllocInfo],
     axon_times: list,
     request_type: REQUEST_TYPE,
@@ -164,12 +165,14 @@ def log_allocations(
     scoring_period_end = datetime.fromtimestamp(challenge_end)  # noqa: DTZ006
     datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
     conn.execute(
-        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?, ?)",
+        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?, ?, ?)",
         (
             request_uid,
             json.dumps(jsonable_encoder(assets_and_pools)),
             datetime_now,
             request_type,
+            # TODO: use jsonable_encoder?
+            json.dumps(extra_metadata)
         ),
     )
 
