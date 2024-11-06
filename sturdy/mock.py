@@ -7,6 +7,7 @@ import bittensor as bt
 import numpy as np
 
 from sturdy.constants import QUERY_TIMEOUT
+from sturdy.pools import get_minimum_allocation
 
 
 def generate_array_with_sum(rng_gen: np.random.RandomState, total_sum: int, min_amounts: [int]) -> list:
@@ -113,7 +114,7 @@ class MockDendrite(bt.dendrite):
 
                     if self.custom_allocs:
                         pools = synapse.assets_and_pools["pools"]
-                        min_amounts = [pool.borrow_amount for pool in pools.values()]
+                        min_amounts = [get_minimum_allocation(pool) for pool in pools.values()]
 
                         alloc_values = generate_array_with_sum(np.random, s.assets_and_pools["total_assets"], min_amounts)
                         contract_addrs = [pool.contract_address for pool in s.assets_and_pools["pools"].values()]

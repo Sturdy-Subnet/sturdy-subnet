@@ -37,7 +37,6 @@ AllocationsDict = dict[str, int]
 
 
 class AllocInfo(TypedDict):
-    apy: int
     allocations: AllocationsDict | None
 
 

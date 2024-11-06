@@ -335,7 +335,6 @@ def filter_allocations(
     for response_idx, response in enumerate(responses):
         allocations = response.allocations
 
-        # validator miner allocations before running simulation
         # is the miner cheating w.r.t allocations?
         cheating = True
         try:
@@ -361,7 +360,6 @@ def filter_allocations(
     sorted_axon_times = dict(sorted(axon_times.items(), key=lambda item: item[1]))
 
     bt.logging.debug(f"sorted axon times:\n{sorted_axon_times}")
-    bt.logging.debug(f"sorted filtered allocs:\n{curr_filtered_allocs}")
 
     self.sorted_axon_times = sorted_axon_times
 

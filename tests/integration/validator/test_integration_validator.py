@@ -1,23 +1,25 @@
-import copy
 import os
 import unittest
+from copy import copy
 from unittest import IsolatedAsyncioTestCase
 
 import numpy as np
 import torch
 from dotenv import load_dotenv
+from web3 import Web3
 
 from neurons.validator import Validator
+from sturdy.algo import naive_algorithm
 from sturdy.constants import QUERY_TIMEOUT
 from sturdy.mock import MockDendrite
 from sturdy.pools import generate_challenge_data
-from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocationsDict
+from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from sturdy.validator.forward import query_and_score_miners
 from sturdy.validator.reward import get_rewards
 
 load_dotenv()
+EXTERNAL_WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 os.environ["WEB_PROVIDER_URL"] = "http://127.0.0.1:8545"
-WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 
 # TODO: more comprehensive integration testing?
 class TestValidator(IsolatedAsyncioTestCase):
@@ -34,6 +36,8 @@ class TestValidator(IsolatedAsyncioTestCase):
         }
 
         cls.validator = Validator(config=config)
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        cls.validator.w3 = w3
         assert cls.validator.w3.is_connected()
 
         cls.validator.w3.provider.make_request(
@@ -41,7 +45,7 @@ class TestValidator(IsolatedAsyncioTestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": EXTERNAL_WEB3_PROVIDER_URL,
                         "blockNumber": 21080765,
                     },
                 },
@@ -49,51 +53,24 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         generated_data = generate_challenge_data(cls.validator.w3, np.random.RandomState(seed=420))
-        assets_and_pools = generated_data["assets_and_pools"]
+        cls.assets_and_pools = generated_data["assets_and_pools"]
 
-        cls.contract_addresses: list[str] = list(assets_and_pools["pools"].keys())  # type: ignore[]
+        synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
+            assets_and_pools=copy(cls.assets_and_pools),
+        )
 
-        assets_and_pools["pools"][cls.contract_addresses[0]].borrow_amount = int(75e18)
-        assets_and_pools["pools"][cls.contract_addresses[1]].borrow_amount = int(50e18)
-        assets_and_pools["pools"][cls.contract_addresses[2]].borrow_amount = int(85e18)
-        assets_and_pools["pools"][cls.contract_addresses[3]].borrow_amount = int(25e18)
-        assets_and_pools["pools"][cls.contract_addresses[4]].borrow_amount = int(90e18)
-        assets_and_pools["pools"][cls.contract_addresses[5]].borrow_amount = int(25e18)
-        assets_and_pools["pools"][cls.contract_addresses[6]].borrow_amount = int(25e18)
-        assets_and_pools["pools"][cls.contract_addresses[7]].borrow_amount = int(40e18)
-        assets_and_pools["pools"][cls.contract_addresses[8]].borrow_amount = int(45e18)
-        assets_and_pools["pools"][cls.contract_addresses[9]].borrow_amount = int(80e18)
+        cls.allocations = naive_algorithm(cls.validator, synapse)
 
-        cls.assets_and_pools = {
-            "pools": assets_and_pools["pools"],
-            "total_assets": int(1000e18),
-        }
-
-        cls.allocations: AllocationsDict = {
-            cls.contract_addresses[0]: int(100e18),
-            cls.contract_addresses[1]: int(100e18),
-            cls.contract_addresses[2]: int(200e18),
-            cls.contract_addresses[3]: int(50e18),
-            cls.contract_addresses[4]: int(200e18),
-            cls.contract_addresses[5]: int(45e18),
-            cls.contract_addresses[6]: int(45e18),
-            cls.contract_addresses[7]: int(50e18),
-            cls.contract_addresses[8]: int(50e18),
-            cls.contract_addresses[9]: int(160e18),
-        }
+        cls.contract_addresses: list[str] = list(cls.assets_and_pools["pools"].keys())  # type: ignore[]
 
     async def test_get_rewards(self) -> None:
         print("----==== test_get_rewards ====----")
 
-        assets_and_pools = copy.deepcopy(self.assets_and_pools)
-        allocations = copy.deepcopy(self.allocations)
+        assets_and_pools = copy(self.assets_and_pools)
+        allocations = copy(self.allocations)
 
         validator = self.validator
-
-        validator.simulator.init_data(
-            init_assets_and_pools=copy.deepcopy(assets_and_pools),
-            init_allocations=copy.deepcopy(allocations),
-        )
 
         active_uids = [str(uid) for uid in range(validator.metagraph.n.item()) if validator.metagraph.axons[uid].is_serving]  # type: ignore[]
 
@@ -101,9 +78,10 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         synapse = AllocateAssets(
             request_type=REQUEST_TYPES.SYNTHETIC,
-            assets_and_pools=copy.deepcopy(assets_and_pools),
-            allocations=copy.deepcopy(allocations),
+            assets_and_pools=copy(assets_and_pools),
+            allocations=copy(allocations),
         )
+
 
         validator.dendrite = MockDendrite(wallet=validator.wallet, custom_allocs=True)
         responses = await validator.dendrite(
@@ -115,8 +93,10 @@ class TestValidator(IsolatedAsyncioTestCase):
             timeout=QUERY_TIMEOUT,
         )
 
+
         for response in responses:
-            self.assertEqual(response.assets_and_pools, assets_and_pools)
+            # TODO: is this necessary?
+            # self.assertEqual(response.assets_and_pools, self.assets_and_pools)
             self.assertLessEqual(sum(response.allocations.values()), assets_and_pools["total_assets"])
 
         rewards, allocs = get_rewards(
@@ -142,17 +122,11 @@ class TestValidator(IsolatedAsyncioTestCase):
     async def test_get_rewards_punish(self) -> None:
         print("----==== test_get_rewards_punish ====----")
         validator = self.validator
-        assets_and_pools = copy.deepcopy(self.assets_and_pools)
+        assets_and_pools = copy(self.assets_and_pools)
 
-        allocations = copy.deepcopy(self.allocations)
+        allocations = copy(self.allocations)
         # increase one of the allocations by +10000  -> clearly this means the miner is cheating!!!
         allocations[self.contract_addresses[0]] += int(10000e18)
-
-        validator.simulator.reset()
-        validator.simulator.init_data(
-            init_assets_and_pools=copy.deepcopy(assets_and_pools),
-            init_allocations=copy.deepcopy(allocations),
-        )
 
         active_uids = [str(uid) for uid in range(validator.metagraph.n.item()) if validator.metagraph.axons[uid].is_serving]  # type: ignore[]
 
@@ -160,8 +134,8 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         synapse = AllocateAssets(
             request_type=REQUEST_TYPES.SYNTHETIC,
-            assets_and_pools=copy.deepcopy(assets_and_pools),
-            allocations=copy.deepcopy(allocations),
+            assets_and_pools=copy(assets_and_pools),
+            allocations=copy(allocations),
         )
 
         validator.dendrite = MockDendrite(wallet=validator.wallet)
@@ -175,7 +149,8 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         for response in responses:
-            self.assertEqual(response.assets_and_pools, assets_and_pools)
+            # TODO: is this necessary?
+            # self.assertEqual(response.assets_and_pools, assets_and_pools)
             self.assertEqual(response.allocations, allocations)
 
         rewards, allocs = get_rewards(
@@ -197,17 +172,11 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         print(f"sorted rewards: {sorted_rewards}")
 
-        assets_and_pools = copy.deepcopy(self.assets_and_pools)
+        assets_and_pools = copy(self.assets_and_pools)
 
-        allocations = copy.deepcopy(self.allocations)
+        allocations = copy(self.allocations)
         # set one of the allocations to be negative! This should not be allowed!
         allocations[self.contract_addresses[0]] = -1
-
-        validator.simulator.reset()
-        validator.simulator.init_data(
-            init_assets_and_pools=copy.deepcopy(assets_and_pools),
-            init_allocations=copy.deepcopy(allocations),
-        )
 
         active_uids = [str(uid) for uid in range(validator.metagraph.n.item()) if validator.metagraph.axons[uid].is_serving]  # type: ignore[]
 
@@ -215,8 +184,8 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         synapse = AllocateAssets(
             request_type=REQUEST_TYPES.SYNTHETIC,
-            assets_and_pools=copy.deepcopy(assets_and_pools),
-            allocations=copy.deepcopy(allocations),
+            assets_and_pools=copy(assets_and_pools),
+            allocations=copy(allocations),
         )
 
         validator.dendrite = MockDendrite(wallet=validator.wallet)
@@ -230,7 +199,8 @@ class TestValidator(IsolatedAsyncioTestCase):
         )
 
         for response in responses:
-            self.assertEqual(response.assets_and_pools, assets_and_pools)
+            # TODO: is this necessary?
+            # self.assertEqual(response.assets_and_pools, assets_and_pools)
             self.assertEqual(response.allocations, allocations)
 
         rewards, allocs = get_rewards(

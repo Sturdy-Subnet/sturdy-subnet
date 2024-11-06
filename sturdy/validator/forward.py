@@ -133,6 +133,10 @@ async def query_and_score_miners(
     bt.logging.debug(f"Assets and pools: {synapse.assets_and_pools}")
     bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
 
+    curr_pools = assets_and_pools["pools"]
+    for pool in curr_pools.values():
+        pool.sync(self.w3)
+
     # score previously suggested miner allocations based on how well they are performing now
 
     # get all the request ids for the pools we should be scoring from the db
@@ -167,5 +171,16 @@ async def query_and_score_miners(
     )
 
     # TODO: sort the miners' by their current scores and return their respective allocations
+    sorted_indices = [idx for idx, val in sorted(enumerate(self.scores), key=lambda k: k[1], reverse=True)]
 
-    return axon_times, filtered_allocs
+    sorted_allocs = {}
+    for idx in sorted_indices:
+        alloc = filtered_allocs.get(str(idx), None)
+        if alloc is None:
+            continue
+
+        sorted_allocs[str(idx)] = alloc
+
+    bt.logging.debug(f"sorted allocations: {sorted_allocs}")
+
+    return axon_times, sorted_allocs
