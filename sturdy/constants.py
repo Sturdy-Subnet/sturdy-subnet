@@ -31,10 +31,10 @@ POOL_RESERVE_SIZE = int(100e18)  # 100
 QUERY_RATE = 75 # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 45  # timeout (seconds)
 
-ORGANIC_SCORING_PERIOD = 28800  # organic scoring period in seconds
-MIN_SCORING_PERIOD = 7200  # min. synthetic scoring period in seconds
-MAX_SCORING_PERIOD = 43200 # max. synthetic scoring period in seconds
-SCORING_PERIOD_STEP = 3600
+ORGANIC_SCORING_PERIOD = 7200  # organic scoring period in seconds
+MIN_SCORING_PERIOD = 5400  # min. synthetic scoring period in seconds
+MAX_SCORING_PERIOD = 10800 # max. synthetic scoring period in seconds
+SCORING_PERIOD_STEP = 1800
 
 SCORING_WINDOW = 300 # scoring window
 

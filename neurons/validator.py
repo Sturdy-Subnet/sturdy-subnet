@@ -227,6 +227,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     synapse.assets_and_pools["pools"] = new_pools
 
+    bt.logging.info("Querying miners...")
     axon_times, result = await query_and_score_miners(
         core_validator,
         assets_and_pools=synapse.assets_and_pools,

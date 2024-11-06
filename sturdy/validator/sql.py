@@ -207,15 +207,15 @@ def get_active_allocs(
     # TODO: the existance "active" column may be redundant
     query = f"""
     SELECT * FROM {ACTIVE_ALLOCS}
-    WHERE scoring_period_end > ?
-    AND scoring_period_end >= ?
+    WHERE scoring_period_end >= ?
+    AND scoring_period_end < ?
     """
     ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
     window_ts = ts_now - scoring_window
     datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
     window_datetime = datetime.fromtimestamp(window_ts)  # noqa: DTZ006
 
-    cur = conn.execute(query, [datetime_now, window_datetime])
+    cur = conn.execute(query, [window_datetime, datetime_now])
     rows = cur.fetchall()
 
     return [dict(row) for row in rows]

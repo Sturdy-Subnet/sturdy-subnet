@@ -48,6 +48,7 @@ async def forward(self) -> Any:
     challenge_data = assets_pools_for_challenge_data(selected_entry, self.w3)
     request_uuid = str(uuid.uuid4()).replace("-", "")
 
+    bt.logging.info("Querying miners...")
     axon_times, allocations = await query_and_score_miners(
         self,
         assets_and_pools=challenge_data["assets_and_pools"],
