@@ -37,7 +37,7 @@ MAX_SCORING_PERIOD = 43200 # scoring period in seconds
 SCORING_PERIOD_STEP = 3600 # scoring period in seconds
 
 TOTAL_ALLOC_THRESHOLD = 0.98
-SIMILARITY_THRESHOLD = 0.0075  # similarity threshold for plagiarism checking
+SIMILARITY_THRESHOLD = 0.01  # similarity threshold for plagiarism checking
 
 
 
