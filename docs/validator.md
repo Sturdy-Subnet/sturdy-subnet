@@ -40,6 +40,18 @@ You have the option of running two kinds of validators:
  - [Synthetic](#synthetic-validator)
  - [Organic](#organic-validator)
 
+Before we get to the differences between them, and how to set each of them up, we must first ensure we have a connection to the Ethereum network.
+
+#### Connecting to Ethereum
+All validators are required to have a connection to an Ethereum RPC to handle requests. It is required to interact with relevant smart contracts in order to perform certain operations i.e. calculate miner allocation yields.
+
+##### Preparing Environment
+The next step involves interacting with an API. We've provided an [.env.example](../.env.example) file which should be copied as a `.env` file in the root of this repository before proceeding.
+
+##### Connecting to a Web3 Provider
+We recommend using a third party service to connect to an RPC to perform on-chain calls such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `WEB3_PROVIDER_URL` alias.
+
+
 ## Synthetic Validator 
 This is the most simple of the two. Synthetic validators generate dummy (fake) pools to send to miners to challenge them. To run a synthetic validator, run:
 #### Starting the validator - without PM2
@@ -76,15 +88,6 @@ Where `ID_OR_PROCESS_NAME` is the `name` OR `id` of the process as noted per the
 
 ## Organic Validator 
 This is the less simple but more exciting of the two! Now you get to sell your bandwidth to whoever you want, with a very simple to use CLI!
-
-#### Connecting to Ethereum
-Organic validators are required to have a connection to an Ethereum RPC to handle organic requests. It is required to interact with relevant smart contracts in order to perform certain operations i.e. calculate miner allocation yields.
-
-##### Preparing Environment
-The next step involves interacting with an API. We've provided an [.env.example](../.env.example) file which should be copied as a `.env` file in the root of this repository before proceeding.
-
-#### Connecting to a Web3 Provider
-We recommend using a third party service to connect to an RPC to perform on-chain calls such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `WEB3_PROVIDER_URL` alias.
 
 #### Spinning Up Organic Validator
 

@@ -49,68 +49,71 @@ There are three core files.
 ### Subnet Overview
 - Validators are responsible for distributing lists of pools (of which contain relevant parameters
   such as base interest rate, base interest rate slope, minimum borrow amount, etc), as well as a
-  maximum token balance miners can allocate to pools. Below is the function present in the codebase
-  used for generating a dummy `assets_and_pools` taken from [pools.py](./sturdy/pools.py) used for
-  synthetic requests:
+  maximum token balance miners can allocate to pools. Below are the function present in the codebase
+  used for generating challenge data in [pools.py](./sturdy/pools.py) used for
+  synthetic requests. The selection of different assets and pools which can be used in such requests are defined in the [pool registry](./sturdy/pool_registry/pool_registry.py), and are all based on pools which are real and do indeed exist on-chain (i.e. on the Ethereum Mainnet):
     ```python
-  def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
-      private_key_bytes = rng_gen.bytes(32)  # type: ignore[]
-      account = Account.from_key(private_key_bytes)
-      return account.address
+  def generate_challenge_data(
+      web3_provider: Web3,
+      rng_gen: np.random.RandomState = np.random.RandomState(),
+  ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
+      selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
+      bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
+
+      return assets_pools_for_challenge_data(selected_entry, web3_provider)
 
 
-  def generate_assets_and_pools(rng_gen: np.random.RandomState) -> dict[str, dict[str, BasePoolModel] | int]:  # generate pools
-      assets_and_pools = {}
+  def assets_pools_for_challenge_data(
+      selected_entry, web3_provider: Web3
+  ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
+      challenge_data = {}
 
-      pools_list = [
-          BasePool(
-              contract_address=generate_eth_public_key(rng_gen=rng_gen),
-              pool_type=POOL_TYPES.SYNTHETIC,
-              base_rate=int(randrange_float(MIN_BASE_RATE, MAX_BASE_RATE, BASE_RATE_STEP, rng_gen=rng_gen)),
-              base_slope=int(randrange_float(MIN_SLOPE, MAX_SLOPE, SLOPE_STEP, rng_gen=rng_gen)),
-              kink_slope=int(
-                  randrange_float(MIN_KINK_SLOPE, MAX_KINK_SLOPE, SLOPE_STEP, rng_gen=rng_gen),
-              ),  # kink rate - kicks in after pool hits optimal util rate
-              optimal_util_rate=int(
-                  randrange_float(
-                      MIN_OPTIMAL_RATE,
-                      MAX_OPTIMAL_RATE,
-                      OPTIMAL_UTIL_STEP,
-                      rng_gen=rng_gen,
-                  ),
-              ),  # optimal util rate - after which the kink slope kicks in
-              borrow_amount=int(
-                  format_num_prec(
-                      wei_mul(
-                          POOL_RESERVE_SIZE,
-                          int(
-                              randrange_float(
-                                  MIN_UTIL_RATE,
-                                  MAX_UTIL_RATE,
-                                  UTIL_RATE_STEP,
-                                  rng_gen=rng_gen,
-                              ),
-                          ),
-                      ),
-                  ),
-              ),  # initial borrowed amount from pool
-              reserve_size=int(POOL_RESERVE_SIZE),
+      selected_assets_and_pools = selected_entry["assets_and_pools"]
+      selected_pools = selected_assets_and_pools["pools"]
+      user_address = selected_entry["user_address"]
+
+      pool_list = []
+
+      for pool_dict in selected_pools.values():
+          pool = PoolFactory.create_pool(
+              pool_type=POOL_TYPES._member_map_[pool_dict["pool_type"]],
+              pool_model_disc=pool_dict["pool_model_disc"],
+              user_address=user_address,
+              contract_address=pool_dict["contract_address"],
           )
-          for _ in range(NUM_POOLS)
-      ]
+          pool_list.append(pool)
 
-      pools = {str(pool.contract_address): pool for pool in pools_list}
+      pools = {str(pool.contract_address): pool for pool in pool_list}
 
-      minimums = [pool.borrow_amount for pool in pools_list]
-      min_total = sum(minimums)
-      assets_and_pools["total_assets"] = int(min_total) + int(
-          math.floor(
-              randrange_float(MIN_TOTAL_ASSETS_OFFSET, MAX_TOTAL_ASSETS_OFFSET, TOTAL_ASSETS_OFFSET_STEP, rng_gen=rng_gen),
-          )
-      )
-      assets_and_pools["pools"] = pools
+      # we assume that the user address is the same across pools (valid)
+      # and also that the asset contracts are the same across said pools
+      first_pool = pool_list[0]
+      total_assets = 0
 
-      return assets_and_pools
+      match first_pool.pool_type:
+          case POOL_TYPES.STURDY_SILO:
+              first_pool.sync(web3_provider)
+              total_assets = first_pool._user_asset_balance
+          case _:
+              pass
+
+      for pool in pools.values():
+          pool.sync(web3_provider)
+          total_asset = 0
+          match pool.pool_type:
+              case POOL_TYPES.STURDY_SILO:
+                  total_asset += pool._curr_deposit_amount
+              case _:
+                  pass
+
+          total_assets += total_asset
+
+      challenge_data["assets_and_pools"] = {}
+      challenge_data["assets_and_pools"]["pools"] = pools
+      challenge_data["assets_and_pools"]["total_assets"] = total_assets
+      challenge_data["user_address"] = user_address
+
+      return challenge_data
     ```
     Validators can optionally run an API server and sell their bandwidth to outside users to send
     their own pools (organic requests) to the subnet. For more information on this process - please read
@@ -125,34 +128,19 @@ There are three core files.
   [algo.py](./sturdy/algo.py). The naive allocation essentially works by divvying assets across
   pools, and allocating more to pools which have a higher current supply rate.
 
-- After generating allocations, miners then send their outputs to validators to be scored. For
-  synthetic requests, validators run a simulation which simulates borrow behavior over a predetermined
-  amount of timesteps. For organic requests, on the other hand, validators query the relevant smart
-  contracts of user-defined pools on the Ethereum Network to calculate the miners' allocation's
-  yields. The scores of miners are determined based on their relative aggregate
-  yields, and miners which have similar allocations to other miners will be penalized if they are
+- After generating allocations, miners then send their outputs to validators to be scored. These requests are generated and sent to miners roughly every 15 minutes.
+  Organic requests, on the other hand, are sent by to validators, upon which they are then routed to miners. After the "scoring period" for requests have passed, miners are then scored based on how much yield pools have generated within the scoring period - with the miner with the most yield obtaining the highest score. Scoring these miners involves gather on chain info about pools, with most if not all such information being obtained from smart contracts on the the Ethereum Network.  Miners which have similar allocations to other miners will be penalized if they are
   not perceived as being original. If miners fail to respond in ~45 seconds after receiving the
-  request they are scored
-  poorly.
+  request they are scored poorly.
   The best allocating miner will receive the most emissions. For more information on how
-  miners are rewarded and how the simulator works- please see
-  [reward.py](sturdy/validator/reward.py) and [simulator.py](sturdy/validator/simulator.py)
-  respectively. A diagram is provided below highlighting the interactions that takes place within
-  the subnet when processing organic requests:
+  miners are rewarded - please see
+  [reward.py](sturdy/validator/reward.py). A diagram is provided below highlighting the interactions that takes place within
+  the subnet when processing synthetic and organic requests:
 
  <div align="center"> 
-    <img src="./assets/organic_validator.png" />
+    <img src="./assets/subnet_architecture.png" />
 </div> 
  
-
-
-- We provide a demo which plots simulations in [plot_simulator.py](demos/plot_simulator.py). We
-  provide a sample output of the script below:
-
-<div align="center"> 
-    <img src="./assets/sim_plot.png" />
-</div> 
-
 ---
 
 ## Installation

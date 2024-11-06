@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS allocations (
 
 -- This alter statement adds a new column to the allocations table if it exists
 ALTER TABLE allocation_requests
-ADD COLUMN request_type TEXT NOT NULL DEFAULT 'SYNTHETIC';
+ADD COLUMN request_type TEXT NOT NULL DEFAULT 1;
 ALTER TABLE allocation_requests
 ADD COLUMN metadata TEXT;
 ALTER TABLE allocations

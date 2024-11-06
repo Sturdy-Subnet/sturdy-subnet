@@ -283,31 +283,6 @@ def calculate_apy(
     return wei_div(total_yield, initial_balance)
 
 
-def calculate_aggregate_apy(
-    allocations: AllocationsDict,
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
-    timesteps: int,
-    pool_history: list[dict[str, Any]],
-) -> int:
-    """
-    Calculates aggregate yields given intial assets and pools, pool history, and number of timesteps
-    """
-
-    # calculate aggregate yield
-    initial_balance = cast(int, assets_and_pools["total_assets"])
-    pct_yield = 0
-    for pools in pool_history:
-        curr_yield = 0
-        for uid, allocs in allocations.items():
-            pool_data = pools[uid]
-            pool_yield = wei_mul(allocs, pool_data.supply_rate)
-            curr_yield += pool_yield
-        pct_yield += curr_yield
-
-    pct_yield = wei_div(pct_yield, initial_balance)
-    return int(pct_yield // timesteps)  # for simplicity each timestep is a day in the simulator
-
-
 def filter_allocations(
     self,
     query: int,  # noqa: ARG001

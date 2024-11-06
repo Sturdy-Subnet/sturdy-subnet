@@ -21,11 +21,12 @@ import uuid
 from typing import Any
 
 import bittensor as bt
+import numpy as np
 from web3.constants import ADDRESS_ZERO
 
-from sturdy.constants import QUERY_TIMEOUT, SCORING_PERIOD
+from sturdy.constants import MAX_SCORING_PERIOD, MIN_SCORING_PERIOD, QUERY_TIMEOUT, SCORING_PERIOD_STEP
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
-from sturdy.pools import assets_pools_for_challenge_data, generate_challenge_data
+from sturdy.pools import assets_pools_for_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.reward import filter_allocations, get_rewards
 from sturdy.validator.sql import get_active_allocs, get_db_connection, log_allocations
@@ -42,8 +43,6 @@ async def forward(self) -> Any:
 
     """
     # initialize pools and assets
-
-    # challenge_data = generate_challenge_data(web3_provider=self.w3)
     # TODO: only sturdy pools for now
     selected_entry = POOL_REGISTRY["Sturdy Crvusd Aggregator"]
     challenge_data = assets_pools_for_challenge_data(selected_entry, self.w3)
@@ -64,6 +63,8 @@ async def forward(self) -> Any:
         pool.sync(self.w3)
         metadata[contract_addr] = pool._price_per_share
 
+    scoring_period = get_scoring_period()
+
     with get_db_connection() as conn:
         log_allocations(
             conn,
@@ -73,9 +74,21 @@ async def forward(self) -> Any:
             allocations,
             axon_times,
             REQUEST_TYPES.SYNTHETIC,
-            SCORING_PERIOD,
+            scoring_period,
         )
 
+
+def get_scoring_period(rng_gen: np.random.RandomState = None) -> int:
+    if rng_gen is None:
+        rng_gen = np.random.RandomState()
+
+    return rng_gen.choice(
+                np.arange(
+                    MIN_SCORING_PERIOD,
+                    MAX_SCORING_PERIOD + SCORING_PERIOD_STEP,
+                    SCORING_PERIOD_STEP,
+                ),
+            )
 
 async def query_miner(
     self,

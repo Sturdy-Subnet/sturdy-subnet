@@ -52,6 +52,9 @@ class BaseValidatorNeuron(BaseNeuron):
         super().__init__(config=config)
         load_dotenv()
 
+        # set last query block to be 0
+        self.last_query_block = 0
+
         # init wandb
         self.wandb_run_log_count = 0
         if not self.config.wandb.off:
@@ -155,14 +158,13 @@ class BaseValidatorNeuron(BaseNeuron):
         self.sync()
 
         bt.logging.info(f"Validator starting at block: {self.block}")
-        last_query_block = self.block
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
                 # Run multiple forwards concurrently - runs every 2 blocks
                 current_block = self.subtensor.block
-                if current_block - last_query_block > QUERY_RATE:
+                if current_block - self.last_query_block > QUERY_RATE:
                     bt.logging.info(f"step({self.step}) block({self.block})")
 
                     if self.config.organic:
@@ -171,7 +173,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     else:
                         self.loop.run_until_complete(self.concurrent_forward())
 
-                    last_query_block = current_block
+                    self.last_query_block = current_block
                     # Sync metagraph and potentially set weights.
                     self.sync()
 
@@ -413,6 +415,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 "step": self.step,
                 "scores": self.scores,
                 "hotkeys": self.hotkeys,
+                "last_query_block": self.last_query_block
             },
             self.config.neuron.full_path + "/state.pt",
         )
@@ -426,3 +429,4 @@ class BaseValidatorNeuron(BaseNeuron):
         self.step = state["step"]
         self.scores = state["scores"]
         self.hotkeys = state["hotkeys"]
+        self.last_query_block = state["last_query_block"]

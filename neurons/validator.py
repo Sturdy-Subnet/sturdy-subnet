@@ -36,7 +36,7 @@ from web3.constants import ADDRESS_ZERO
 
 # import base validator class which takes care of most of the boilerplate
 from sturdy.base.validator import BaseValidatorNeuron
-from sturdy.constants import SCORING_PERIOD
+from sturdy.constants import ORGANIC_SCORING_PERIOD
 
 # Bittensor Validator Template:
 from sturdy.pools import PoolFactory
@@ -247,7 +247,6 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
         metadata[contract_addr] = pool._price_per_share
 
     with sql.get_db_connection() as conn:
-        # TODO: make challenge period variable and based on user input
         sql.log_allocations(
             conn,
             to_log.request_uuid,
@@ -256,7 +255,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
             to_log.allocations,
             axon_times,
             REQUEST_TYPES.ORGANIC,
-            SCORING_PERIOD,
+            ORGANIC_SCORING_PERIOD,
         )
 
     return ret
