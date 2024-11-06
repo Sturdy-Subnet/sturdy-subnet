@@ -21,6 +21,7 @@ load_dotenv()
 EXTERNAL_WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 os.environ["WEB_PROVIDER_URL"] = "http://127.0.0.1:8545"
 
+
 # TODO: more comprehensive integration testing?
 class TestValidator(IsolatedAsyncioTestCase):
     maxDiff = 4000
@@ -82,7 +83,6 @@ class TestValidator(IsolatedAsyncioTestCase):
             allocations=copy(allocations),
         )
 
-
         validator.dendrite = MockDendrite(wallet=validator.wallet, custom_allocs=True)
         responses = await validator.dendrite(
             # Send the query to selected miner axons in the network.
@@ -92,7 +92,6 @@ class TestValidator(IsolatedAsyncioTestCase):
             deserialize=False,
             timeout=QUERY_TIMEOUT,
         )
-
 
         for response in responses:
             # TODO: is this necessary?
@@ -221,7 +220,6 @@ class TestValidator(IsolatedAsyncioTestCase):
         sorted_rewards = dict(sorted(rewards_dict.items(), key=lambda item: item[1], reverse=True))  # type: ignore[]
 
         print(f"sorted rewards: {sorted_rewards}")
-
 
     async def test_query_and_score_miners(self) -> None:
         await query_and_score_miners(self.validator, assets_and_pools=self.assets_and_pools)

@@ -258,9 +258,7 @@ def _get_rewards(
 
 
 def calculate_apy(
-    allocations: AllocationsDict,
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
-    extra_metadata: dict
+    allocations: AllocationsDict, assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int], extra_metadata: dict
 ) -> int:
     """
     Calculates immediate projected yields given intial assets and pools, pool history, and number of timesteps

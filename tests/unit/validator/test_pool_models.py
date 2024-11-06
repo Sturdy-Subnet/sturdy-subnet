@@ -147,10 +147,7 @@ class TestAavePool(unittest.TestCase):
 
     def test_supply_rate_decrease_alloc(self) -> None:
         print("----==== test_supply_rate_decrease_alloc ====----")
-        pool = AaveV3DefaultInterestRatePool(
-            contract_address=self.atoken_address,
-            user_address=self.account.address
-        )
+        pool = AaveV3DefaultInterestRatePool(contract_address=self.atoken_address, user_address=self.account.address)
 
         # sync pool params
         pool.sync(web3_provider=self.w3)
@@ -289,10 +286,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
         print("----==== test_pool_contract ====----")
         whale_addr = self.w3.to_checksum_address("0x0669091F451142b3228171aE6aD794cF98288124")
 
-        pool = VariableInterestSturdySiloStrategy(
-            contract_address=self.contract_address,
-            user_address=whale_addr
-        )  # type: ignore[]
+        pool = VariableInterestSturdySiloStrategy(contract_address=self.contract_address, user_address=whale_addr)  # type: ignore[]
 
         pool.sync(self.w3)
 
@@ -311,7 +305,6 @@ class TestSturdySiloStrategy(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_price_per_share"))
         self.assertTrue(isinstance(pool._price_per_share, int))
         print(f"price per share: {pool._price_per_share}")
-
 
         # don't change deposit amount to pool by much
         prev_supply_rate = pool.supply_rate(int(630e18))

@@ -172,7 +172,7 @@ def log_allocations(
             datetime_now,
             request_type,
             # TODO: use jsonable_encoder?
-            json.dumps(extra_metadata)
+            json.dumps(extra_metadata),
         ),
     )
 
