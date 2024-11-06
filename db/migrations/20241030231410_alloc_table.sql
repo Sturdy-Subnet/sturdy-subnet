@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS allocation_requests (
 
 CREATE TABLE active_allocs (
     request_uid TEXT PRIMARY KEY,
-    active BOOLEAN DEFAULT FALSE,
     scoring_period_end TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (request_uid) REFERENCES allocation_requests (request_uid)

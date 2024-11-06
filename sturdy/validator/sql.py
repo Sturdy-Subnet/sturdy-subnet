@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from fastapi.encoders import jsonable_encoder
 
+from sturdy.constants import SCORING_WINDOW
 from sturdy.protocol import AllocInfo, ChainBasedPoolModel
 
 BALANCE = "balance"
@@ -165,7 +166,7 @@ def log_allocations(
     scoring_period_end = datetime.fromtimestamp(challenge_end)  # noqa: DTZ006
     datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
     conn.execute(
-        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?, ?, ?)",
+        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?, ?, json(?))",
         (
             request_uid,
             json.dumps(jsonable_encoder(assets_and_pools)),
@@ -177,10 +178,9 @@ def log_allocations(
     )
 
     conn.execute(
-        f"INSERT INTO {ACTIVE_ALLOCS} VALUES (?, json(?), ?, ?)",
+        f"INSERT INTO {ACTIVE_ALLOCS} VALUES (?, ?, ?)",
         (
             request_uid,
-            True,
             scoring_period_end,
             datetime_now,
         ),
@@ -199,6 +199,7 @@ def log_allocations(
 # TODO: rename function and database table?
 def get_active_allocs(
     conn: sqlite3.Connection,
+    scoring_window: float = SCORING_WINDOW
 ) -> list:
     # TODO: change the logic of handling "active allocations"
     # for now we simply get ones which are still in their "challenge"
@@ -206,13 +207,15 @@ def get_active_allocs(
     # TODO: the existance "active" column may be redundant
     query = f"""
     SELECT * FROM {ACTIVE_ALLOCS}
-    WHERE scoring_period_end >= ?
-    AND active == True
+    WHERE scoring_period_end > ?
+    AND scoring_period_end >= ?
     """
     ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
+    window_ts = ts_now - scoring_window
     datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
+    window_datetime = datetime.fromtimestamp(window_ts)  # noqa: DTZ006
 
-    cur = conn.execute(query, [datetime_now])
+    cur = conn.execute(query, [datetime_now, window_datetime])
     rows = cur.fetchall()
 
     return [dict(row) for row in rows]
