@@ -275,7 +275,7 @@ def calculate_apy(
             case POOL_TYPES.STURDY_SILO:
                 last_share_price = extra_metadata[contract_addr]
                 curr_share_price = pool._price_per_share
-                pct_delta = float(last_share_price - curr_share_price) / float(last_share_price)
+                pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
                 total_yield += int(allocation * pct_delta)
             case _:
                 total_yield += 0
