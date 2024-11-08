@@ -25,7 +25,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
-from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
+from sturdy.constants import ALLOCATION_SIMILARITY_THRESHOLD, APY_SIMILARITY_THRESHOLD, QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div
@@ -99,16 +99,26 @@ def normalize_squared(apys_and_allocations: AllocationsDict, epsilon: float = 1e
 
 
 def calculate_penalties(
-    similarity_matrix: dict[str, dict[str, float]],
+    allocation_similarity_matrix: dict[str, dict[str, float]],
+    apy_similarity_matrix: dict[str, dict[str, float]],
     axon_times: dict[str, float],
-    similarity_threshold: float = SIMILARITY_THRESHOLD,
+    allocation_similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
+    apy_similarity_threshold: float = APY_SIMILARITY_THRESHOLD,
 ) -> dict[str, int]:
-    penalties = {miner: 0 for miner in similarity_matrix}
+    penalties = {miner: 0 for miner in allocation_similarity_matrix}
 
-    for miner_a, similarities in similarity_matrix.items():
-        for miner_b, similarity in similarities.items():
-            if similarity <= similarity_threshold and axon_times[miner_a] <= axon_times[miner_b]:
-                penalties[miner_b] += 1
+    for miner_a in allocation_similarity_matrix:
+        allocation_similarities = allocation_similarity_matrix[miner_a]
+        apy_similarities = apy_similarity_matrix[miner_a]
+        for miner_b in allocation_similarities:
+            allocation_similarity = allocation_similarities[miner_b]
+            apy_similarity = apy_similarities[miner_b]
+            if (
+                    allocation_similarity <= allocation_similarity_threshold
+                    and apy_similarity <= apy_similarity_threshold
+                    and axon_times[miner_a] <= axon_times[miner_b]
+                ):
+                    penalties[miner_b] += 1
 
     return penalties
 
@@ -193,7 +203,7 @@ def adjust_rewards_for_plagiarism(
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     uids: list,
     axon_times: dict[str, float],
-    similarity_threshold: float = SIMILARITY_THRESHOLD,
+    similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
 ) -> torch.Tensor:
     """
     Adjusts the annual percentage yield (APY) rewards for miners based on the similarity of their allocations
