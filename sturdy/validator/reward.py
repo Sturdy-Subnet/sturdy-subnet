@@ -225,16 +225,13 @@ def get_apy_similarity_matrix(
 
     for miner_a, info_a in apys_and_allocations.items():
         apy_a = cast(int, info_a["apy"])
-        apy_a = np.array([gmpy2.mpz(apy_a)])
+        apy_a = np.array([gmpy2.mpz(apy_a)], dtype=object)
         similarity_matrix[miner_a] = {}
         for miner_b, info_b in apys_and_allocations.items():
             if miner_a != miner_b:
                 apy_b = cast(int, info_b["apy"])
-                if apy_a is None or apy_b is None:
-                    similarity_matrix[miner_a][miner_b] = float("inf")
-                    continue
-                apy_b = np.array([gmpy2.mpz(apy_b)])
-                similarity_matrix[miner_a][miner_b] = get_distance(apy_a, apy_b, max(apy_b, apy_b)[0])  # Max scaling
+                apy_b = np.array([gmpy2.mpz(apy_b)], dtype=object)
+                similarity_matrix[miner_a][miner_b] = get_distance(apy_a, apy_b, max(apy_a, apy_b)[0])  # Max scaling
 
     return similarity_matrix
 
