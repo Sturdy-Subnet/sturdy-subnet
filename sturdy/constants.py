@@ -39,7 +39,8 @@ SCORING_PERIOD_STEP = 1800
 SCORING_WINDOW = 300  # scoring window
 
 TOTAL_ALLOC_THRESHOLD = 0.98
-SIMILARITY_THRESHOLD = 0.01  # similarity threshold for plagiarism checking
+ALLOCATION_SIMILARITY_THRESHOLD = 1e-18  # similarity threshold for plagiarism checking
+APY_SIMILARITY_THRESHOLD = 1e-16
 
 DB_DIR = "validator_database.db"  # default validator database dir
 
