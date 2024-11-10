@@ -257,7 +257,7 @@ def _get_rewards(
     return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 
 
-def calculate_apy(
+def generated_yield_pct(
     allocations: AllocationsDict, assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int], extra_metadata: dict
 ) -> int:
     """
@@ -391,7 +391,7 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         allocations = json.loads(miner["allocation"])["allocations"]
         extra_metadata = json.loads(request_info["metadata"])
         miner_uid = miner["miner_uid"]
-        miner_apy = calculate_apy(allocations, assets_and_pools, extra_metadata)
+        miner_apy = generated_yield_pct(allocations, assets_and_pools, extra_metadata)
         miner_axon_time = miner["axon_time"]
 
         miner_uids.append(miner_uid)

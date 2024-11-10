@@ -9,12 +9,16 @@ from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
 from neurons.validator import Validator
+from sturdy.algo import naive_algorithm
+from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.pools import *
+from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from sturdy.validator.reward import (
     adjust_rewards_for_plagiarism,
     calculate_penalties,
     calculate_rewards_with_adjusted_penalties,
     format_allocations,
+    generated_yield_pct,
     get_distance,
     get_similarity_matrix,
     normalize_squared,
@@ -718,6 +722,86 @@ class TestRewardFunctions(unittest.TestCase):
         )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
+
+
+class TestCalculateApy(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # runs tests on local mainnet fork at block: 20233401
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21080765,
+                    },
+                },
+            ],
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+
+    def tearDown(self) -> None:
+        # Optional: Revert to the original snapshot after each test
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+
+    def test_calculate_apy_sturdy(self) -> None:
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21075005,
+                    },
+                },
+            ],
+        )
+
+        selected_entry = POOL_REGISTRY["Sturdy Crvusd Aggregator"]
+        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+
+        assets_and_pools = selected["assets_and_pools"]
+        user_address = selected["user_address"]
+        synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
+            assets_and_pools=assets_and_pools,
+            user_address=user_address,
+        )
+
+        allocations = naive_algorithm(self, synapse)
+
+        extra_metadata = {}
+        for contract_address, pool in assets_and_pools["pools"].items():
+            pool.sync(self.w3)
+            extra_metadata[contract_address] = pool._price_per_share
+
+        # move forwards in time, back to "present"
+        # TODO: why doesnt the following work?
+        # self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21080765,
+                    },
+                },
+            ],
+        )
+
+        for pool in assets_and_pools["pools"].values():
+            pool.sync(self.w3)
+
+        apy = generated_yield_pct(allocations, assets_and_pools, extra_metadata)
+        print(f"annualized yield: {(((1 + float(apy) / 1e18)**(365)) - 1) * 100}%")
+        self.assertGreater(apy, 0)
 
 
 if __name__ == "__main__":

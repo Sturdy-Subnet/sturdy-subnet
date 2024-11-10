@@ -525,7 +525,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
         # get current price per share
-        self._price_per_share = retry_with_backoff(self._silo_strategy_contract.functions.pricePerShare().call)
+        self._price_per_share = retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
