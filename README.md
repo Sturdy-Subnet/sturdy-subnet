@@ -77,7 +77,6 @@ There are three core files.
       for pool_dict in selected_pools.values():
           pool = PoolFactory.create_pool(
               pool_type=POOL_TYPES._member_map_[pool_dict["pool_type"]],
-              pool_model_disc=pool_dict["pool_model_disc"],
               user_address=user_address,
               contract_address=pool_dict["contract_address"],
           )

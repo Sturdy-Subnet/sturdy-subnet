@@ -803,6 +803,75 @@ class TestCalculateApy(unittest.TestCase):
         print(f"annualized yield: {(((1 + float(apy) / 1e18)**(365)) - 1) * 100}%")
         self.assertGreater(apy, 0)
 
+    def test_calculate_apy_aave(self) -> None:
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21075005,
+                    },
+                },
+            ],
+        )
+
+        # aave pools - with yearn strategies being their users
+        selected_entry = {
+            "assets_and_pools": {
+                "pools": {
+                    "0x018008bfb33d285247A21d44E50697654f754e63": {
+                        "pool_type": "AAVE_DEFAULT",
+                        "contract_address": "0x018008bfb33d285247A21d44E50697654f754e63",
+                        "user_address": "0xF0825750791A4444c5E70743270DcfA8Bb38f959",
+                    },
+                    "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B": {
+                        "pool_type": "AAVE_TARGET",
+                        "contract_address": "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B",
+                        "user_address": "0x1fd862499e9b9402de6c599b6c391f83981180ab",
+                    },
+                }
+            }
+        }
+
+        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+
+        assets_and_pools = selected["assets_and_pools"]
+        synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
+            assets_and_pools=assets_and_pools,
+        )
+
+        allocations = naive_algorithm(self, synapse)
+
+        extra_metadata = {}
+        for contract_address, pool in assets_and_pools["pools"].items():
+            pool.sync(self.w3)
+            extra_metadata[contract_address] = pool._normalized_income
+
+        # move forwards in time, back to "present"
+        # TODO: why doesnt the following work?
+        # self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21080765,
+                    },
+                },
+            ],
+        )
+
+        for pool in assets_and_pools["pools"].values():
+            pool.sync(self.w3)
+
+        apy = generated_yield_pct(allocations, assets_and_pools, extra_metadata)
+        print(f"annualized yield: {(((1 + float(apy) / 1e18)**(365)) - 1) * 100}%")
+        self.assertGreater(apy, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

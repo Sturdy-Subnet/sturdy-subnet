@@ -29,7 +29,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 21080765,
+                        "blockNumber": 21150770,
                     },
                 },
             ],
@@ -60,7 +60,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 21080765,
+                        "blockNumber": 21150770,
                     },
                 },
             ],
@@ -80,9 +80,10 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
         np.random.seed(69)
         # run test multiple times to to ensure the number generated are
         # within the correct ranges
-        keys = list(POOL_REGISTRY.keys())[:2]
-        for idx in range(2):
+        keys = list(POOL_REGISTRY.keys())
+        for idx in range(len(keys)):
             key = keys[idx]
+            print(key)
             selected_entry = POOL_REGISTRY[key]
             generated = assets_pools_for_challenge_data(selected_entry, self.w3)
             print(generated)

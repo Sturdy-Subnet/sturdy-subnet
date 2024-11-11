@@ -184,7 +184,6 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
               ...
               "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": {
                 "pool_type": "STURDY_SILO",
-                "pool_model_disc: "CHAIN",
                 "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
               },
               ...

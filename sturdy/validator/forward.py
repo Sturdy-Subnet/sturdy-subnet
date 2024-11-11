@@ -26,7 +26,7 @@ from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import MAX_SCORING_PERIOD, MIN_SCORING_PERIOD, QUERY_TIMEOUT, SCORING_PERIOD_STEP
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
-from sturdy.pools import assets_pools_for_challenge_data
+from sturdy.pools import POOL_TYPES, assets_pools_for_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.reward import filter_allocations, get_rewards
 from sturdy.validator.sql import get_active_allocs, get_db_connection, log_allocations
@@ -44,16 +44,17 @@ async def forward(self) -> Any:
     """
     # initialize pools and assets
     # TODO: only sturdy pools for now
-    selected_entry = POOL_REGISTRY["Sturdy Crvusd Aggregator"]
+    selected_entry = POOL_REGISTRY["Yearn DAI Vault"]
     challenge_data = assets_pools_for_challenge_data(selected_entry, self.w3)
     request_uuid = str(uuid.uuid4()).replace("-", "")
+    user_address = challenge_data.get("user_address", None)
 
     bt.logging.info("Querying miners...")
     axon_times, allocations = await query_and_score_miners(
         self,
         assets_and_pools=challenge_data["assets_and_pools"],
         request_type=REQUEST_TYPES.SYNTHETIC,
-        user_address=challenge_data["user_address"],
+        user_address=user_address if user_address is not None else ADDRESS_ZERO,
     )
 
     assets_and_pools = challenge_data["assets_and_pools"]
@@ -62,7 +63,13 @@ async def forward(self) -> Any:
 
     for contract_addr, pool in pools.items():
         pool.sync(self.w3)
-        metadata[contract_addr] = pool._price_per_share
+        match pool.pool_type:
+            case POOL_TYPES.STURDY_SILO:
+                metadata[contract_addr] = pool._price_per_share
+            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
+                metadata[contract_addr] = pool._normalized_income
+            case _:
+                pass
 
     scoring_period = get_scoring_period()
 

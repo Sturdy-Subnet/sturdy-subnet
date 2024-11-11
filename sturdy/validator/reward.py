@@ -277,6 +277,11 @@ def generated_yield_pct(
                 curr_share_price = pool._price_per_share
                 pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
                 total_yield += int(allocation * pct_delta)
+            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
+                last_income = extra_metadata[contract_addr]
+                curr_income = pool._normalized_income
+                pct_delta = float(curr_income - last_income) / float(last_income)
+                total_yield += int(allocation * pct_delta)
             case _:
                 total_yield += 0
 

@@ -44,11 +44,12 @@ from sturdy.utils.misc import (
 
 class POOL_TYPES(IntEnum):
     STURDY_SILO = 1
-    AAVE = 2
+    AAVE_DEFAULT = 2
     DAI_SAVINGS = 3
     COMPOUND_V3 = 4
     MORPHO = 5
     YEARN_V3 = 6
+    AAVE_TARGET = 7
 
 
 def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
@@ -60,7 +61,7 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
             borrow_amount = pool._totalBorrow
             our_supply = pool._curr_deposit_amount
             assets_available = pool._totalAssets - borrow_amount
-        case POOL_TYPES.AAVE:
+        case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
             # borrow amount for aave pools is total_stable_debt + total_variable_debt
             borrow_amount = ((pool._nextTotalStableDebt * int(1e18)) // int(10**pool._decimals)) + (
                 (pool._totalVariableDebt * int(1e18)) // int(10**pool._decimals)
@@ -154,7 +155,6 @@ class ChainBasedPoolModel(BaseModel):
         use_enum_values = True  # This will use the enum's value instead of the enum itself
         smart_union = True
 
-    pool_model_disc: Literal["CHAIN"] = Field(default="CHAIN", description="pool type discriminator")
     pool_type: POOL_TYPES | int | str = Field(..., description="type of pool")
     user_address: str = Field(
         default=ADDRESS_ZERO,
@@ -200,7 +200,7 @@ class PoolFactory:
     @staticmethod
     def create_pool(pool_type: POOL_TYPES, **kwargs: Any) -> ChainBasedPoolModel:
         match pool_type:
-            case POOL_TYPES.AAVE:
+            case POOL_TYPES.AAVE_DEFAULT:
                 return AaveV3DefaultInterestRatePool(**kwargs)
             case POOL_TYPES.STURDY_SILO:
                 return VariableInterestSturdySiloStrategy(**kwargs)
@@ -212,6 +212,8 @@ class PoolFactory:
                 return MorphoVault(**kwargs)
             case POOL_TYPES.YEARN_V3:
                 return YearnV3Vault(**kwargs)
+            case POOL_TYPES.AAVE_TARGET:
+                return AaveV3RateTargetBaseInterestRatePool(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
@@ -219,7 +221,7 @@ class PoolFactory:
 class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE, const=True, description="type of pool")
+    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_DEFAULT, const=True, description="type of pool")
 
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
@@ -235,6 +237,8 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
     _collateral_amount: int = PrivateAttr()
     _total_supplied: int = PrivateAttr()
     _decimals: int = PrivateAttr()
+    _user_asset_balance: int = PrivateAttr()
+    _normalized_income: int = PrivateAttr()
 
     class Config:
         arbitrary_types_allowed = True
@@ -377,6 +381,225 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
             self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
             self._collateral_amount = retry_with_backoff(
                 self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+            )
+
+            self._user_asset_balance = retry_with_backoff(
+                self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+            )
+
+            self._normalized_income = retry_with_backoff(
+                self._pool_contract.functions.getReserveNormalizedIncome(self._underlying_asset_address).call
+            )
+
+        except Exception as err:
+            bt.logging.error("Failed to sync to chain!")
+            bt.logging.error(err)  # type: ignore[]
+
+    # last 256 unique calls to this will be cached for the next 60 seconds
+    @ttl_cache(maxsize=256, ttl=60)
+    def supply_rate(self, amount: int) -> int:
+        """Returns supply rate given new deposit amount"""
+        try:
+            already_deposited = self._collateral_amount
+            delta = amount - already_deposited
+            to_deposit = max(0, delta)
+            to_remove = abs(delta) if delta < 0 else 0
+
+            (nextLiquidityRate, _) = retry_with_backoff(
+                self._strategy_contract.functions.calculateInterestRates(
+                    (
+                        self._reserve_data.unbacked,
+                        int(to_deposit),
+                        int(to_remove),
+                        self._nextTotalStableDebt + self._totalVariableDebt,
+                        self._reserveFactor,
+                        self._underlying_asset_address,
+                        True,
+                        already_deposited,
+                    ),
+                ).call,
+            )
+
+            return Web3.to_wei(nextLiquidityRate / 1e27, "ether")
+
+        except Exception as e:
+            bt.logging.error("Failed to retrieve supply apy!")
+            bt.logging.error(e)  # type: ignore[]
+
+        return 0
+
+
+class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
+    """This class defines the default pool type for Aave"""
+
+    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_TARGET, const=True, description="type of pool")
+
+    _atoken_contract: Contract = PrivateAttr()
+    _pool_contract: Contract = PrivateAttr()
+    _underlying_asset_contract: Contract = PrivateAttr()
+    _underlying_asset_address: str = PrivateAttr()
+    _reserve_data = PrivateAttr()
+    _strategy_contract = PrivateAttr()
+    _nextTotalStableDebt = PrivateAttr()
+    _nextAvgStableBorrowRate = PrivateAttr()
+    _variable_debt_token_contract = PrivateAttr()
+    _totalVariableDebt = PrivateAttr()
+    _reserveFactor = PrivateAttr()
+    _collateral_amount: int = PrivateAttr()
+    _total_supplied: int = PrivateAttr()
+    _decimals: int = PrivateAttr()
+    _user_asset_balance: int = PrivateAttr()
+    _normalized_income: int = PrivateAttr()
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    def __hash__(self) -> int:
+        return hash((self._atoken_contract.address, self._underlying_asset_address))
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, AaveV3DefaultInterestRatePool):
+            return NotImplemented
+        # Compare the attributes for equality
+        return (self._atoken_contract.address, self._underlying_asset_address) == (
+            other._atoken_contract.address,
+            other._underlying_asset_address,
+        )
+
+    def pool_init(self, web3_provider: Web3) -> None:
+        try:
+            assert web3_provider.is_connected()
+        except Exception as err:
+            bt.logging.error("Failed to connect to Web3 instance!")
+            bt.logging.error(err)  # type: ignore[]
+
+        try:
+            atoken_abi_file_path = Path(__file__).parent / "abi/AToken.json"
+            atoken_abi_file = atoken_abi_file_path.open()
+            atoken_abi = json.load(atoken_abi_file)
+            atoken_abi_file.close()
+            atoken_contract = web3_provider.eth.contract(abi=atoken_abi, decode_tuples=True)
+            self._atoken_contract = retry_with_backoff(
+                atoken_contract,
+                address=self.contract_address,
+            )
+
+            pool_abi_file_path = Path(__file__).parent / "abi/Pool.json"
+            pool_abi_file = pool_abi_file_path.open()
+            pool_abi = json.load(pool_abi_file)
+            pool_abi_file.close()
+
+            atoken_contract = self._atoken_contract
+            pool_address = retry_with_backoff(atoken_contract.functions.POOL().call)
+
+            pool_contract = web3_provider.eth.contract(abi=pool_abi, decode_tuples=True)
+            self._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
+
+            self._underlying_asset_address = retry_with_backoff(
+                self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call,
+            )
+
+            erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
+            erc20_abi_file = erc20_abi_file_path.open()
+            erc20_abi = json.load(erc20_abi_file)
+            erc20_abi_file.close()
+
+            underlying_asset_contract = web3_provider.eth.contract(abi=erc20_abi, decode_tuples=True)
+            self._underlying_asset_contract = retry_with_backoff(
+                underlying_asset_contract,
+                address=self._underlying_asset_address,
+            )
+
+            self._total_supplied = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
+
+            self._initted = True
+
+        except Exception as err:
+            bt.logging.error("Failed to load contract!")
+            bt.logging.error(err)  # type: ignore[]
+
+    def sync(self, web3_provider: Web3) -> None:
+        """Syncs with chain"""
+        if not self._initted:
+            self.pool_init(web3_provider)
+        try:
+            pool_abi_file_path = Path(__file__).parent / "abi/Pool.json"
+            pool_abi_file = pool_abi_file_path.open()
+            pool_abi = json.load(pool_abi_file)
+            pool_abi_file.close()
+
+            atoken_contract_onchain = self._atoken_contract
+            pool_address = retry_with_backoff(atoken_contract_onchain.functions.POOL().call)
+
+            pool_contract = web3_provider.eth.contract(abi=pool_abi, decode_tuples=True)
+            self._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
+
+            self._underlying_asset_address = retry_with_backoff(
+                self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call,
+            )
+
+            self._reserve_data = retry_with_backoff(
+                self._pool_contract.functions.getReserveData(self._underlying_asset_address).call,
+            )
+
+            reserve_strat_abi_file_path = Path(__file__).parent / "abi/RateTargetBaseInterestRateStrategy.json"
+            reserve_strat_abi_file = reserve_strat_abi_file_path.open()
+            reserve_strat_abi = json.load(reserve_strat_abi_file)
+            reserve_strat_abi_file.close()
+
+            strategy_contract = web3_provider.eth.contract(abi=reserve_strat_abi)
+            self._strategy_contract = retry_with_backoff(
+                strategy_contract,
+                address=self._reserve_data.interestRateStrategyAddress,
+            )
+
+            stable_debt_token_abi_file_path = Path(__file__).parent / "abi/IStableDebtToken.json"
+            stable_debt_token_abi_file = stable_debt_token_abi_file_path.open()
+            stable_debt_token_abi = json.load(stable_debt_token_abi_file)
+            stable_debt_token_abi_file.close()
+
+            stable_debt_token_contract = web3_provider.eth.contract(abi=stable_debt_token_abi)
+            stable_debt_token_contract = retry_with_backoff(
+                stable_debt_token_contract,
+                address=self._reserve_data.stableDebtTokenAddress,
+            )
+
+            (
+                _,
+                self._nextTotalStableDebt,
+                self._nextAvgStableBorrowRate,
+                _,
+            ) = retry_with_backoff(stable_debt_token_contract.functions.getSupplyData().call)
+
+            variable_debt_token_abi_file_path = Path(__file__).parent / "abi/IVariableDebtToken.json"
+            variable_debt_token_abi_file = variable_debt_token_abi_file_path.open()
+            variable_debt_token_abi = json.load(variable_debt_token_abi_file)
+            variable_debt_token_abi_file.close()
+
+            variable_debt_token_contract = web3_provider.eth.contract(abi=variable_debt_token_abi)
+            self._variable_debt_token_contract = retry_with_backoff(
+                variable_debt_token_contract,
+                address=self._reserve_data.variableDebtTokenAddress,
+            )
+
+            nextVariableBorrowIndex = self._reserve_data.variableBorrowIndex
+
+            nextScaledVariableDebt = retry_with_backoff(self._variable_debt_token_contract.functions.scaledTotalSupply().call)
+            self._totalVariableDebt = rayMul(nextScaledVariableDebt, nextVariableBorrowIndex)
+
+            reserveConfiguration = self._reserve_data.configuration
+            self._reserveFactor = getReserveFactor(reserveConfiguration)
+            self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
+            self._collateral_amount = retry_with_backoff(
+                self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+            )
+
+            self._user_asset_balance = retry_with_backoff(
+                self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+            )
+
+            self._normalized_income = retry_with_backoff(
+                self._pool_contract.functions.getReserveNormalizedIncome(self._underlying_asset_address).call
             )
 
         except Exception as err:
@@ -892,75 +1115,6 @@ class MorphoVault(ChainBasedPoolModel):
         )
 
 
-def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
-    private_key_bytes = rng_gen.bytes(32)  # type: ignore[]
-    account = Account.from_key(private_key_bytes)
-    return account.address
-
-
-def generate_challenge_data(
-    web3_provider: Web3,
-    rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
-) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
-    selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
-    bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
-
-    return assets_pools_for_challenge_data(selected_entry, web3_provider)
-
-
-def assets_pools_for_challenge_data(
-    selected_entry, web3_provider: Web3
-) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
-    challenge_data = {}
-
-    selected_assets_and_pools = selected_entry["assets_and_pools"]
-    selected_pools = selected_assets_and_pools["pools"]
-    user_address = selected_entry["user_address"]
-
-    pool_list = []
-
-    for pool_dict in selected_pools.values():
-        pool = PoolFactory.create_pool(
-            pool_type=POOL_TYPES._member_map_[pool_dict["pool_type"]],
-            pool_model_disc=pool_dict["pool_model_disc"],
-            user_address=user_address,
-            contract_address=pool_dict["contract_address"],
-        )
-        pool_list.append(pool)
-
-    pools = {str(pool.contract_address): pool for pool in pool_list}
-
-    # we assume that the user address is the same across pools (valid)
-    # and also that the asset contracts are the same across said pools
-    first_pool = pool_list[0]
-    total_assets = 0
-
-    match first_pool.pool_type:
-        case POOL_TYPES.STURDY_SILO:
-            first_pool.sync(web3_provider)
-            total_assets = first_pool._user_asset_balance
-        case _:
-            pass
-
-    for pool in pools.values():
-        pool.sync(web3_provider)
-        total_asset = 0
-        match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                total_asset += pool._curr_deposit_amount
-            case _:
-                pass
-
-        total_assets += total_asset
-
-    challenge_data["assets_and_pools"] = {}
-    challenge_data["assets_and_pools"]["pools"] = pools
-    challenge_data["assets_and_pools"]["total_assets"] = total_assets
-    challenge_data["user_address"] = user_address
-
-    return challenge_data
-
-
 class YearnV3Vault(ChainBasedPoolModel):
     pool_type: POOL_TYPES = Field(POOL_TYPES.YEARN_V3, const=True, description="type of pool")
 
@@ -999,14 +1153,73 @@ class YearnV3Vault(ChainBasedPoolModel):
         return retry_with_backoff(self._apr_oracle.functions.getExpectedApr(self.contract_address, delta).call)
 
 
-# TODO: remove this?
-# # generate intial allocations for pools
-# def generate_initial_allocations_for_pools(assets_and_pools: dict) -> dict:
-#     total_assets: int = assets_and_pools["total_assets"]
-#     pools: dict[str, Chain] = assets_and_pools["pools"]
-#     allocs = {}
-#     for pool_uid, pool in pools.items():
-#         alloc = pool.borrow_amount if pool.pool_type == POOL_TYPES.SYNTHETIC else total_assets // len(pools)
-#         allocs[pool_uid] = alloc
+def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
+    private_key_bytes = rng_gen.bytes(32)  # type: ignore[]
+    account = Account.from_key(private_key_bytes)
+    return account.address
 
-#     return allocs
+
+def generate_challenge_data(
+    web3_provider: Web3,
+    rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
+) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
+    selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
+    bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
+
+    return assets_pools_for_challenge_data(selected_entry, web3_provider)
+
+
+def assets_pools_for_challenge_data(
+    selected_entry, web3_provider: Web3
+) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
+    challenge_data = {}
+
+    selected_assets_and_pools = selected_entry["assets_and_pools"]
+    selected_pools = selected_assets_and_pools["pools"]
+    global_user_address = selected_entry.get("user_address", None)
+
+    pool_list = []
+
+    for pool_dict in selected_pools.values():
+        user_address = pool_dict.get("user_address", None)
+        pool = PoolFactory.create_pool(
+            pool_type=POOL_TYPES._member_map_[pool_dict["pool_type"]],
+            user_address=global_user_address if user_address is None else user_address,
+            contract_address=pool_dict["contract_address"],
+        )
+        pool_list.append(pool)
+
+    pools = {str(pool.contract_address): pool for pool in pool_list}
+
+    # we assume that the user address is the same across pools (valid)
+    # and also that the asset contracts are the same across said pools
+    first_pool = pool_list[0]
+    total_assets = 0
+
+    first_pool.sync(web3_provider)
+    match first_pool.pool_type:
+        case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
+            total_assets = first_pool._user_asset_balance
+        case _:
+            pass
+
+    for pool in pools.values():
+        pool.sync(web3_provider)
+        total_asset = 0
+        match pool.pool_type:
+            case POOL_TYPES.STURDY_SILO:
+                total_asset += pool._curr_deposit_amount
+            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
+                total_asset += pool._collateral_amount
+            case _:
+                pass
+
+        total_assets += total_asset
+
+    challenge_data["assets_and_pools"] = {}
+    challenge_data["assets_and_pools"]["pools"] = pools
+    challenge_data["assets_and_pools"]["total_assets"] = total_assets
+    if global_user_address is not None:
+        challenge_data["user_address"] = global_user_address
+
+    return challenge_data

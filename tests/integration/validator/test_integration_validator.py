@@ -22,7 +22,7 @@ EXTERNAL_WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 os.environ["WEB_PROVIDER_URL"] = "http://127.0.0.1:8545"
 
 
-# TODO: more comprehensive integration testing?
+# TODO: more comprehensive integration testing - with in-mem sql db and everythin'
 class TestValidator(IsolatedAsyncioTestCase):
     maxDiff = 4000
 

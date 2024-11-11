@@ -208,22 +208,18 @@ curl -X POST \
     "pools": {
       "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": {
         "pool_type": "STURDY_SILO",
-        "pool_model_disc": "CHAIN",
         "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
       },
        "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b": {
         "pool_type": "STURDY_SILO",
-        "pool_model_disc": "CHAIN",
         "contract_address": "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b"
       },
        "0x26fe402A57D52c8a323bb6e09f06489C8216aC88": {
         "pool_type": "STURDY_SILO",
-        "pool_model_disc": "CHAIN",
         "contract_address": "0x26fe402A57D52c8a323bb6e09f06489C8216aC88"
       },
        "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D": {
         "pool_type": "STURDY_SILO",
-        "pool_model_disc": "CHAIN",
         "contract_address": "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D"
       }
     }
@@ -239,8 +235,7 @@ Some annotations are provided below to further help understand the request forma
     "total_assets": 548568963376234830607950, # total assets available to a miner to allocate
     "pools": { # pools available to output allocations for
       "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": { # address used to get relevant info about the the pool
-        "pool_type": "STURDY_SILO", 
-        "pool_model_disc": "CHAIN", # if this is a synthetic or chain (organic) pool 
+        "pool_type": "STURDY_SILO",  # if this is a synthetic or chain (organic) pool 
         "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227" # address used to get relevant info about the the pool
       },
 ```
