@@ -18,6 +18,7 @@
 
 import asyncio
 import uuid
+import random
 from typing import Any
 
 import bittensor as bt
@@ -125,6 +126,8 @@ async def query_and_score_miners(
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
     active_uids = [str(uid) for uid in range(self.metagraph.n.item()) if self.metagraph.axons[uid].is_serving]
+
+    random.shuffle(active_uids)
 
     bt.logging.debug(f"active_uids: {active_uids}")
 
