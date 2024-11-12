@@ -778,7 +778,7 @@ class TestCalculateApy(unittest.TestCase):
         extra_metadata = {}
         for contract_address, pool in assets_and_pools["pools"].items():
             pool.sync(self.w3)
-            extra_metadata[contract_address] = pool._price_per_share
+            extra_metadata[contract_address] = pool._share_price
 
         # move forwards in time, back to "present"
         # TODO: why doesnt the following work?
@@ -852,6 +852,56 @@ class TestCalculateApy(unittest.TestCase):
         # move forwards in time, back to "present"
         # TODO: why doesnt the following work?
         # self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21080765,
+                    },
+                },
+            ],
+        )
+
+        for pool in assets_and_pools["pools"].values():
+            pool.sync(self.w3)
+
+        apy = generated_yield_pct(allocations, assets_and_pools, extra_metadata)
+        print(f"annualized yield: {(((1 + float(apy) / 1e18)**(365)) - 1) * 100}%")
+        self.assertGreater(apy, 0)
+
+    def test_calculate_apy_morpho(self) -> None:
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21075005,
+                    },
+                },
+            ],
+        )
+
+        selected_entry = POOL_REGISTRY["Morpho USDC Vaults"]
+        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+
+        assets_and_pools = selected["assets_and_pools"]
+        user_address = selected["user_address"]
+        synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
+            assets_and_pools=assets_and_pools,
+            user_address=user_address,
+        )
+
+        allocations = naive_algorithm(self, synapse)
+
+        extra_metadata = {}
+        for contract_address, pool in assets_and_pools["pools"].items():
+            pool.sync(self.w3)
+            extra_metadata[contract_address] = pool._share_price
 
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]

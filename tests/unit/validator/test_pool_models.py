@@ -111,7 +111,7 @@ class TestAavePool(unittest.TestCase):
 
     # TODO: test syncing after time travel
     def test_sync(self) -> None:
-        print("----==== test_sync ====----")
+        print("----==== TestAavePool | test_sync ====----")
         pool = AaveV3DefaultInterestRatePool(
             contract_address=self.atoken_address,
         )
@@ -132,7 +132,7 @@ class TestAavePool(unittest.TestCase):
 
     # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
     def test_supply_rate_alloc(self) -> None:
-        print("----==== test_supply_rate_increase_alloc ====----")
+        print("----==== TestAavePool | test_supply_rate_increase_alloc ====----")
         pool = AaveV3DefaultInterestRatePool(
             contract_address=self.atoken_address,
         )
@@ -152,7 +152,7 @@ class TestAavePool(unittest.TestCase):
         self.assertLess(apy_after, apy_before)
 
     def test_supply_rate_decrease_alloc(self) -> None:
-        print("----==== test_supply_rate_decrease_alloc ====----")
+        print("----==== TestAavePool | test_supply_rate_decrease_alloc ====----")
         pool = AaveV3DefaultInterestRatePool(contract_address=self.atoken_address, user_address=self.account.address)
 
         # sync pool params
@@ -308,9 +308,9 @@ class TestSturdySiloStrategy(unittest.TestCase):
         self.assertTrue(isinstance(pool._rate_model_contract, Contract))
         print(f"rate model contract: {pool._rate_model_contract.address}")
 
-        self.assertTrue(hasattr(pool, "_price_per_share"))
-        self.assertTrue(isinstance(pool._price_per_share, int))
-        print(f"price per share: {pool._price_per_share}")
+        self.assertTrue(hasattr(pool, "_share_price"))
+        self.assertTrue(isinstance(pool._share_price, int))
+        print(f"price per share: {pool._share_price}")
 
         # don't change deposit amount to pool by much
         prev_supply_rate = pool.supply_rate(int(630e18))
@@ -641,6 +641,11 @@ class TestMorphoVault(unittest.TestCase):
         self.assertTrue(isinstance(pool._user_asset_balance, int))
         print(f"user asset balance: {pool._user_asset_balance}")
         self.assertGreater(pool._user_asset_balance, 0)
+
+        self.assertTrue(hasattr(pool, "_share_price"))
+        self.assertTrue(isinstance(pool._share_price, int))
+        print(f"morpho vault share price: {pool._share_price}")
+        self.assertGreater(pool._share_price, 0)
 
         # check pool supply_rate
         print(pool.supply_rate(0))

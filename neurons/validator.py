@@ -244,7 +244,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     for contract_addr, pool in pools.items():
         pool.sync(core_validator.w3)
-        metadata[contract_addr] = pool._price_per_share
+        metadata[contract_addr] = pool._share_price
 
     with sql.get_db_connection() as conn:
         sql.log_allocations(

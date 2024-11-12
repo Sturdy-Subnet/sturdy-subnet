@@ -60,24 +60,24 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
         case POOL_TYPES.STURDY_SILO:
             borrow_amount = pool._totalBorrow
             our_supply = pool._curr_deposit_amount
-            assets_available = pool._totalAssets - borrow_amount
+            assets_available = max(0, pool._totalAssets - borrow_amount)
         case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
             # borrow amount for aave pools is total_stable_debt + total_variable_debt
             borrow_amount = ((pool._nextTotalStableDebt * int(1e18)) // int(10**pool._decimals)) + (
                 (pool._totalVariableDebt * int(1e18)) // int(10**pool._decimals)
             )
             our_supply = pool._collateral_amount
-            assets_available = ((pool._total_supplied * int(1e18)) // int(10**pool._decimals)) - borrow_amount
+            assets_available = max(0, ((pool._total_supplied * int(1e18)) // int(10**pool._decimals)) - borrow_amount)
         case POOL_TYPES.COMPOUND_V3:
             borrow_amount = pool._total_borrow
             our_supply = pool._deposit_amount
-            assets_available = pool._total_supply - borrow_amount
+            assets_available = max(0, pool._total_supply - borrow_amount)
         case POOL_TYPES.MORPHO:
             borrow_amount = pool._curr_borrows
             our_supply = pool._user_assets
-            assets_available = pool._total_assets - borrow_amount
+            assets_available = max(0, pool._total_assets - borrow_amount)
         case POOL_TYPES.YEARN_V3:
-            return pool._curr_deposit - pool._max_withdraw
+            return max(0, pool._curr_deposit - pool._max_withdraw)
         case POOL_TYPES.DAI_SAVINGS:
             pass  # TODO: is there a more appropriate way to go about this?
         case _:  # not a valid pool type
@@ -662,7 +662,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _asset: Contract = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
     _user_total_assets: int = PrivateAttr()
-    _price_per_share: Contract = PrivateAttr()
+    _share_price: Contract = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
@@ -748,7 +748,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
         # get current price per share
-        self._price_per_share = retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
+        self._share_price = retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
@@ -967,6 +967,7 @@ class MorphoVault(ChainBasedPoolModel):
     _asset_decimals: int = PrivateAttr()
     _underlying_asset_contract: Contract = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
+    _share_price: int = PrivateAttr()
 
     _VIRTUAL_SHARES: ClassVar[int] = 1e6
     _VIRTUAL_ASSETS: ClassVar[int] = 1
@@ -1008,9 +1009,7 @@ class MorphoVault(ChainBasedPoolModel):
         self._irm_abi = json.load(irm_abi_file)
         irm_abi_file.close()
 
-        underlying_asset_address = retry_with_backoff(
-            self._vault_contract.functions.asset().call
-        )
+        underlying_asset_address = retry_with_backoff(self._vault_contract.functions.asset().call)
 
         erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
         erc20_abi_file = erc20_abi_file_path.open()
@@ -1051,8 +1050,12 @@ class MorphoVault(ChainBasedPoolModel):
         self._total_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
         curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
         self._user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
-        self._user_asset_balance = retry_with_backoff(self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call)
+        self._user_asset_balance = retry_with_backoff(
+            self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+        )
         self._curr_borrows = total_borrows
+
+        self._share_price = retry_with_backoff(self._vault_contract.functions.convertToAssets(int(1e18)).call)
 
     @classmethod
     def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
@@ -1195,28 +1198,32 @@ def assets_pools_for_challenge_data(
 
     # we assume that the user address is the same across pools (valid)
     # and also that the asset contracts are the same across said pools
-    first_pool = pool_list[0]
-    total_assets = 0
+    total_assets = selected_entry.get("total_assets", None)
 
-    first_pool.sync(web3_provider)
-    match first_pool.pool_type:
-        case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-            total_assets = first_pool._user_asset_balance
-        case _:
-            pass
-
-    for pool in pools.values():
-        pool.sync(web3_provider)
-        total_asset = 0
-        match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                total_asset += pool._curr_deposit_amount
-            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                total_asset += pool._collateral_amount
+    if total_assets is None:
+        total_assets = 0
+        first_pool = pool_list[0]
+        first_pool.sync(web3_provider)
+        match first_pool.pool_type:
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET, POOL_TYPES.MORPHO):
+                total_assets = first_pool._user_asset_balance
             case _:
                 pass
 
-        total_assets += total_asset
+        for pool in pools.values():
+            pool.sync(web3_provider)
+            total_asset = 0
+            match pool.pool_type:
+                case POOL_TYPES.STURDY_SILO:
+                    total_asset += pool._curr_deposit_amount
+                case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
+                    total_asset += pool._collateral_amount
+                case POOL_TYPES.MORPHO:
+                    total_asset += pool._user_assets
+                case _:
+                    pass
+
+            total_assets += total_asset
 
     challenge_data["assets_and_pools"] = {}
     challenge_data["assets_and_pools"]["pools"] = pools

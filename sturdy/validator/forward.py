@@ -43,9 +43,7 @@ async def forward(self) -> Any:
 
     """
     # initialize pools and assets
-    # TODO: only specific pools for now
-    # selected_entry = POOL_REGISTRY["Morpho USDC Vaults"]
-    # challenge_data = assets_pools_for_challenge_data(selected_entry, self.w3)
+    # TODO: only sturdy silos and morpho vaults for now
     challenge_data = generate_challenge_data(self.w3)
     request_uuid = str(uuid.uuid4()).replace("-", "")
     user_address = challenge_data.get("user_address", None)
@@ -65,8 +63,8 @@ async def forward(self) -> Any:
     for contract_addr, pool in pools.items():
         pool.sync(self.w3)
         match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
-                metadata[contract_addr] = pool._price_per_share
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO):
+                metadata[contract_addr] = pool._share_price
             case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
                 metadata[contract_addr] = pool._normalized_income
             case _:

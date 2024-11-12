@@ -261,7 +261,7 @@ def generated_yield_pct(
     allocations: AllocationsDict, assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int], extra_metadata: dict
 ) -> int:
     """
-    Calculates immediate projected yields given intial assets and pools, pool history, and number of timesteps
+    Calculates yields generated allocations in pools within scoring period
     """
 
     # calculate projected yield
@@ -272,9 +272,9 @@ def generated_yield_pct(
     for contract_addr, pool in pools.items():
         allocation = allocations[contract_addr]
         match pool.pool_type:
-            case POOL_TYPES.STURDY_SILO:
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO):
                 last_share_price = extra_metadata[contract_addr]
-                curr_share_price = pool._price_per_share
+                curr_share_price = pool._share_price
                 pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
                 total_yield += int(allocation * pct_delta)
             case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
@@ -402,6 +402,8 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         miner_uids.append(miner_uid)
         axon_times[miner_uid] = miner_axon_time
         apys_and_allocations[miner_uid] = {"apy": miner_apy, "allocations": allocations}
+
+    print(f"yields and allocs: {apys_and_allocations}")
 
     # TODO: there may be a better way to go about this
     if len(miner_uids) < 1:
