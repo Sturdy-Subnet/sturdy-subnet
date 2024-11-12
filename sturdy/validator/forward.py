@@ -26,7 +26,7 @@ from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import MAX_SCORING_PERIOD, MIN_SCORING_PERIOD, QUERY_TIMEOUT, SCORING_PERIOD_STEP
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
-from sturdy.pools import POOL_TYPES, assets_pools_for_challenge_data
+from sturdy.pools import POOL_TYPES, assets_pools_for_challenge_data, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.reward import filter_allocations, get_rewards
 from sturdy.validator.sql import get_active_allocs, get_db_connection, log_allocations
@@ -43,9 +43,10 @@ async def forward(self) -> Any:
 
     """
     # initialize pools and assets
-    # TODO: only sturdy pools for now
-    selected_entry = POOL_REGISTRY["Yearn DAI Vault"]
-    challenge_data = assets_pools_for_challenge_data(selected_entry, self.w3)
+    # TODO: only specific pools for now
+    # selected_entry = POOL_REGISTRY["Morpho USDC Vaults"]
+    # challenge_data = assets_pools_for_challenge_data(selected_entry, self.w3)
+    challenge_data = generate_challenge_data(self.w3)
     request_uuid = str(uuid.uuid4()).replace("-", "")
     user_address = challenge_data.get("user_address", None)
 

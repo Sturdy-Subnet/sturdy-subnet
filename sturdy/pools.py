@@ -950,23 +950,7 @@ class DaiSavingsRate(ChainBasedPoolModel):
 
 
 class MorphoVault(ChainBasedPoolModel):
-    # TODO: remove
-    """Model for Morpho Vaults
-    NOTE:
-    This pool type is a bit different from other pools
-    pools = {
-        ...
-        "0x0...1": { # <--- this is the index of the market in the morpho vault's "supplyQueue"
-            "contract_address": "0x....", # <---- this is the address of the morpho vault
-            ...
-        }
-        ...
-    }
-
-    new_pools = []
-    for pool_uid, pool in pools.items():
-        new_pool = MorphoVault(contract_address=pool["contract_address"], market_idx=pool_uid ...)
-    """
+    """Model for Morpho Vaults"""
 
     pool_type: POOL_TYPES = Field(POOL_TYPES.MORPHO, const=True, description="type of pool")
 
@@ -981,6 +965,8 @@ class MorphoVault(ChainBasedPoolModel):
     _user_assets: int = PrivateAttr()
     _curr_borrows: int = PrivateAttr()
     _asset_decimals: int = PrivateAttr()
+    _underlying_asset_contract: Contract = PrivateAttr()
+    _user_asset_balance: int = PrivateAttr()
 
     _VIRTUAL_SHARES: ClassVar[int] = 1e6
     _VIRTUAL_ASSETS: ClassVar[int] = 1
@@ -1022,6 +1008,21 @@ class MorphoVault(ChainBasedPoolModel):
         self._irm_abi = json.load(irm_abi_file)
         irm_abi_file.close()
 
+        underlying_asset_address = retry_with_backoff(
+            self._vault_contract.functions.asset().call
+        )
+
+        erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
+        erc20_abi_file = erc20_abi_file_path.open()
+        erc20_abi = json.load(erc20_abi_file)
+        erc20_abi_file.close()
+
+        underlying_asset_contract = web3_provider.eth.contract(abi=erc20_abi, decode_tuples=True)
+        self._underlying_asset_contract = retry_with_backoff(
+            underlying_asset_contract,
+            address=underlying_asset_address,
+        )
+
         self._initted = True
 
     def sync(self, web3_provider: Web3) -> None:
@@ -1050,6 +1051,7 @@ class MorphoVault(ChainBasedPoolModel):
         self._total_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
         curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
         self._user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        self._user_asset_balance = retry_with_backoff(self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call)
         self._curr_borrows = total_borrows
 
     @classmethod

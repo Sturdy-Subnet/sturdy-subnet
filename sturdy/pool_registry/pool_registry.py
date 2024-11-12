@@ -37,28 +37,31 @@ POOL_REGISTRY = {
             }
         },
     },
-    "Yearn DAI Vault": {
-        "assets_and_pools": {
-            "pools": {
-                # "x83F20F44975D03b1b09e64809B757c47f942BEeA": {
-                #     "pool_type": "SAVINGS_DAI",
-                #     "contract_address": "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
-                # },
-                "0x018008bfb33d285247A21d44E50697654f754e63": {
-                    "pool_type": "AAVE_DEFAULT",
-                    "contract_address": "0x018008bfb33d285247A21d44E50697654f754e63",
-                    "user_address": "0xF0825750791A4444c5E70743270DcfA8Bb38f959"
-                },
-                "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B": {
-                    "pool_type": "AAVE_TARGET",
-                    "contract_address": "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B",
-                    "user_address": "0x1fd862499e9b9402de6c599b6c391f83981180ab"
-                },
-                # "0x6acEDA98725505737c0F00a3dA0d047304052948": {
-                #     "pool_type": "YEARN",
-                #     "contract_address": "0x6acEDA98725505737c0F00a3dA0d047304052948",
-                # },
-            }
-        },
-    },
+    # "Morpho USDC Vaults": {
+    #     "user_address": "0xFA60E843a52eff94901f43ac08232b59351192cc",
+    #     "assets_and_pools": {
+    #         "pools": {
+    #             "0xd63070114470f685b75B74D60EEc7c1113d33a3D": {
+    #                 "pool_type": "MORPHO",
+    #                 "pool_model_disc": "CHAIN",
+    #                 "contract_address": "0xd63070114470f685b75B74D60EEc7c1113d33a3D",
+    #             },
+    #             "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB": {
+    #                 "pool_type": "MORPHO",
+    #                 "pool_model_disc": "CHAIN",
+    #                 "contract_address": "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
+    #             },
+    #             "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458": {
+    #                 "pool_type": "MORPHO",
+    #                 "pool_model_disc": "CHAIN",
+    #                 "contract_address": "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458",
+    #             },
+    #             "0xdd0f28e19C1780eb6396170735D45153D261490d": {
+    #                 "pool_type": "MORPHO",
+    #                 "pool_model_disc": "CHAIN",
+    #                 "contract_address": "0xdd0f28e19C1780eb6396170735D45153D261490d",
+    #             },
+    #         }
+    #     },
+    # },
 }

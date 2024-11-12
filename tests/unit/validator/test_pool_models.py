@@ -635,6 +635,13 @@ class TestMorphoVault(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_curr_borrows"))
         self.assertTrue(isinstance(pool._curr_borrows, int))
 
+        self.assertTrue(hasattr(pool, "_underlying_asset_contract"))
+        self.assertTrue(isinstance(pool._underlying_asset_contract, Contract))
+        self.assertTrue(hasattr(pool, "_user_asset_balance"))
+        self.assertTrue(isinstance(pool._user_asset_balance, int))
+        print(f"user asset balance: {pool._user_asset_balance}")
+        self.assertGreater(pool._user_asset_balance, 0)
+
         # check pool supply_rate
         print(pool.supply_rate(0))
 
