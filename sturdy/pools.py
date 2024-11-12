@@ -201,7 +201,7 @@ class PoolFactory:
     def create_pool(pool_type: POOL_TYPES, **kwargs: Any) -> ChainBasedPoolModel:
         match pool_type:
             case POOL_TYPES.AAVE_DEFAULT:
-                return AaveV3DefaultInterestRatePool(**kwargs)
+                return AaveV3DefaultInterestRateV2Pool(**kwargs)
             case POOL_TYPES.STURDY_SILO:
                 return VariableInterestSturdySiloStrategy(**kwargs)
             case POOL_TYPES.DAI_SAVINGS:
@@ -218,7 +218,7 @@ class PoolFactory:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
 
-class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
+class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
     pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_DEFAULT, const=True, description="type of pool")
@@ -247,7 +247,7 @@ class AaveV3DefaultInterestRatePool(ChainBasedPoolModel):
         return hash((self._atoken_contract.address, self._underlying_asset_address))
 
     def __eq__(self, other) -> bool:
-        if not isinstance(other, AaveV3DefaultInterestRatePool):
+        if not isinstance(other, AaveV3DefaultInterestRateV2Pool):
             return NotImplemented
         # Compare the attributes for equality
         return (self._atoken_contract.address, self._underlying_asset_address) == (
@@ -458,7 +458,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
         return hash((self._atoken_contract.address, self._underlying_asset_address))
 
     def __eq__(self, other) -> bool:
-        if not isinstance(other, AaveV3DefaultInterestRatePool):
+        if not isinstance(other, AaveV3DefaultInterestRateV2Pool):
             return NotImplemented
         # Compare the attributes for equality
         return (self._atoken_contract.address, self._underlying_asset_address) == (

@@ -10,7 +10,7 @@ from web3.contract.contract import Contract
 
 from sturdy.constants import APR_ORACLE
 from sturdy.pools import (
-    AaveV3DefaultInterestRatePool,
+    AaveV3DefaultInterestRateV2Pool,
     AaveV3RateTargetBaseInterestRatePool,
     CompoundV3Pool,
     DaiSavingsRate,
@@ -38,7 +38,7 @@ class TestAavePool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20233401,
+                        "blockNumber": 21150770,
                     },
                 },
             ],
@@ -80,7 +80,7 @@ class TestAavePool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 21080765,
+                        "blockNumber": 21150770,
                     },
                 },
             ],
@@ -98,7 +98,7 @@ class TestAavePool(unittest.TestCase):
     def test_pool_contract(self) -> None:
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
-        pool = AaveV3DefaultInterestRatePool(
+        pool = AaveV3RateTargetBaseInterestRatePool(
             contract_address=self.atoken_address,
         )
 
@@ -112,7 +112,7 @@ class TestAavePool(unittest.TestCase):
     # TODO: test syncing after time travel
     def test_sync(self) -> None:
         print("----==== TestAavePool | test_sync ====----")
-        pool = AaveV3DefaultInterestRatePool(
+        pool = AaveV3DefaultInterestRateV2Pool(
             contract_address=self.atoken_address,
         )
 
@@ -133,7 +133,7 @@ class TestAavePool(unittest.TestCase):
     # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
     def test_supply_rate_alloc(self) -> None:
         print("----==== TestAavePool | test_supply_rate_increase_alloc ====----")
-        pool = AaveV3DefaultInterestRatePool(
+        pool = AaveV3DefaultInterestRateV2Pool(
             contract_address=self.atoken_address,
         )
 
@@ -153,7 +153,7 @@ class TestAavePool(unittest.TestCase):
 
     def test_supply_rate_decrease_alloc(self) -> None:
         print("----==== TestAavePool | test_supply_rate_decrease_alloc ====----")
-        pool = AaveV3DefaultInterestRatePool(contract_address=self.atoken_address, user_address=self.account.address)
+        pool = AaveV3DefaultInterestRateV2Pool(contract_address=self.atoken_address, user_address=self.account.address)
 
         # sync pool params
         pool.sync(web3_provider=self.w3)
@@ -908,7 +908,7 @@ class TestAaveTargetPool(unittest.TestCase):
     def test_pool_contract(self) -> None:
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
-        pool = AaveV3DefaultInterestRatePool(
+        pool = AaveV3DefaultInterestRateV2Pool(
             contract_address=self.atoken_address,
         )
 
@@ -922,7 +922,7 @@ class TestAaveTargetPool(unittest.TestCase):
     # TODO: test syncing after time travel
     def test_sync(self) -> None:
         print("----==== test_sync ====----")
-        pool = AaveV3DefaultInterestRatePool(
+        pool = AaveV3DefaultInterestRateV2Pool(
             contract_address=self.atoken_address,
         )
 
@@ -943,7 +943,7 @@ class TestAaveTargetPool(unittest.TestCase):
     # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
     def test_supply_rate_alloc(self) -> None:
         print("----==== test_supply_rate_increase_alloc ====----")
-        pool = AaveV3DefaultInterestRatePool(
+        pool = AaveV3DefaultInterestRateV2Pool(
             contract_address=self.atoken_address,
             user_address=self.account.address
         )

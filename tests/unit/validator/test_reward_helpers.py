@@ -286,14 +286,14 @@ class TestRewardFunctions(unittest.TestCase):
         assets_and_pools = {
             "total_assets": int(200e18),
             "pools": {
-                A: AaveV3DefaultInterestRatePool(
+                A: AaveV3DefaultInterestRateV2Pool(
                     user_address=ADDRESS_ZERO,
                     contract_address=A,
                 ),
             },
         }
 
-        pool_a: AaveV3DefaultInterestRatePool = assets_and_pools["pools"][A]
+        pool_a: AaveV3DefaultInterestRateV2Pool = assets_and_pools["pools"][A]
         pool_a.sync(self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
