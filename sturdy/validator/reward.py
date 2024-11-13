@@ -24,12 +24,11 @@ import gmpy2
 import numpy as np
 import numpy.typing as npt
 import torch
-from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
-from sturdy.utils.ethmath import wei_div, wei_mul
+from sturdy.utils.ethmath import wei_div
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
 
@@ -85,7 +84,7 @@ def format_allocations(
 
 
 def normalize_squared(
-    apys_and_allocations: AllocationsDict, z_threshold: float = 1.0, q: float = 0.75, epsilon: float = 1e-8
+    apys_and_allocations: AllocationsDict, epsilon: float = 1e-8
 ) -> torch.Tensor:
     raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
 
@@ -93,7 +92,7 @@ def normalize_squared(
     if len(raw_apys) <= 1:
         return torch.zeros(len(raw_apys))
 
-    apys = torch.tensor(list(raw_apys.values()))
+    apys = torch.tensor(list(raw_apys.values())).to(torch.float64)
 
     squared = torch.pow(apys, 2)
 
@@ -257,6 +256,7 @@ def _get_rewards(
     return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 
 
+# TODO: make this return annualized pct return instead of pct return within scoring period?
 def generated_yield_pct(
     allocations: AllocationsDict, assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int], extra_metadata: dict
 ) -> int:
@@ -357,7 +357,7 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
     assets_and_pools = None
     miners = None
 
-    with get_db_connection() as conn:
+    with get_db_connection(self.config.db_dir) as conn:
         # get assets and pools that are used to benchmark miner
         # we get the first row entry - we assume that it is the only response from the database
         try:
@@ -389,9 +389,7 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
 
     assets_and_pools["pools"] = new_pools
 
-    # TODO: this probably needs more work
-    # TODO: would it be better here to use metrics i.e. liquidityIndex for aave pools?
-    # calculate the "adjusted" yields of the allocations
+    # calculate the yield the pools accrued during the scoring period
     for miner in miners:
         allocations = json.loads(miner["allocation"])["allocations"]
         extra_metadata = json.loads(request_info["metadata"])

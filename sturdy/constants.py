@@ -28,20 +28,20 @@ MAX_STOCHASTICITY = 0.002  # max stochasticity
 STOCHASTICITY_STEP = 0.0001
 POOL_RESERVE_SIZE = int(100e18)  # 100
 
-QUERY_RATE = 20 # how often synthetic validator queries miners (blocks)
+QUERY_RATE = 20  # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 45  # timeout (seconds)
 
 ORGANIC_SCORING_PERIOD = 7200  # organic scoring period in seconds
 MIN_SCORING_PERIOD = 5400  # min. synthetic scoring period in seconds
-MAX_SCORING_PERIOD = 10800 # max. synthetic scoring period in seconds
+MAX_SCORING_PERIOD = 10800  # max. synthetic scoring period in seconds
 SCORING_PERIOD_STEP = 1800
 
-SCORING_WINDOW = 300 # scoring window
+SCORING_WINDOW = 300  # scoring window
 
 TOTAL_ALLOC_THRESHOLD = 0.98
 SIMILARITY_THRESHOLD = 0.01  # similarity threshold for plagiarism checking
 
-
+DB_DIR = "validator_database.db" # default validator database dir
 
 # The following constants are for different pool models
 # Aave

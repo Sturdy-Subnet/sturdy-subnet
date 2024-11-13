@@ -36,7 +36,7 @@ from web3.constants import ADDRESS_ZERO
 
 # import base validator class which takes care of most of the boilerplate
 from sturdy.base.validator import BaseValidatorNeuron
-from sturdy.constants import ORGANIC_SCORING_PERIOD
+from sturdy.constants import DB_DIR, ORGANIC_SCORING_PERIOD
 
 # Bittensor Validator Template:
 from sturdy.pools import PoolFactory
@@ -267,8 +267,9 @@ async def get_allocations(
     miner_uid: str | None = None,
     from_ts: int | None = None,
     to_ts: int | None = None,
+    db_dir: str = DB_DIR,
 ) -> list[dict]:
-    with sql.get_db_connection() as conn:
+    with sql.get_db_connection(db_dir) as conn:
         allocations = sql.get_miner_responses(conn, request_uid, miner_uid, from_ts, to_ts)
     if not allocations:
         raise HTTPException(status_code=404, detail="No allocations found")
@@ -280,8 +281,9 @@ async def request_info(
     request_uid: str | None = None,
     from_ts: int | None = None,
     to_ts: int | None = None,
+    db_dir: str = DB_DIR,
 ) -> list[dict]:
-    with sql.get_db_connection() as conn:
+    with sql.get_db_connection(db_dir) as conn:
         info = sql.get_request_info(conn, request_uid, from_ts, to_ts)
     if not info:
         raise HTTPException(status_code=404, detail="No request info found")

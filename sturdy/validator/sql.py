@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from fastapi.encoders import jsonable_encoder
 
-from sturdy.constants import SCORING_WINDOW
+from sturdy.constants import DB_DIR, SCORING_WINDOW
 from sturdy.protocol import AllocInfo, ChainBasedPoolModel
 
 BALANCE = "balance"
@@ -32,8 +32,8 @@ ALLOCATION = "allocation"
 
 
 @contextmanager
-def get_db_connection():  # noqa: ANN201
-    conn = sqlite3.connect("validator_database.db")
+def get_db_connection(db_dir: str = DB_DIR, uri: bool = False):  # noqa: ANN201
+    conn = sqlite3.connect(db_dir, uri=uri)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     try:
@@ -197,10 +197,7 @@ def log_allocations(
 
 
 # TODO: rename function and database table?
-def get_active_allocs(
-    conn: sqlite3.Connection,
-    scoring_window: float = SCORING_WINDOW
-) -> list:
+def get_active_allocs(conn: sqlite3.Connection, scoring_window: float = SCORING_WINDOW) -> list:
     # TODO: change the logic of handling "active allocations"
     # for now we simply get ones which are still in their "challenge"
     # period, and consider them to determine the score of miners

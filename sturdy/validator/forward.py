@@ -22,11 +22,11 @@ from typing import Any
 
 import bittensor as bt
 import numpy as np
+from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import MAX_SCORING_PERIOD, MIN_SCORING_PERIOD, QUERY_TIMEOUT, SCORING_PERIOD_STEP
-from sturdy.pool_registry.pool_registry import POOL_REGISTRY
-from sturdy.pools import POOL_TYPES, assets_pools_for_challenge_data, generate_challenge_data
+from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.reward import filter_allocations, get_rewards
 from sturdy.validator.sql import get_active_allocs, get_db_connection, log_allocations
@@ -58,21 +58,12 @@ async def forward(self) -> Any:
 
     assets_and_pools = challenge_data["assets_and_pools"]
     pools = assets_and_pools["pools"]
-    metadata = {}
+    metadata = get_metadata(pools, self.w3)
 
-    for contract_addr, pool in pools.items():
-        pool.sync(self.w3)
-        match pool.pool_type:
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO):
-                metadata[contract_addr] = pool._share_price
-            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                metadata[contract_addr] = pool._normalized_income
-            case _:
-                pass
 
     scoring_period = get_scoring_period()
 
-    with get_db_connection() as conn:
+    with get_db_connection(self.config.db_dir) as conn:
         log_allocations(
             conn,
             request_uuid,
@@ -84,6 +75,19 @@ async def forward(self) -> Any:
             scoring_period,
         )
 
+def get_metadata(pools: dict[str, ChainBasedPoolModel], w3: Web3) -> dict:
+    metadata = {}
+    for contract_addr, pool in pools.items():
+        pool.sync(w3)
+        match pool.pool_type:
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO):
+                metadata[contract_addr] = pool._share_price
+            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
+                metadata[contract_addr] = pool._normalized_income
+            case _:
+                pass
+
+    return metadata
 
 def get_scoring_period(rng_gen: np.random.RandomState = None) -> int:
     if rng_gen is None:
@@ -163,7 +167,7 @@ async def query_and_score_miners(
 
     # get all the request ids for the pools we should be scoring from the db
     active_alloc_rows = []
-    with get_db_connection() as conn:
+    with get_db_connection(self.config.db_dir) as conn:
         active_alloc_rows = get_active_allocs(conn)
 
     bt.logging.debug(f"Active allocs: {active_alloc_rows}")

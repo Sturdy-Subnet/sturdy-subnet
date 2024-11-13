@@ -20,7 +20,7 @@ import math
 from decimal import Decimal
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar
 
 import bittensor as bt
 import numpy as np
@@ -676,7 +676,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             other._pair_contract.address,
         )
 
-    def pool_init(self, web3_provider: Web3) -> None:  # noqa: ARG002
+    def pool_init(self, web3_provider: Web3) -> None:
         try:
             assert web3_provider.is_connected()
         except Exception as err:

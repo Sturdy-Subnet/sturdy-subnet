@@ -24,7 +24,7 @@ import torch
 from loguru import logger
 
 from sturdy import __spec_version__ as spec_version
-from sturdy.constants import QUERY_TIMEOUT
+from sturdy.constants import DB_DIR, QUERY_TIMEOUT
 
 
 def check_config(cls, config: "bt.Config") -> None:
@@ -258,6 +258,15 @@ def add_validator_args(cls, parser):
         help="If you want to run a organic validator",
         type=lambda x: (str(x).lower() == "true"),
         default=False,
+    )
+
+    # TODO: make this available for organic validators so that it can be used to in prod
+    # - not just testing?
+    parser.add_argument(
+        "--db_dir",
+        type=str,
+        help="directory of database - used for testing purposes",
+        default=DB_DIR,
     )
 
 

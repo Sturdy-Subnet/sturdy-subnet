@@ -17,7 +17,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 from enum import IntEnum
-from typing import Annotated
 
 import bittensor as bt
 from pydantic import BaseModel, Field, root_validator, validator
