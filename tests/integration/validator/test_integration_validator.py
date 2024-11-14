@@ -157,7 +157,7 @@ class TestValidator(IsolatedAsyncioTestCase):
     async def test_get_rewards(self) -> None:
         print("----==== test_get_rewards ====----")
 
-        freezer = freeze_time("2024-01-11 00:00:00")
+        freezer = freeze_time("2024-01-11 00:00:00.124513")
         freezer.start()
 
         request_uuid = str(uuid.uuid4()).replace("-", "")
@@ -237,7 +237,7 @@ class TestValidator(IsolatedAsyncioTestCase):
 
         # fast forward ~12 hrs
 
-        freezer = freeze_time("2024-01-11 12:01:00")
+        freezer = freeze_time("2024-01-11 12:01:00.136136")
         freezer.start()
 
         validator.w3.provider.make_request(

@@ -59,25 +59,25 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
     match pool.pool_type:
         case POOL_TYPES.STURDY_SILO:
             borrow_amount = pool._totalBorrow
-            our_supply = pool._curr_deposit_amount
-            assets_available = max(0, pool._totalAssets - borrow_amount)
+            our_supply = pool._user_deposits
+            assets_available = max(0, pool._total_supplied_assets - borrow_amount)
         case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
             # borrow amount for aave pools is total_stable_debt + total_variable_debt
             borrow_amount = ((pool._nextTotalStableDebt * int(1e18)) // int(10**pool._decimals)) + (
                 (pool._totalVariableDebt * int(1e18)) // int(10**pool._decimals)
             )
-            our_supply = pool._collateral_amount
-            assets_available = max(0, ((pool._total_supplied * int(1e18)) // int(10**pool._decimals)) - borrow_amount)
+            our_supply = pool._user_deposits
+            assets_available = max(0, ((pool._total_supplied_assets * int(1e18)) // int(10**pool._decimals)) - borrow_amount)
         case POOL_TYPES.COMPOUND_V3:
             borrow_amount = pool._total_borrow
-            our_supply = pool._deposit_amount
-            assets_available = max(0, pool._total_supply - borrow_amount)
+            our_supply = pool._user_deposits
+            assets_available = max(0, pool._total_supplied_assets - borrow_amount)
         case POOL_TYPES.MORPHO:
             borrow_amount = pool._curr_borrows
-            our_supply = pool._user_assets
-            assets_available = max(0, pool._total_assets - borrow_amount)
+            our_supply = pool._user_deposits
+            assets_available = max(0, pool._total_supplied_assets - borrow_amount)
         case POOL_TYPES.YEARN_V3:
-            return max(0, pool._curr_deposit - pool._max_withdraw)
+            return max(0, pool._user_deposits - pool._max_withdraw)
         case POOL_TYPES.DAI_SAVINGS:
             pass  # TODO: is there a more appropriate way to go about this?
         case _:  # not a valid pool type
@@ -234,8 +234,8 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
     _variable_debt_token_contract = PrivateAttr()
     _totalVariableDebt = PrivateAttr()
     _reserveFactor = PrivateAttr()
-    _collateral_amount: int = PrivateAttr()
-    _total_supplied: int = PrivateAttr()
+    _user_deposits: int = PrivateAttr()
+    _total_supplied_assets: int = PrivateAttr()
     _decimals: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
     _normalized_income: int = PrivateAttr()
@@ -299,7 +299,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
                 address=self._underlying_asset_address,
             )
 
-            self._total_supplied = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
+            self._total_supplied_assets = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
 
             self._initted = True
 
@@ -379,7 +379,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
             reserveConfiguration = self._reserve_data.configuration
             self._reserveFactor = getReserveFactor(reserveConfiguration)
             self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
-            self._collateral_amount = retry_with_backoff(
+            self._user_deposits = retry_with_backoff(
                 self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
             )
 
@@ -400,7 +400,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
     def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
-            already_deposited = self._collateral_amount
+            already_deposited = self._user_deposits
             delta = amount - already_deposited
             to_deposit = max(0, delta)
             to_remove = abs(delta) if delta < 0 else 0
@@ -445,8 +445,8 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
     _variable_debt_token_contract = PrivateAttr()
     _totalVariableDebt = PrivateAttr()
     _reserveFactor = PrivateAttr()
-    _collateral_amount: int = PrivateAttr()
-    _total_supplied: int = PrivateAttr()
+    _user_deposits: int = PrivateAttr()
+    _total_supplied_assets: int = PrivateAttr()
     _decimals: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
     _normalized_income: int = PrivateAttr()
@@ -510,7 +510,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
                 address=self._underlying_asset_address,
             )
 
-            self._total_supplied = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
+            self._total_supplied_assets = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
 
             self._initted = True
 
@@ -590,7 +590,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
             reserveConfiguration = self._reserve_data.configuration
             self._reserveFactor = getReserveFactor(reserveConfiguration)
             self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
-            self._collateral_amount = retry_with_backoff(
+            self._user_deposits = retry_with_backoff(
                 self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
             )
 
@@ -611,7 +611,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
     def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
-            already_deposited = self._collateral_amount
+            already_deposited = self._user_deposits
             delta = amount - already_deposited
             to_deposit = max(0, delta)
             to_remove = abs(delta) if delta < 0 else 0
@@ -648,10 +648,10 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _pair_contract: Contract = PrivateAttr()
     _rate_model_contract: Contract = PrivateAttr()
 
-    _curr_deposit_amount: int = PrivateAttr()
+    _user_deposits: int = PrivateAttr()
     _util_prec: int = PrivateAttr()
     _fee_prec: int = PrivateAttr()
-    _totalAssets: Any = PrivateAttr()
+    _total_supplied_assets: Any = PrivateAttr()
     _totalBorrow: Any = PrivateAttr()
     _current_rate_info = PrivateAttr()
     _rate_prec: int = PrivateAttr()
@@ -731,12 +731,12 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             self.pool_init(web3_provider)
 
         user_shares = retry_with_backoff(self._pair_contract.functions.balanceOf(self.contract_address).call)
-        self._curr_deposit_amount = retry_with_backoff(self._pair_contract.functions.convertToAssets(user_shares).call)
+        self._user_deposits = retry_with_backoff(self._pair_contract.functions.convertToAssets(user_shares).call)
 
         constants = retry_with_backoff(self._pair_contract.functions.getConstants().call)
         self._util_prec = constants[2]
         self._fee_prec = constants[3]
-        self._totalAssets: Any = retry_with_backoff(self._pair_contract.functions.totalAssets().call)
+        self._total_supplied_assets: Any = retry_with_backoff(self._pair_contract.functions.totalAssets().call)
         self._totalBorrow: Any = retry_with_backoff(self._pair_contract.functions.totalBorrow().call).amount
 
         self._block = web3_provider.eth.get_block("latest")
@@ -754,10 +754,10 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     @ttl_cache(maxsize=256, ttl=60)
     def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
-        delta = amount - self._curr_deposit_amount
+        delta = amount - self._user_deposits
 
         """Returns supply rate given new deposit amount"""
-        util_rate = int((self._util_prec * self._totalBorrow) // (self._totalAssets + delta))
+        util_rate = int((self._util_prec * self._totalBorrow) // (self._total_supplied_assets + delta))
 
         last_update_timestamp = self._current_rate_info.lastTimestamp
         current_timestamp = self._block["timestamp"]
@@ -797,8 +797,8 @@ class CompoundV3Pool(ChainBasedPoolModel):
     _reward_token_price: float = PrivateAttr()
     _base_decimals: int = PrivateAttr()
     _total_borrow: int = PrivateAttr()
-    _deposit_amount: int = PrivateAttr()
-    _total_supply: int = PrivateAttr()
+    _user_deposits: int = PrivateAttr()
+    _total_supplied_assets: int = PrivateAttr()
 
     _CompoundTokenMap: dict = {
         "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # WETH -> ETH
@@ -862,16 +862,16 @@ class CompoundV3Pool(ChainBasedPoolModel):
             retry_with_backoff(self._reward_oracle_contract.functions.latestAnswer().call) / 10**reward_decimals
         )
 
-        self._deposit_amount = retry_with_backoff(self._ctoken_contract.functions.balanceOf(self.user_address).call)
-        self._total_supply = retry_with_backoff(self._ctoken_contract.functions.totalSupply().call)
+        self._user_deposits = retry_with_backoff(self._ctoken_contract.functions.balanceOf(self.user_address).call)
+        self._total_supplied_assets = retry_with_backoff(self._ctoken_contract.functions.totalSupply().call)
 
     def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
         # get pool supply rate (base token)
-        already_in_pool = self._deposit_amount
+        already_in_pool = self._user_deposits
 
         delta = amount - already_in_pool
-        new_supply = self._total_supply + delta
+        new_supply = self._total_supplied_assets + delta
         current_borrows = self._total_borrow
 
         utilization = wei_div(current_borrows, new_supply)
@@ -961,8 +961,8 @@ class MorphoVault(ChainBasedPoolModel):
     _DECIMALS_OFFSET: int = PrivateAttr()
     # TODO: update unit tests to check these :^)
     _irm_contracts: dict = PrivateAttr(default={})
-    _total_assets: int = PrivateAttr()
-    _user_assets: int = PrivateAttr()
+    _total_supplied_assets: int = PrivateAttr()
+    _user_deposits: int = PrivateAttr()
     _curr_borrows: int = PrivateAttr()
     _asset_decimals: int = PrivateAttr()
     _underlying_asset_contract: Contract = PrivateAttr()
@@ -1047,9 +1047,9 @@ class MorphoVault(ChainBasedPoolModel):
 
             total_borrows += market.totalBorrowAssets
 
-        self._total_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
+        self._total_supplied_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
         curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
-        self._user_assets = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
+        self._user_deposits = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
         self._user_asset_balance = retry_with_backoff(
             self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
         )
@@ -1073,7 +1073,7 @@ class MorphoVault(ChainBasedPoolModel):
             retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
         ]
 
-        total_asset_delta = amount - self._user_assets
+        total_asset_delta = amount - self._user_deposits
 
         # apys in each market
         current_supply_apys = []
@@ -1115,7 +1115,7 @@ class MorphoVault(ChainBasedPoolModel):
         ) / sum(current_assets)
 
         return int(
-            (wei_mul(curr_agg_apy, self._total_assets) / (self._total_assets + total_asset_delta))
+            (wei_mul(curr_agg_apy, self._total_supplied_assets) / (self._total_supplied_assets + total_asset_delta))
             * 10 ** (self._asset_decimals * 2)
         )
 
@@ -1126,7 +1126,7 @@ class YearnV3Vault(ChainBasedPoolModel):
     _vault_contract: Contract = PrivateAttr()
     _apr_oracle: Contract = PrivateAttr()
     _max_withdraw: int = PrivateAttr()
-    _curr_deposit: int = PrivateAttr()
+    _user_deposits: int = PrivateAttr()
 
     def pool_init(self, web3_provider: Web3) -> None:
         vault_abi_file_path = Path(__file__).parent / "abi/Yearn_V3_Vault.json"
@@ -1151,10 +1151,10 @@ class YearnV3Vault(ChainBasedPoolModel):
 
         self._max_withdraw = retry_with_backoff(self._vault_contract.functions.maxWithdraw(self.user_address).call)
         user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
-        self._curr_deposit = retry_with_backoff(self._vault_contract.functions.convertToAssets(user_shares).call)
+        self._user_deposits = retry_with_backoff(self._vault_contract.functions.convertToAssets(user_shares).call)
 
     def supply_rate(self, amount: int) -> int:
-        delta = amount - self._curr_deposit
+        delta = amount - self._user_deposits
         return retry_with_backoff(self._apr_oracle.functions.getExpectedApr(self.contract_address, delta).call)
 
 
@@ -1215,11 +1215,11 @@ def assets_pools_for_challenge_data(
             total_asset = 0
             match pool.pool_type:
                 case POOL_TYPES.STURDY_SILO:
-                    total_asset += pool._curr_deposit_amount
+                    total_asset += pool._user_deposits
                 case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                    total_asset += pool._collateral_amount
+                    total_asset += pool._user_deposits
                 case POOL_TYPES.MORPHO:
-                    total_asset += pool._user_assets
+                    total_asset += pool._user_deposits
                 case _:
                     pass
 

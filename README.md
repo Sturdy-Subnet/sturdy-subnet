@@ -101,7 +101,7 @@ There are three core files.
           total_asset = 0
           match pool.pool_type:
               case POOL_TYPES.STURDY_SILO:
-                  total_asset += pool._curr_deposit_amount
+                  total_asset += pool._user_deposits
               case _:
                   pass
 

@@ -15,10 +15,10 @@ from sturdy.pools import *
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from sturdy.validator.reward import (
     adjust_rewards_for_plagiarism,
+    annualized_yield_pct,
     calculate_penalties,
     calculate_rewards_with_adjusted_penalties,
     format_allocations,
-    generated_yield_pct,
     get_distance,
     get_similarity_matrix,
     normalize_squared,
@@ -234,9 +234,9 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a.sync(web3_provider=self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
-        pool_a._totalAssets = int(100e23)
+        pool_a._total_supplied_assets = int(100e23)
         pool_a._totalBorrow = int(10e23)
-        pool_a._curr_deposit_amount = int(5e23)
+        pool_a._user_deposits = int(5e23)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -244,7 +244,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._totalBorrow = int(97e23)
-        pool_a._curr_deposit_amount = int(5e23)
+        pool_a._user_deposits = int(5e23)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations)
@@ -252,7 +252,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # should return True
         pool_a._totalBorrow = int(97e23)
-        pool_a._curr_deposit_amount = int(5e23)
+        pool_a._user_deposits = int(5e23)
         allocations[A] = int(4e23)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -260,7 +260,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._totalBorrow = int(10e23)
-        pool_a._curr_deposit_amount = int(1e23)
+        pool_a._user_deposits = int(1e23)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -297,10 +297,10 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a.sync(self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
-        pool_a._total_supplied = int(100e6)
+        pool_a._total_supplied_assets = int(100e6)
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(10e6)
-        pool_a._collateral_amount = int(5e18)
+        pool_a._user_deposits = int(5e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -309,7 +309,7 @@ class TestRewardFunctions(unittest.TestCase):
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._collateral_amount = int(5e18)
+        pool_a._user_deposits = int(5e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -318,7 +318,7 @@ class TestRewardFunctions(unittest.TestCase):
         # should return True
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._collateral_amount = int(5e18)
+        pool_a._user_deposits = int(5e18)
         allocations[A] = int(4e18)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -327,7 +327,7 @@ class TestRewardFunctions(unittest.TestCase):
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._collateral_amount = int(1e18)
+        pool_a._user_deposits = int(1e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -351,9 +351,9 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a.sync(self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
-        pool_a._total_supply = int(100e14)
+        pool_a._total_supplied_assets = int(100e14)
         pool_a._total_borrow = int(10e14)
-        pool_a._deposit_amount = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -361,7 +361,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._total_borrow = int(97e14)
-        pool_a._deposit_amount = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -369,7 +369,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # should return True
         pool_a._total_borrow = int(97e14)
-        pool_a._deposit_amount = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = int(4e26)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -377,7 +377,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._total_borrow = int(97e14)
-        pool_a._deposit_amount = int(1e14)
+        pool_a._user_deposits = int(1e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -413,9 +413,9 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a.sync(self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
-        pool_a._total_assets = int(100e14)
+        pool_a._total_supplied_assets = int(100e14)
         pool_a._curr_borrows = int(10e14)
-        pool_a._user_assets = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -423,7 +423,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._curr_borrows = int(97e14)
-        pool_a._user_assets = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -431,7 +431,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # should return True
         pool_a._curr_borrows = int(97e14)
-        pool_a._user_assets = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = int(4e14)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -439,7 +439,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._curr_borrows = int(97e14)
-        pool_a._user_assets = int(1e14)
+        pool_a._user_deposits = int(1e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -464,7 +464,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: max withdraw = deposit amount
         pool_a._max_withdraw = int(1e9)
-        pool_a._curr_deposit = int(1e9)
+        pool_a._user_deposits = int(1e9)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -472,7 +472,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: max withdraw = 0
         pool_a._max_withdraw = 0
-        pool_a._curr_deposit = int(1e9)
+        pool_a._user_deposits = int(1e9)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -480,7 +480,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # should return True
         pool_a._max_withdraw = int(1e9)
-        pool_a._curr_deposit = int(5e9)
+        pool_a._user_deposits = int(5e9)
         allocations[A] = int(4e9)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -799,8 +799,8 @@ class TestCalculateApy(unittest.TestCase):
         for pool in assets_and_pools["pools"].values():
             pool.sync(self.w3)
 
-        apy = generated_yield_pct(allocations, assets_and_pools, extra_metadata)
-        print(f"annualized yield: {(((1 + float(apy) / 1e18)**(365)) - 1) * 100}%")
+        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
         self.assertGreater(apy, 0)
 
     def test_calculate_apy_aave(self) -> None:
@@ -868,8 +868,8 @@ class TestCalculateApy(unittest.TestCase):
         for pool in assets_and_pools["pools"].values():
             pool.sync(self.w3)
 
-        apy = generated_yield_pct(allocations, assets_and_pools, extra_metadata)
-        print(f"annualized yield: {(((1 + float(apy) / 1e18)**(365)) - 1) * 100}%")
+        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
         self.assertGreater(apy, 0)
 
     def test_calculate_apy_morpho(self) -> None:
@@ -918,8 +918,8 @@ class TestCalculateApy(unittest.TestCase):
         for pool in assets_and_pools["pools"].values():
             pool.sync(self.w3)
 
-        apy = generated_yield_pct(allocations, assets_and_pools, extra_metadata)
-        print(f"annualized yield: {(((1 + float(apy) / 1e18)**(365)) - 1) * 100}%")
+        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
         self.assertGreater(apy, 0)
 
 

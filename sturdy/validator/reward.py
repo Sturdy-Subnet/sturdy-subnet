@@ -29,6 +29,7 @@ from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div
+from sturdy.utils.misc import get_scoring_period_length
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
 
@@ -83,16 +84,14 @@ def format_allocations(
     return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
 
-def normalize_squared(
-    apys_and_allocations: AllocationsDict, epsilon: float = 1e-8
-) -> torch.Tensor:
+def normalize_squared(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) -> torch.Tensor:
     raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
 
     # TODO: is there a better way to go about this?
     if len(raw_apys) <= 1:
         return torch.zeros(len(raw_apys))
 
-    apys = torch.tensor(list(raw_apys.values())).to(torch.float64)
+    apys = torch.tensor(list(raw_apys.values())).to(torch.float32)
 
     squared = torch.pow(apys, 2)
 
@@ -256,12 +255,14 @@ def _get_rewards(
     return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 
 
-# TODO: make this return annualized pct return instead of pct return within scoring period?
-def generated_yield_pct(
-    allocations: AllocationsDict, assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int], extra_metadata: dict
+def annualized_yield_pct(
+    allocations: AllocationsDict,
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
+    seconds_passed: int,
+    extra_metadata: dict,
 ) -> int:
     """
-    Calculates yields generated allocations in pools within scoring period
+    Calculates annualized yields of allocations in pools within scoring period
     """
 
     # calculate projected yield
@@ -269,6 +270,9 @@ def generated_yield_pct(
     pools = cast(dict[str, ChainBasedPoolModel], assets_and_pools["pools"])
     total_yield = 0
 
+    seconds_per_year = 31536000
+
+    # TODO: refactor?
     for contract_addr, pool in pools.items():
         allocation = allocations[contract_addr]
         match pool.pool_type:
@@ -276,12 +280,18 @@ def generated_yield_pct(
                 last_share_price = extra_metadata[contract_addr]
                 curr_share_price = pool._share_price
                 pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
-                total_yield += int(allocation * pct_delta)
+                deposit_delta = allocation - pool._user_deposits
+                adjusted_pct_delta = (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta) * pct_delta
+                annualized_pct_yield = ((1 + adjusted_pct_delta) ** (seconds_per_year / seconds_passed)) - 1
+                total_yield += int(allocation * annualized_pct_yield)
             case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
                 last_income = extra_metadata[contract_addr]
                 curr_income = pool._normalized_income
                 pct_delta = float(curr_income - last_income) / float(last_income)
-                total_yield += int(allocation * pct_delta)
+                deposit_delta = allocation - pool._user_deposits
+                adjusted_pct_delta = (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta) * pct_delta
+                annualized_pct_yield = ((1 + adjusted_pct_delta) ** (seconds_per_year / seconds_passed)) - 1
+                total_yield += int(allocation * annualized_pct_yield)
             case _:
                 total_yield += 0
 
@@ -353,6 +363,8 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
 
     # TODO: rename this here and in the database schema?
     request_uid = active_allocation["request_uid"]
+    scoring_period_length = get_scoring_period_length(active_allocation)
+
     request_info = {}
     assets_and_pools = None
     miners = None
@@ -394,7 +406,7 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         allocations = json.loads(miner["allocation"])["allocations"]
         extra_metadata = json.loads(request_info["metadata"])
         miner_uid = miner["miner_uid"]
-        miner_apy = generated_yield_pct(allocations, assets_and_pools, extra_metadata)
+        miner_apy = annualized_yield_pct(allocations, assets_and_pools, scoring_period_length, extra_metadata)
         miner_axon_time = miner["axon_time"]
 
         miner_uids.append(miner_uid)

@@ -628,10 +628,10 @@ class TestMorphoVault(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_asset_decimals"))
         self.assertTrue(isinstance(pool._asset_decimals, int))
 
-        self.assertTrue(hasattr(pool, "_total_assets"))
-        self.assertTrue(isinstance(pool._total_assets, int))
-        self.assertTrue(hasattr(pool, "_user_assets"))
-        self.assertTrue(isinstance(pool._user_assets, int))
+        self.assertTrue(hasattr(pool, "_total_supplied_assets"))
+        self.assertTrue(isinstance(pool._total_supplied_assets, int))
+        self.assertTrue(hasattr(pool, "_user_deposits"))
+        self.assertTrue(isinstance(pool._user_deposits, int))
         self.assertTrue(hasattr(pool, "_curr_borrows"))
         self.assertTrue(isinstance(pool._curr_borrows, int))
 
