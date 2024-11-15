@@ -1108,16 +1108,13 @@ class MorphoVault(ChainBasedPoolModel):
             allocated_assets = self.shares_to_assets_down(
                 position.supplyShares, market.totalSupplyAssets, market.totalSupplyShares
             )
-            current_assets.append(allocated_assets)
+            current_assets.append(allocated_assets * int(10**self._asset_decimals))
 
-        curr_agg_apy = sum(
-            [(current_assets[i] * current_supply_apys[i]) // int(10**self._asset_decimals) for i in range(supply_queue_length)]
-        ) / sum(current_assets)
-
-        return int(
-            (wei_mul(curr_agg_apy, self._total_supplied_assets) / (self._total_supplied_assets + total_asset_delta))
-            * 10 ** (self._asset_decimals * 2)
+        curr_agg_apy = sum([current_assets[i] * current_supply_apys[i] for i in range(supply_queue_length)]) / sum(
+            current_assets
         )
+
+        return int(curr_agg_apy * self._total_supplied_assets / (self._total_supplied_assets + total_asset_delta))
 
 
 class YearnV3Vault(ChainBasedPoolModel):
