@@ -87,7 +87,7 @@ def dynamic_normalize_zscore(
 ) -> torch.Tensor:
     raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
     sorted_apys_uid = dict(sorted(raw_apys.items(), key=lambda item: item[1]))
-    apys = torch.tensor(list(raw_apys.values()))
+    apys = torch.tensor(list(raw_apys.values()), dtype=torch.float32)
     sorted_apys = torch.tensor(list(sorted_apys_uid.values()))
 
     quantile = np.percentile(sorted_apys.numpy(), q)
