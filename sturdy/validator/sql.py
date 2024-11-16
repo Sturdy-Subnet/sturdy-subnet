@@ -218,6 +218,21 @@ def get_active_allocs(conn: sqlite3.Connection, scoring_window: float = SCORING_
     return [dict(row) for row in rows]
 
 
+def delete_stale_active_allocs(conn: sqlite3.Connection, scoring_window: int = SCORING_WINDOW) -> int:
+    query = f"""
+    DELETE FROM {ACTIVE_ALLOCS}
+    WHERE scoring_period_end < ?
+    """
+    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
+    expiry_ts = ts_now - scoring_window
+    expiration_date = datetime.fromtimestamp(expiry_ts)  # noqa: DTZ006
+
+    cur = conn.execute(query, [expiration_date])
+    conn.commit()
+
+    return cur.rowcount
+
+
 def get_miner_responses(
     conn: sqlite3.Connection,
     request_uid: str | None = None,

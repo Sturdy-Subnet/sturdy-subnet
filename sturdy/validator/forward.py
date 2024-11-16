@@ -29,7 +29,7 @@ from sturdy.constants import MAX_SCORING_PERIOD, MIN_SCORING_PERIOD, QUERY_TIMEO
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.reward import filter_allocations, get_rewards
-from sturdy.validator.sql import get_active_allocs, get_db_connection, log_allocations
+from sturdy.validator.sql import delete_stale_active_allocs, get_active_allocs, get_db_connection, log_allocations
 
 
 async def forward(self) -> Any:
@@ -42,6 +42,12 @@ async def forward(self) -> Any:
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
 
     """
+    # delete stale active allocations after expiry time
+    bt.logging.debug("Purging stale active allocation requests")
+    with get_db_connection(self.config.db_dir) as conn:
+        rows_affected = delete_stale_active_allocs(conn)
+    bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
+
     # initialize pools and assets
     # TODO: only sturdy silos and morpho vaults for now
     challenge_data = generate_challenge_data(self.w3)
@@ -60,7 +66,6 @@ async def forward(self) -> Any:
     pools = assets_and_pools["pools"]
     metadata = get_metadata(pools, self.w3)
 
-
     scoring_period = get_scoring_period()
 
     with get_db_connection(self.config.db_dir) as conn:
@@ -74,6 +79,7 @@ async def forward(self) -> Any:
             REQUEST_TYPES.SYNTHETIC,
             scoring_period,
         )
+
 
 def get_metadata(pools: dict[str, ChainBasedPoolModel], w3: Web3) -> dict:
     metadata = {}
@@ -89,17 +95,19 @@ def get_metadata(pools: dict[str, ChainBasedPoolModel], w3: Web3) -> dict:
 
     return metadata
 
+
 def get_scoring_period(rng_gen: np.random.RandomState = None) -> int:
     if rng_gen is None:
         rng_gen = np.random.RandomState()
 
     return rng_gen.choice(
-                np.arange(
-                    MIN_SCORING_PERIOD,
-                    MAX_SCORING_PERIOD + SCORING_PERIOD_STEP,
-                    SCORING_PERIOD_STEP,
-                ),
-            )
+        np.arange(
+            MIN_SCORING_PERIOD,
+            MAX_SCORING_PERIOD + SCORING_PERIOD_STEP,
+            SCORING_PERIOD_STEP,
+        ),
+    )
+
 
 async def query_miner(
     self,
