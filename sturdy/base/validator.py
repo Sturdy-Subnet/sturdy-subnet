@@ -67,7 +67,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # set web3 provider url
         w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
         if w3_provider_url is None:
-            raise ValueError("You must provide a valid web3 provider url as an organic validator!")
+            raise ValueError("You must provide a valid web3 provider url")
 
         self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
 

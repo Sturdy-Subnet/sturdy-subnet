@@ -413,7 +413,7 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         axon_times[miner_uid] = miner_axon_time
         apys_and_allocations[miner_uid] = {"apy": miner_apy, "allocations": allocations}
 
-    print(f"yields and allocs: {apys_and_allocations}")
+    bt.logging.debug(f"yields and allocs: {apys_and_allocations}")
 
     # TODO: there may be a better way to go about this
     if len(miner_uids) < 1:
