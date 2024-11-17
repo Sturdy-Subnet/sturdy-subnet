@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from fastapi.encoders import jsonable_encoder
 
 from sturdy.constants import DB_DIR, SCORING_WINDOW
-from sturdy.protocol import AllocInfo, ChainBasedPoolModel
+from sturdy.protocol import REQUEST_TYPES, AllocInfo, ChainBasedPoolModel
 
 BALANCE = "balance"
 KEY = "key"
@@ -157,8 +157,8 @@ def log_allocations(
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     extra_metadata: dict,
     allocations: dict[str, AllocInfo],
-    axon_times: list,
-    request_type: REQUEST_TYPE,
+    axon_times: dict[str, float],
+    request_type: REQUEST_TYPES,
     scoring_period: int,
 ) -> None:
     ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003

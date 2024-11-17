@@ -5,7 +5,7 @@ indent-width = 4
 target-version = "py311"
 
 [tool.ruff.lint]
-ignore = ["NPY002", "F405", "F403", "E402", "D", "ANN001", "FBT001", "FBT002", "TD002", "TD003", "PLR", "C901", "BLE001", "ANN401", "N801", "EM101", "EM102", "TRY003", "S608", "FIX002", "N805", "N815", "N806", "PT009", "COM812", "S101", "SLF001", "T201"]
+ignore = ["NPY002", "F405", "F403", "E402", "D", "ANN001", "FBT001", "FBT002", "TD002", "TD003", "PLR", "C901", "BLE001", "ANN401", "N801", "EM101", "EM102", "TRY003", "S608", "FIX002", "N805", "N815", "N806", "PT009", "COM812", "S101", "SLF001", "T201", "DTZ003"]
 select = ["ALL"]
 
 [tool.ruff.format]

@@ -6,7 +6,6 @@ from copy import copy
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
-import bittensor as bt
 import numpy as np
 import torch
 from dotenv import load_dotenv
@@ -64,7 +63,6 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(query)
 
 
-# TODO: more comprehensive integration testing - with in-mem sql db and everythin'
 class TestValidator(IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -276,7 +274,6 @@ class TestValidator(IsolatedAsyncioTestCase):
             sorted_rewards = dict(sorted(rewards_dict.items(), key=lambda item: item[1], reverse=True))  # type: ignore[]
 
             print(f"sorted rewards: {sorted_rewards}")
-            # bt.logging.debug(f"miner rewards: {rewards}")
             print(f"sim penalities: {validator.similarity_penalties}")
 
             # rewards should not all be the same
