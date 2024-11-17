@@ -41,7 +41,7 @@ SCORING_WINDOW = 300  # scoring window
 TOTAL_ALLOC_THRESHOLD = 0.98
 SIMILARITY_THRESHOLD = 0.01  # similarity threshold for plagiarism checking
 
-DB_DIR = "validator_database.db" # default validator database dir
+DB_DIR = "validator_database.db"  # default validator database dir
 
 # The following constants are for different pool models
 # Aave

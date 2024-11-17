@@ -943,10 +943,7 @@ class TestAaveTargetPool(unittest.TestCase):
     # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
     def test_supply_rate_alloc(self) -> None:
         print("----==== test_supply_rate_increase_alloc ====----")
-        pool = AaveV3DefaultInterestRateV2Pool(
-            contract_address=self.atoken_address,
-            user_address=self.account.address
-        )
+        pool = AaveV3DefaultInterestRateV2Pool(contract_address=self.atoken_address, user_address=self.account.address)
 
         # sync pool params
         pool.sync(web3_provider=self.w3)

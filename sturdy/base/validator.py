@@ -411,12 +411,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Save the state of the validator to file.
         torch.save(
-            {
-                "step": self.step,
-                "scores": self.scores,
-                "hotkeys": self.hotkeys,
-                "last_query_block": self.last_query_block
-            },
+            {"step": self.step, "scores": self.scores, "hotkeys": self.hotkeys, "last_query_block": self.last_query_block},
             self.config.neuron.full_path + "/state.pt",
         )
 
