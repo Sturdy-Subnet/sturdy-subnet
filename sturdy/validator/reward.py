@@ -91,7 +91,7 @@ def normalize_squared(apys_and_allocations: AllocationsDict, epsilon: float = 1e
     if len(raw_apys) <= 1:
         return torch.zeros(len(raw_apys))
 
-    apys = torch.tensor(list(raw_apys.values())).to(torch.float32)
+    apys = torch.tensor(list(raw_apys.values()), dtype=torch.float32)
 
     squared = torch.pow(apys, 2)
 

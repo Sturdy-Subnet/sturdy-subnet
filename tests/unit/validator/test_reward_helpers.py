@@ -780,10 +780,6 @@ class TestCalculateApy(unittest.TestCase):
             pool.sync(self.w3)
             extra_metadata[contract_address] = pool._share_price
 
-        # move forwards in time, back to "present"
-        # TODO: why doesnt the following work?
-        # self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
-
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
             [
@@ -848,10 +844,6 @@ class TestCalculateApy(unittest.TestCase):
         for contract_address, pool in assets_and_pools["pools"].items():
             pool.sync(self.w3)
             extra_metadata[contract_address] = pool._normalized_income
-
-        # move forwards in time, back to "present"
-        # TODO: why doesnt the following work?
-        # self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
