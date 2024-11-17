@@ -145,9 +145,9 @@ class TestAavePool(unittest.TestCase):
         apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
         print(f"apy before supplying: {apy_before}")
 
-        # calculate predicted future supply rate after supplying 10000 ETH
-        apy_after = pool.supply_rate(int(10000e18))
-        print(f"apy after supplying 10000 ETH: {apy_after}")
+        # calculate predicted future supply rate after supplying 2000000 ETH
+        apy_after = pool.supply_rate(int(2000000e18))
+        print(f"apy after supplying 2000000 ETH: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertLess(apy_after, apy_before)
 
@@ -854,26 +854,17 @@ class TestAaveTargetPool(unittest.TestCase):
             ],
         )
 
-        cls.atoken_address = "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8"
+        # spark dai
+        cls.atoken_address = "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B"
         # Create a funded account for testing
-        cls.account = Account.create()
+        # cls.account = Account.create()
+        cls.account_address = "0x0Fd6abA4272a96Bb8CcbbA69B825075cb2047D1D"  # spDai holder (~17.5k spDai at time of writing)
         cls.w3.eth.send_transaction(
             {
-                "to": cls.account.address,
+                "to": cls.account_address,
                 "from": cls.w3.eth.accounts[0],
                 "value": cls.w3.to_wei(200000, "ether"),
             }
-        )
-
-        weth_abi_file_path = Path(__file__).parent / "../../../sturdy/abi/IWETH.json"
-        weth_abi_file = weth_abi_file_path.open()
-        weth_abi = json.load(weth_abi_file)
-        weth_abi_file.close()
-
-        weth_contract = cls.w3.eth.contract(abi=weth_abi)
-        cls.weth_contract = retry_with_backoff(
-            weth_contract,
-            address=Web3.to_checksum_address("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
         )
 
         cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
@@ -908,7 +899,7 @@ class TestAaveTargetPool(unittest.TestCase):
     def test_pool_contract(self) -> None:
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
-        pool = AaveV3DefaultInterestRateV2Pool(
+        pool = AaveV3RateTargetBaseInterestRatePool(
             contract_address=self.atoken_address,
         )
 
@@ -922,7 +913,7 @@ class TestAaveTargetPool(unittest.TestCase):
     # TODO: test syncing after time travel
     def test_sync(self) -> None:
         print("----==== test_sync ====----")
-        pool = AaveV3DefaultInterestRateV2Pool(
+        pool = AaveV3RateTargetBaseInterestRatePool(
             contract_address=self.atoken_address,
         )
 
@@ -943,7 +934,7 @@ class TestAaveTargetPool(unittest.TestCase):
     # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
     def test_supply_rate_alloc(self) -> None:
         print("----==== test_supply_rate_increase_alloc ====----")
-        pool = AaveV3DefaultInterestRateV2Pool(contract_address=self.atoken_address, user_address=self.account.address)
+        pool = AaveV3RateTargetBaseInterestRatePool(contract_address=self.atoken_address, user_address=self.account_address)
 
         # sync pool params
         pool.sync(web3_provider=self.w3)
@@ -953,82 +944,25 @@ class TestAaveTargetPool(unittest.TestCase):
         apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
         print(f"apy before supplying: {apy_before}")
 
-        # calculate predicted future supply rate after supplying 10000 ETH
-        apy_after = pool.supply_rate(int(1000e18))
-        print(f"apy after supplying 10000 ETH: {apy_after}")
+        # calculate predicted future supply rate after supplying 100000 DAI
+        apy_after = pool.supply_rate(int(100000e18))
+        print(f"apy after supplying 100000 DAI: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertLess(apy_after, apy_before)
 
     def test_supply_rate_decrease_alloc(self) -> None:
         print("----==== test_supply_rate_decrease_alloc ====----")
-        pool = AaveV3RateTargetBaseInterestRatePool(contract_address=self.atoken_address, user_address=self.account.address)
+        pool = AaveV3RateTargetBaseInterestRatePool(contract_address=self.atoken_address, user_address=self.account_address)
 
         # sync pool params
         pool.sync(web3_provider=self.w3)
-
-        tx = self.weth_contract.functions.deposit().build_transaction(
-            {
-                "from": self.w3.to_checksum_address(self.account.address),
-                "gas": 100000,
-                "gasPrice": self.w3.eth.gas_price,
-                "nonce": self.w3.eth.get_transaction_count(self.account.address),
-                "value": self.w3.to_wei(10000, "ether"),
-            }
-        )
-
-        signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
-
-        # Send the transaction
-        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        print(f"weth deposit tx hash: {tx_hash}")
-
-        # check if we received some weth
-        weth_balance = self.weth_contract.functions.balanceOf(self.account.address).call()
-        self.assertGreaterEqual(int(weth_balance), self.w3.to_wei(10000, "ether"))
-
-        # approve aave pool to use weth
-        tx = self.weth_contract.functions.approve(pool._pool_contract.address, self.w3.to_wei(1e9, "ether")).build_transaction(
-            {
-                "from": self.w3.to_checksum_address(self.account.address),
-                "gas": 1000000,
-                "gasPrice": self.w3.eth.gas_price,
-                "nonce": self.w3.eth.get_transaction_count(self.account.address),
-            }
-        )
-
-        signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
-
-        # Send the transaction
-        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        print(f"pool approve weth tx hash: {tx_hash}")
-
-        # deposit tokens into the pool
-        tx = pool._pool_contract.functions.supply(
-            self.weth_contract.address,
-            self.w3.to_wei(10000, "ether"),
-            self.account.address,
-            0,
-        ).build_transaction(
-            {
-                "from": self.w3.to_checksum_address(self.account.address),
-                "gas": 1000000,
-                "gasPrice": self.w3.eth.gas_price,
-                "nonce": self.w3.eth.get_transaction_count(self.account.address),
-            }
-        )
-
-        signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
-
-        # Send the transaction
-        tx_hash = retry_with_backoff(self.w3.eth.send_raw_transaction, signed_tx.rawTransaction)
-        print(f"supply weth tx hash: {tx_hash}")
 
         reserve_data = retry_with_backoff(pool._pool_contract.functions.getReserveData(pool._underlying_asset_address).call)
 
         apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
         print(f"apy before rebalancing ether: {apy_before}")
 
-        # calculate predicted future supply rate after removing 1000 ETH to end up with 9000 ETH in the pool
+        # calculate predicted future supply rate after removing 100000 DAI to end up with 9000 DAI in the pool
         pool.sync(self.w3)
         apy_after = pool.supply_rate(int(9000e18))
         print(f"apy after rebalancing ether: {apy_after}")
