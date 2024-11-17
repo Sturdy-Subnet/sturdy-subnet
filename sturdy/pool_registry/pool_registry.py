@@ -44,22 +44,18 @@ POOL_REGISTRY = {
             "pools": {
                 "0xd63070114470f685b75B74D60EEc7c1113d33a3D": {
                     "pool_type": "MORPHO",
-                    "pool_model_disc": "CHAIN",
                     "contract_address": "0xd63070114470f685b75B74D60EEc7c1113d33a3D",
                 },
                 "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB": {
                     "pool_type": "MORPHO",
-                    "pool_model_disc": "CHAIN",
                     "contract_address": "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
                 },
                 "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458": {
                     "pool_type": "MORPHO",
-                    "pool_model_disc": "CHAIN",
                     "contract_address": "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458",
                 },
                 "0xdd0f28e19C1780eb6396170735D45153D261490d": {
                     "pool_type": "MORPHO",
-                    "pool_model_disc": "CHAIN",
                     "contract_address": "0xdd0f28e19C1780eb6396170735D45153D261490d",
                 },
             }
