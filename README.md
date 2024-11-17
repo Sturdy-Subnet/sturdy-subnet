@@ -39,7 +39,7 @@ There are three core files.
 1. `sturdy/protocol.py`: Contains the definition of the protocol used by subnet miners and subnet
    validators. At the moment it only has one kind of synapse - `AllocateAssets` - which contains
    the inputs (`assets_and_pools`) validators need to send to miners to generate return
-   `allocations` for. See `generate_assets_in_pools()` in [pools.py](./sturdy/pools.py) to see how
+   `allocations` for. See `generate_challenge_data()` in [pools.py](./sturdy/pools.py) to see how
    assets and pools are defined.
 2. `neurons/miner.py`: Script that defines the subnet miner's behavior, i.e., how the subnet miner
    responds to requests from subnet validators.
@@ -53,66 +53,74 @@ There are three core files.
   used for generating challenge data in [pools.py](./sturdy/pools.py) used for
   synthetic requests. The selection of different assets and pools which can be used in such requests are defined in the [pool registry](./sturdy/pool_registry/pool_registry.py), and are all based on pools which are real and do indeed exist on-chain (i.e. on the Ethereum Mainnet):
     ```python
-  def generate_challenge_data(
-      web3_provider: Web3,
-      rng_gen: np.random.RandomState = np.random.RandomState(),
-  ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
-      selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
-      bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
+    def generate_challenge_data(
+        web3_provider: Web3,
+        rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
+    ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
+        selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
+        bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
 
-      return assets_pools_for_challenge_data(selected_entry, web3_provider)
+        return assets_pools_for_challenge_data(selected_entry, web3_provider)
 
 
-  def assets_pools_for_challenge_data(
-      selected_entry, web3_provider: Web3
-  ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
-      challenge_data = {}
+    def assets_pools_for_challenge_data(
+        selected_entry, web3_provider: Web3
+    ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
+        challenge_data = {}
 
-      selected_assets_and_pools = selected_entry["assets_and_pools"]
-      selected_pools = selected_assets_and_pools["pools"]
-      user_address = selected_entry["user_address"]
+        selected_assets_and_pools = selected_entry["assets_and_pools"]
+        selected_pools = selected_assets_and_pools["pools"]
+        global_user_address = selected_entry.get("user_address", None)
 
-      pool_list = []
+        pool_list = []
 
-      for pool_dict in selected_pools.values():
-          pool = PoolFactory.create_pool(
-              pool_type=POOL_TYPES._member_map_[pool_dict["pool_type"]],
-              user_address=user_address,
-              contract_address=pool_dict["contract_address"],
-          )
-          pool_list.append(pool)
+        for pool_dict in selected_pools.values():
+            user_address = pool_dict.get("user_address", None)
+            pool = PoolFactory.create_pool(
+                pool_type=POOL_TYPES._member_map_[pool_dict["pool_type"]],
+                user_address=global_user_address if user_address is None else user_address,
+                contract_address=pool_dict["contract_address"],
+            )
+            pool_list.append(pool)
 
-      pools = {str(pool.contract_address): pool for pool in pool_list}
+        pools = {str(pool.contract_address): pool for pool in pool_list}
 
-      # we assume that the user address is the same across pools (valid)
-      # and also that the asset contracts are the same across said pools
-      first_pool = pool_list[0]
-      total_assets = 0
+        # we assume that the user address is the same across pools (valid)
+        # and also that the asset contracts are the same across said pools
+        total_assets = selected_entry.get("total_assets", None)
 
-      match first_pool.pool_type:
-          case POOL_TYPES.STURDY_SILO:
-              first_pool.sync(web3_provider)
-              total_assets = first_pool._user_asset_balance
-          case _:
-              pass
+        if total_assets is None:
+            total_assets = 0
+            first_pool = pool_list[0]
+            first_pool.sync(web3_provider)
+            match first_pool.pool_type:
+                case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET, POOL_TYPES.MORPHO):
+                    total_assets = first_pool._user_asset_balance
+                case _:
+                    pass
 
-      for pool in pools.values():
-          pool.sync(web3_provider)
-          total_asset = 0
-          match pool.pool_type:
-              case POOL_TYPES.STURDY_SILO:
-                  total_asset += pool._user_deposits
-              case _:
-                  pass
+            for pool in pools.values():
+                pool.sync(web3_provider)
+                total_asset = 0
+                match pool.pool_type:
+                    case POOL_TYPES.STURDY_SILO:
+                        total_asset += pool._user_deposits
+                    case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
+                        total_asset += pool._user_deposits
+                    case POOL_TYPES.MORPHO:
+                        total_asset += pool._user_deposits
+                    case _:
+                        pass
 
-          total_assets += total_asset
+                total_assets += total_asset
 
-      challenge_data["assets_and_pools"] = {}
-      challenge_data["assets_and_pools"]["pools"] = pools
-      challenge_data["assets_and_pools"]["total_assets"] = total_assets
-      challenge_data["user_address"] = user_address
+        challenge_data["assets_and_pools"] = {}
+        challenge_data["assets_and_pools"]["pools"] = pools
+        challenge_data["assets_and_pools"]["total_assets"] = total_assets
+        if global_user_address is not None:
+            challenge_data["user_address"] = global_user_address
 
-      return challenge_data
+        return challenge_data
     ```
     Validators can optionally run an API server and sell their bandwidth to outside users to send
     their own pools (organic requests) to the subnet. For more information on this process - please read
@@ -132,8 +140,7 @@ There are three core files.
   not perceived as being original. If miners fail to respond in ~45 seconds after receiving the
   request they are scored poorly.
   The best allocating miner will receive the most emissions. For more information on how
-  miners are rewarded - please see
-  [reward.py](sturdy/validator/reward.py). A diagram is provided below highlighting the interactions that takes place within
+  miners are rewarded - please see [forward.py](sturdy/validator/forward.py), [reward.py](sturdy/validator/reward.py), and [validator.py](neurons/validator.py). A diagram is provided below highlighting the interactions that takes place within
   the subnet when processing synthetic and organic requests:
 
  <div align="center"> 

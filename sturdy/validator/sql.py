@@ -161,7 +161,7 @@ def log_allocations(
     request_type: REQUEST_TYPES,
     scoring_period: int,
 ) -> None:
-    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
+    ts_now = datetime.utcnow().timestamp()
     challenge_end = ts_now + scoring_period
     scoring_period_end = datetime.fromtimestamp(challenge_end)  # noqa: DTZ006
     datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
@@ -207,7 +207,7 @@ def get_active_allocs(conn: sqlite3.Connection, scoring_window: float = SCORING_
     WHERE scoring_period_end >= ?
     AND scoring_period_end < ?
     """
-    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
+    ts_now = datetime.utcnow().timestamp()
     window_ts = ts_now - scoring_window
     datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
     window_datetime = datetime.fromtimestamp(window_ts)  # noqa: DTZ006
@@ -223,7 +223,7 @@ def delete_stale_active_allocs(conn: sqlite3.Connection, scoring_window: int = S
     DELETE FROM {ACTIVE_ALLOCS}
     WHERE scoring_period_end < ?
     """
-    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
+    ts_now = datetime.utcnow().timestamp()
     expiry_ts = ts_now - scoring_window
     expiration_date = datetime.fromtimestamp(expiry_ts)  # noqa: DTZ006
 

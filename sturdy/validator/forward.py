@@ -208,12 +208,15 @@ async def query_and_score_miners(
     sorted_indices = [idx for idx, val in sorted(enumerate(self.scores), key=lambda k: k[1], reverse=True)]
 
     sorted_allocs = {}
+    rank = 1
     for idx in sorted_indices:
         alloc = filtered_allocs.get(str(idx), None)
         if alloc is None:
             continue
 
+        alloc["rank"] = rank
         sorted_allocs[str(idx)] = alloc
+        rank += 1
 
     bt.logging.debug(f"sorted allocations: {sorted_allocs}")
 

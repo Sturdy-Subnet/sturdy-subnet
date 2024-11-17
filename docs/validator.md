@@ -53,7 +53,7 @@ We recommend using a third party service to connect to an RPC to perform on-chai
 
 
 ## Synthetic Validator 
-This is the most simple of the two. Synthetic validators generate dummy (fake) pools to send to miners to challenge them. To run a synthetic validator, run:
+This is the most simple of the two. Synthetic validators generate synthetic requests to send to miners to challenge them. To run a synthetic validator, run:
 #### Starting the validator - without PM2
 ```bash
 python3 neurons/validator.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.trace --axon.port PORT --organic False
@@ -235,7 +235,7 @@ Some annotations are provided below to further help understand the request forma
     "total_assets": 548568963376234830607950, # total assets available to a miner to allocate
     "pools": { # pools available to output allocations for
       "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": { # address used to get relevant info about the the pool
-        "pool_type": "STURDY_SILO",  # if this is a synthetic or chain (organic) pool 
+        "pool_type": "STURDY_SILO",  # type of pool (i.e sturdy silo, aave pool, yearn vault, etc.)
         "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227" # address used to get relevant info about the the pool
       },
 ```
@@ -246,8 +246,8 @@ And the corresponding response(example) format from the subnet:
     "request_uuid":"1e09d3f1ce574921bd13a2461607f5fe",
     "allocations":{
         "1":{ # miner uid
-            "apy":62133011236204113, # apy of miner's allocations in 18 decimal precision because the asset has the same precision. 
-            "allocations":{ # allocations to pools in wei
+            "rank":1, # rank of the miner based on past performance
+            "allocations":{ # allocations to pools
                 "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":114864688949643874140160,
                 "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":1109027125282399872,
                 "0x26fe402A57D52c8a323bb6e09f06489C8216aC88":71611128603622265323520,
@@ -255,7 +255,7 @@ And the corresponding response(example) format from the subnet:
             }
         },
         "4":{
-            "apy":61332661325287823,
+            "rank":2,
             "allocations":{
                 "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":119201178628424617426944,
                 "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":1290874337673458688,
@@ -264,7 +264,7 @@ And the corresponding response(example) format from the subnet:
             }
         },
         "2":{
-            "apy":31168293423379011,
+            "rank":3,
             "allocations":{
                 "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":45592862828746122461184,
                 "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":172140896186699296,

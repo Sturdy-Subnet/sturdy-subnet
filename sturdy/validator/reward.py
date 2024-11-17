@@ -320,6 +320,7 @@ def filter_allocations(
     filtered_allocs = {}
     axon_times = get_response_times(uids=uids, responses=responses, timeout=QUERY_TIMEOUT)
 
+    cheaters = []
     for response_idx, response in enumerate(responses):
         allocations = response.allocations
 
@@ -333,7 +334,7 @@ def filter_allocations(
         # score response very low if miner is cheating somehow or returns allocations with incorrect format
         if cheating:
             miner_uid = uids[response_idx]
-            bt.logging.warning(f"CHEATER DETECTED | UID {miner_uid}")
+            cheaters.append(miner_uid)
             continue
 
         # used to filter out miners who timed out
@@ -343,6 +344,8 @@ def filter_allocations(
             filtered_allocs[uids[response_idx]] = {
                 "allocations": response.allocations,
             }
+
+    bt.logging.warning(f"CHEATERS DETECTED: {cheaters}")
 
     curr_filtered_allocs = dict(sorted(filtered_allocs.items(), key=lambda item: int(item[0])))
     sorted_axon_times = dict(sorted(axon_times.items(), key=lambda item: item[1]))
