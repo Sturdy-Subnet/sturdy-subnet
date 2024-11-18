@@ -84,18 +84,16 @@ def format_allocations(
     return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
 
-def normalize_squared(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) -> torch.Tensor:
+def normalize_exp(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) -> torch.Tensor:
     raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
 
-    # TODO: is there a better way to go about this?
     if len(raw_apys) <= 1:
         return torch.zeros(len(raw_apys))
 
     apys = torch.tensor(list(raw_apys.values()), dtype=torch.float32)
+    normed = (apys - apys.min()) / (apys.max() - apys.min() + epsilon)
 
-    squared = torch.pow(apys, 2)
-
-    return (squared - squared.min()) / (squared.max() - squared.min() + epsilon)
+    return torch.pow(normed, 8)
 
 
 def calculate_penalties(
@@ -308,7 +306,7 @@ def _get_rewards(
     - adjusted_rewards: The reward values for the miners.
     """
 
-    rewards_apy = normalize_squared(apys_and_allocations).to(self.device)
+    rewards_apy = normalize_exp(apys_and_allocations).to(self.device)
 
     return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 

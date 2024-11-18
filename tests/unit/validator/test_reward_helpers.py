@@ -22,7 +22,7 @@ from sturdy.validator.reward import (
     get_allocation_similarity_matrix,
     get_apy_similarity_matrix,
     get_distance,
-    normalize_squared,
+    normalize_exp,
 )
 
 load_dotenv()
@@ -90,7 +90,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_basic_normalization(self) -> None:
         # Test a simple AllocationsDict with large values
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 2e16}, "3": {"apy": 3e16}, "4": {"apy": 4e16}}
-        normalized = normalize_squared(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Check if output is normalized between 0 and 1
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -105,7 +105,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 5e16},
             "5": {"apy": 1e17},
         }
-        normalized = normalize_squared(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Check that outliers don't affect the overall normalization
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -120,7 +120,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 1e17},
             "5": {"apy": 2e17},
         }
-        normalized = normalize_squared(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Check that the function correctly handles high outliers
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -129,7 +129,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_uniform_values(self) -> None:
         # Test where all values are the same
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e16}, "3": {"apy": 1e16}, "4": {"apy": 1e16}}
-        normalized = normalize_squared(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # If all values are the same, the output should also be uniform (or handle gracefully)
         self.assertTrue(
@@ -147,7 +147,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 1.03e16},
             "5": {"apy": 1.04e16},
         }
-        normalized = normalize_squared(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Check if normalization happens correctly
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -156,27 +156,9 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_high_variance(self) -> None:
         # Test with high variance data
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e17}, "3": {"apy": 5e17}, "4": {"apy": 1e18}}
-        normalized = normalize_squared(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Ensure that the normalization works even with high variance
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_quantile_logic(self) -> None:
-        # Test a case where the lower quartile range affects the lower bound decision
-        apys_and_allocations = {
-            "1": {"apy": 1e16},
-            "2": {"apy": 2e16},
-            "3": {"apy": 3e16},
-            "4": {"apy": 4e16},
-            "5": {"apy": 1e17},
-            "6": {"apy": 2e17},
-            "7": {"apy": 3e17},
-            "8": {"apy": 4e17},
-        }
-        normalized = normalize_squared(apys_and_allocations)
-
-        # Ensure that quantile-based clipping works as expected
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
         self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
 
@@ -527,18 +509,18 @@ class TestRewardFunctions(unittest.TestCase):
 
     def test_get_allocation_similarity_matrix(self) -> None:
         apys_and_allocations = {
-        "miner_1": {
-            "apy": int(0.05e18),
-            "allocations": {"pool_1": 30e18, "pool_2": 20e18},
-        },
-        "miner_2": {
-            "apy": int(0.04e18),
-            "allocations": {"pool_1": 40e18, "pool_2": 10e18},
-        },
-        "miner_3": {
-            "apy": int(0.06e18),
-            "allocations": {"pool_1": 30e18, "pool_2": 20e18},
-        },
+            "miner_1": {
+                "apy": int(0.05e18),
+                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
+            },
+            "miner_2": {
+                "apy": int(0.04e18),
+                "allocations": {"pool_1": 40e18, "pool_2": 10e18},
+            },
+            "miner_3": {
+                "apy": int(0.06e18),
+                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
+            },
         }
         assets_and_pools = {
             "pools": {
@@ -552,16 +534,40 @@ class TestRewardFunctions(unittest.TestCase):
 
         expected_similarity_matrix = {
             "miner_2": {
-                "miner_1": get_distance(np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object), np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object), total_assets),
-                "miner_3": get_distance(np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object), np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object), total_assets),
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    total_assets,
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    total_assets,
+                ),
             },
             "miner_1": {
-                "miner_2": get_distance(np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object), np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object), total_assets),
-                "miner_3": get_distance(np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object), np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object), total_assets),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
+                    total_assets,
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    total_assets,
+                ),
             },
             "miner_3": {
-                "miner_1": get_distance(np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object), np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object), total_assets),
-                "miner_2": get_distance(np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object), np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object), total_assets),
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    total_assets,
+                ),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
+                    total_assets,
+                ),
             },
         }
 
@@ -577,32 +583,56 @@ class TestRewardFunctions(unittest.TestCase):
 
     def test_get_apy_similarity_matrix(self) -> None:
         apys_and_allocations = {
-        "miner_1": {
-            "apy": int(0.05e18),
-            "allocations": {"pool_1": 30e18, "pool_2": 20e18},
-        },
-        "miner_2": {
-            "apy": int(0.04e18),
-            "allocations": {"pool_1": 40e18, "pool_2": 10e18},
-        },
-        "miner_3": {
-            "apy": int(0.06e18),
-            "allocations": {"pool_1": 30e18, "pool_2": 20e18},
-        },
+            "miner_1": {
+                "apy": int(0.05e18),
+                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
+            },
+            "miner_2": {
+                "apy": int(0.04e18),
+                "allocations": {"pool_1": 40e18, "pool_2": 10e18},
+            },
+            "miner_3": {
+                "apy": int(0.06e18),
+                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
+            },
         }
 
         expected_similarity_matrix = {
             "miner_1": {
-                "miner_2": get_distance(np.array([gmpy2.mpz(0.05e18)], dtype=object), np.array([gmpy2.mpz(0.04e18)], dtype=object), gmpy2.mpz(0.05e18)),
-                "miner_3": get_distance(np.array([gmpy2.mpz(0.05e18)], dtype=object), np.array([gmpy2.mpz(0.06e18)], dtype=object), gmpy2.mpz(0.06e18)),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    gmpy2.mpz(0.05e18),
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
+                    gmpy2.mpz(0.06e18),
+                ),
             },
             "miner_2": {
-                "miner_1": get_distance(np.array([gmpy2.mpz(0.04e18)], dtype=object), np.array([gmpy2.mpz(0.05e18)], dtype=object), gmpy2.mpz(0.05e18)),
-                "miner_3": get_distance(np.array([gmpy2.mpz(0.04e18)], dtype=object), np.array([gmpy2.mpz(0.06e18)], dtype=object), gmpy2.mpz(0.06e18)),
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    gmpy2.mpz(0.05e18),
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
+                    gmpy2.mpz(0.06e18),
+                ),
             },
             "miner_3": {
-                "miner_1": get_distance(np.array([gmpy2.mpz(0.06e18)], dtype=object), np.array([gmpy2.mpz(0.05e18)], dtype=object), gmpy2.mpz(0.06e18)),
-                "miner_2": get_distance(np.array([gmpy2.mpz(0.06e18)], dtype=object), np.array([gmpy2.mpz(0.04e18)], dtype=object), gmpy2.mpz(0.06e18)),
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    gmpy2.mpz(0.06e18),
+                ),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    gmpy2.mpz(0.06e18),
+                ),
             },
         }
 
@@ -640,11 +670,19 @@ class TestRewardFunctions(unittest.TestCase):
 
         expected_similarity_matrix = {
             "miner_1": {
-                "miner_2": get_distance(np.array([gmpy2.mpz(30), gmpy2.mpz(20)], dtype=object), np.array([gmpy2.mpz(40), gmpy2.mpz(10)], dtype=object), total_assets),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(30), gmpy2.mpz(20)], dtype=object),
+                    np.array([gmpy2.mpz(40), gmpy2.mpz(10)], dtype=object),
+                    total_assets,
+                ),
                 "miner_3": float("inf"),
             },
             "miner_2": {
-                "miner_1": get_distance(np.array([gmpy2.mpz(40), gmpy2.mpz(10)], dtype=object), np.array([gmpy2.mpz(30), gmpy2.mpz(20)], dtype=object), total_assets),
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(40), gmpy2.mpz(10)], dtype=object),
+                    np.array([gmpy2.mpz(30), gmpy2.mpz(20)], dtype=object),
+                    total_assets,
+                ),
                 "miner_3": float("inf"),
             },
             "miner_3": {"miner_1": float("inf"), "miner_2": float("inf")},
@@ -682,18 +720,34 @@ class TestRewardFunctions(unittest.TestCase):
 
         total_assets = assets_and_pools["total_assets"]
 
-        expected_similarity_matrix =  {
+        expected_similarity_matrix = {
             "miner_1": {
-                "miner_2": get_distance(np.array([gmpy2.mpz(0.05e18)], dtype=object), np.array([gmpy2.mpz(0.04e18)], dtype=object), gmpy2.mpz(0.05e18)),
-                "miner_3": get_distance(np.array([gmpy2.mpz(0.05e18)], dtype=object), np.array([gmpy2.mpz(0)], dtype=object), gmpy2.mpz(0.05e18)),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    gmpy2.mpz(0.05e18),
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object), np.array([gmpy2.mpz(0)], dtype=object), gmpy2.mpz(0.05e18)
+                ),
             },
             "miner_2": {
-                "miner_1": get_distance(np.array([gmpy2.mpz(0.04e18)], dtype=object), np.array([gmpy2.mpz(0.05e18)], dtype=object), gmpy2.mpz(0.05e18)),
-                "miner_3": get_distance(np.array([gmpy2.mpz(0.04e18)], dtype=object), np.array([gmpy2.mpz(0)], dtype=object), gmpy2.mpz(0.04e18)),
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    gmpy2.mpz(0.05e18),
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object), np.array([gmpy2.mpz(0)], dtype=object), gmpy2.mpz(0.04e18)
+                ),
             },
             "miner_3": {
-                "miner_1": get_distance(np.array([gmpy2.mpz(0)], dtype=object), np.array([gmpy2.mpz(0.05e18)], dtype=object), gmpy2.mpz(0.05e18)),
-                "miner_2": get_distance(np.array([gmpy2.mpz(0)], dtype=object), np.array([gmpy2.mpz(0.04e18)], dtype=object), gmpy2.mpz(0.04e18)),
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(0)], dtype=object), np.array([gmpy2.mpz(0.05e18)], dtype=object), gmpy2.mpz(0.05e18)
+                ),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(0)], dtype=object), np.array([gmpy2.mpz(0.04e18)], dtype=object), gmpy2.mpz(0.04e18)
+                ),
             },
         }
 
@@ -724,7 +778,13 @@ class TestRewardFunctions(unittest.TestCase):
         apy_similarity_threshold = 0.1
 
         expected_penalties = {"1": 0, "2": 1, "3": 1}
-        result = calculate_penalties(allocation_similarity_matrix,apy_similarity_matrix, axon_times, allocation_similarity_threshold, apy_similarity_threshold)
+        result = calculate_penalties(
+            allocation_similarity_matrix,
+            apy_similarity_matrix,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
+        )
 
         self.assertEqual(result, expected_penalties)
 
@@ -743,12 +803,16 @@ class TestRewardFunctions(unittest.TestCase):
         allocation_similarity_threshold = 0.2
         apy_similarity_threshold = 0.05
 
-
         expected_penalties = {"1": 0, "2": 1, "3": 0}
-        result = calculate_penalties(allocation_similarity_matrix,apy_similarity_matrix, axon_times, allocation_similarity_threshold, apy_similarity_threshold)
+        result = calculate_penalties(
+            allocation_similarity_matrix,
+            apy_similarity_matrix,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
+        )
 
         self.assertEqual(result, expected_penalties)
-
 
     def test_calculate_penalties_no_similarities(self) -> None:
         allocation_similarity_matrix = {
@@ -767,7 +831,13 @@ class TestRewardFunctions(unittest.TestCase):
         apy_similarity_threshold = 0.1
 
         expected_penalties = {"1": 0, "2": 0, "3": 0}
-        result = calculate_penalties(allocation_similarity_matrix,apy_similarity_matrix, axon_times, allocation_similarity_threshold, apy_similarity_threshold)
+        result = calculate_penalties(
+            allocation_similarity_matrix,
+            apy_similarity_matrix,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
+        )
 
         self.assertEqual(result, expected_penalties)
 
@@ -791,7 +861,13 @@ class TestRewardFunctions(unittest.TestCase):
 
         expected_penalties = {"1": 2, "2": 2, "3": 2}
 
-        result = calculate_penalties(allocation_similarity_matrix,apy_similarity_matrix, axon_times, allocation_similarity_threshold, apy_similarity_threshold)
+        result = calculate_penalties(
+            allocation_similarity_matrix,
+            apy_similarity_matrix,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
+        )
 
         self.assertEqual(result, expected_penalties)
 
@@ -818,7 +894,7 @@ class TestRewardFunctions(unittest.TestCase):
     def test_adjust_rewards_for_plagiarism(self) -> None:
         rewards_apy = torch.Tensor([0.05 / 0.05, 0.04 / 0.05, 0.03 / 0.05])
         apys_and_allocations = {
-            "0": {"apy":50, "allocations": {"asset_1": 200, "asset_2": 300}}, # APY: int
+            "0": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},  # APY: int
             "1": {"apy": 40, "allocations": {"asset_1": 202, "asset_2": 303}},
             "2": {"apy": 30, "allocations": {"asset_1": 200, "asset_2": 400}},
         }
@@ -829,14 +905,21 @@ class TestRewardFunctions(unittest.TestCase):
         uids = ["0", "1", "2"]
         axon_times = {"0": 1.0, "1": 2.0, "2": 3.0}
 
-        allocation_similarity_threshold = .1
+        allocation_similarity_threshold = 0.1
 
         apy_similarity_threshold = 0.2
 
         expected_rewards = torch.Tensor([1.0, 0.0, 0.03 / 0.05])
 
         result = adjust_rewards_for_plagiarism(
-            self.vali, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times, allocation_similarity_threshold, apy_similarity_threshold
+            self.vali,
+            rewards_apy,
+            apys_and_allocations,
+            assets_and_pools,
+            uids,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
         )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
@@ -856,11 +939,18 @@ class TestRewardFunctions(unittest.TestCase):
 
         expected_rewards = torch.Tensor([1.0, 0.0])
 
-        allocation_similarity_threshold = .1
+        allocation_similarity_threshold = 0.1
         apy_similarity_threshold = 0.2
 
         result = adjust_rewards_for_plagiarism(
-            self.vali, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times, allocation_similarity_threshold, apy_similarity_threshold
+            self.vali,
+            rewards_apy,
+            apys_and_allocations,
+            assets_and_pools,
+            uids,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
         )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
