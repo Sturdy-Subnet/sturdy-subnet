@@ -265,6 +265,9 @@ def annualized_yield_pct(
     Calculates annualized yields of allocations in pools within scoring period
     """
 
+    if seconds_passed < 1:
+        return 0
+
     # calculate projected yield
     initial_balance = cast(int, assets_and_pools["total_assets"])
     pools = cast(dict[str, ChainBasedPoolModel], assets_and_pools["pools"])
@@ -281,7 +284,9 @@ def annualized_yield_pct(
                 curr_share_price = pool._share_price
                 pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
                 deposit_delta = allocation - pool._user_deposits
-                adjusted_pct_delta = (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta) * pct_delta
+                adjusted_pct_delta = (
+                    (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta + 1) * pct_delta
+                )
                 annualized_pct_yield = ((1 + adjusted_pct_delta) ** (seconds_per_year / seconds_passed)) - 1
                 total_yield += int(allocation * annualized_pct_yield)
             case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
