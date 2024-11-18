@@ -25,7 +25,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
-from sturdy.constants import QUERY_TIMEOUT, SIMILARITY_THRESHOLD
+from sturdy.constants import ALLOCATION_SIMILARITY_THRESHOLD, APY_SIMILARITY_THRESHOLD, QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div
@@ -99,15 +99,25 @@ def normalize_squared(apys_and_allocations: AllocationsDict, epsilon: float = 1e
 
 
 def calculate_penalties(
-    similarity_matrix: dict[str, dict[str, float]],
+    allocation_similarity_matrix: dict[str, dict[str, float]],
+    apy_similarity_matrix: dict[str, dict[str, float]],
     axon_times: dict[str, float],
-    similarity_threshold: float = SIMILARITY_THRESHOLD,
+    allocation_similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
+    apy_similarity_threshold: float = APY_SIMILARITY_THRESHOLD,
 ) -> dict[str, int]:
-    penalties = {miner: 0 for miner in similarity_matrix}
+    penalties = {miner: 0 for miner in allocation_similarity_matrix}
 
-    for miner_a, similarities in similarity_matrix.items():
-        for miner_b, similarity in similarities.items():
-            if similarity <= similarity_threshold and axon_times[miner_a] <= axon_times[miner_b]:
+    for miner_a in allocation_similarity_matrix:
+        allocation_similarities = allocation_similarity_matrix[miner_a]
+        apy_similarities = apy_similarity_matrix[miner_a]
+        for miner_b in allocation_similarities:
+            allocation_similarity = allocation_similarities[miner_b]
+            apy_similarity = apy_similarities[miner_b]
+            if (
+                allocation_similarity <= allocation_similarity_threshold
+                and apy_similarity <= apy_similarity_threshold
+                and axon_times[miner_a] <= axon_times[miner_b]
+            ):
                 penalties[miner_b] += 1
 
     return penalties
@@ -136,7 +146,7 @@ def get_distance(alloc_a: npt.NDArray, alloc_b: npt.NDArray, total_assets: int) 
     return norm / gmpy2.sqrt(float(2 * total_assets**2))
 
 
-def get_similarity_matrix(
+def get_allocation_similarity_matrix(
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
 ) -> dict[str, dict[str, float]]:
@@ -186,6 +196,46 @@ def get_similarity_matrix(
     return similarity_matrix
 
 
+def get_apy_similarity_matrix(
+    apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
+) -> dict[str, dict[str, float]]:
+    """
+    Calculates the similarity matrix for the allocation strategies of miners' APY using normalized Euclidean distance.
+
+    This function computes a similarity matrix based on the Euclidean distance between the allocation vectors of miners,
+    normalized by the maximum possible distance in the given asset space. Each miner's allocation is compared with every
+    other miner's allocation, resulting in a matrix where each element (i, j) represents the normalized Euclidean distance
+    between the allocations of miner_i and miner_j.
+
+    The similarity metric is scaled between 0 and 1, where 0 indicates identical allocations and 1 indicates the maximum
+    possible distance between the allocation 'vectors'.
+
+    Args:
+        apys_and_allocations (dict[str, dict[str, Union[AllocationsDict, int]]]):
+            A dictionary containing the APY and allocation strategies for each miner. The keys are miner identifiers,
+            and the values are dictionaries with their respective allocations and APYs.
+
+    Returns:
+        dict[str, dict[str, float]]:
+            A nested dictionary where each key is a miner identifier, and the value is another dictionary containing the
+            normalized Euclidean distances to every other miner. The distances are scaled between 0 and 1.
+    """
+
+    similarity_matrix = {}
+
+    for miner_a, info_a in apys_and_allocations.items():
+        apy_a = cast(int, info_a["apy"])
+        apy_a = np.array([gmpy2.mpz(apy_a)], dtype=object)
+        similarity_matrix[miner_a] = {}
+        for miner_b, info_b in apys_and_allocations.items():
+            if miner_a != miner_b:
+                apy_b = cast(int, info_b["apy"])
+                apy_b = np.array([gmpy2.mpz(apy_b)], dtype=object)
+                similarity_matrix[miner_a][miner_b] = get_distance(apy_a, apy_b, max(apy_a, apy_b)[0])  # Max scaling
+
+    return similarity_matrix
+
+
 def adjust_rewards_for_plagiarism(
     self,
     rewards_apy: torch.Tensor,
@@ -193,7 +243,8 @@ def adjust_rewards_for_plagiarism(
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     uids: list,
     axon_times: dict[str, float],
-    similarity_threshold: float = SIMILARITY_THRESHOLD,
+    allocation_similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
+    apy_similarity_threshold: float = APY_SIMILARITY_THRESHOLD,
 ) -> torch.Tensor:
     """
     Adjusts the annual percentage yield (APY) rewards for miners based on the similarity of their allocations
@@ -225,10 +276,17 @@ def adjust_rewards_for_plagiarism(
           to a consistent format suitable for comparison.
     """
     # Step 1: Calculate pairwise similarity (e.g., using Euclidean distance)
-    similarity_matrix = get_similarity_matrix(apys_and_allocations, assets_and_pools)
+    allocation_similarity_matrix = get_allocation_similarity_matrix(apys_and_allocations, assets_and_pools)
+    apy_similarity_matrix = get_apy_similarity_matrix(apys_and_allocations)
 
     # Step 2: Apply penalties considering axon times
-    penalties = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
+    penalties = calculate_penalties(
+        allocation_similarity_matrix,
+        apy_similarity_matrix,
+        axon_times,
+        allocation_similarity_threshold,
+        apy_similarity_threshold,
+    )
     self.similarity_penalties = penalties
 
     # Step 3: Calculate final rewards with adjusted penalties
