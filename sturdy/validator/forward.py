@@ -49,7 +49,6 @@ async def forward(self) -> Any:
     bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
     # initialize pools and assets
-    # TODO: only sturdy silos and morpho vaults for now
     challenge_data = generate_challenge_data(self.w3)
     request_uuid = str(uuid.uuid4()).replace("-", "")
     user_address = challenge_data.get("user_address", None)

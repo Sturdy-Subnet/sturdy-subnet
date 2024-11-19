@@ -130,7 +130,6 @@ class TestAavePool(unittest.TestCase):
         self.assertGreaterEqual(pool._normalized_income, int(1e27))
         print(f"normalized income: {pool._normalized_income}")
 
-    # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
     def test_supply_rate_alloc(self) -> None:
         print("----==== TestAavePool | test_supply_rate_increase_alloc ====----")
         pool = AaveV3DefaultInterestRateV2Pool(

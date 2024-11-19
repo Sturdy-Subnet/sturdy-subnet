@@ -201,7 +201,6 @@ def get_active_allocs(conn: sqlite3.Connection, scoring_window: float = SCORING_
     # TODO: change the logic of handling "active allocations"
     # for now we simply get ones which are still in their "challenge"
     # period, and consider them to determine the score of miners
-    # TODO: the existance "active" column may be redundant
     query = f"""
     SELECT * FROM {ACTIVE_ALLOCS}
     WHERE scoring_period_end >= ?
