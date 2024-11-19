@@ -33,7 +33,7 @@ from web3.types import BlockData
 
 from sturdy.constants import *
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
-from sturdy.utils.ethmath import wei_div, wei_mul
+from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import (
     getReserveFactor,
     rayMul,
