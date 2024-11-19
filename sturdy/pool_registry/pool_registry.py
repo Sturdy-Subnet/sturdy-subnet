@@ -52,6 +52,25 @@ POOL_REGISTRY = {
             }
         },
     },
+    "Sturdy tBTC Aggregator": {
+        "user_address": "0xAeD098db0e39bed6DDc2c07727B8FfC0BA470D9C",
+        "assets_and_pools": {
+            "pools": {
+                "0x6F03c615a3E609D2CF149754CC55462b6477965c": {
+                    "pool_type": "STURDY_SILO",
+                    "contract_address": "0x6F03c615a3E609D2CF149754CC55462b6477965c",
+                },
+                "0xf94B349d52c542aBd8Fb612c2854974e1D72223B": {
+                    "pool_type": "STURDY_SILO",
+                    "contract_address": "0xf94B349d52c542aBd8Fb612c2854974e1D72223B",
+                },
+                "0xEEF271A0071423EA56d38E4aBE748165cc432e3f": {
+                    "pool_type": "STURDY_SILO",
+                    "contract_address": "0xEEF271A0071423EA56d38E4aBE748165cc432e3f",
+                },
+            }
+        },
+    },
     "Morpho USDC Vaults": {
         "user_address": "0xFA60E843a52eff94901f43ac08232b59351192cc",
         "total_assets": 1000000000000,
