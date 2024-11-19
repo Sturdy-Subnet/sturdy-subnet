@@ -37,6 +37,21 @@ POOL_REGISTRY = {
             }
         },
     },
+    "Sturdy GHO Aggregator": {
+        "user_address": "0x93eBc3cA85F96aFD72edB914e833Fe18888DE179",
+        "assets_and_pools": {
+            "pools": {
+                "0x0b8C80fd9CaC5570Ff829416f0aFCE7aF6F3C6f8": {
+                    "pool_type": "STURDY_SILO",
+                    "contract_address": "0x0b8C80fd9CaC5570Ff829416f0aFCE7aF6F3C6f8",
+                },
+                "0xb3Bf04A939aAcFf5BdCFc273CE4F36CF29F063Db": {
+                    "pool_type": "STURDY_SILO",
+                    "contract_address": "0xb3Bf04A939aAcFf5BdCFc273CE4F36CF29F063Db",
+                },
+            }
+        },
+    },
     "Morpho USDC Vaults": {
         "user_address": "0xFA60E843a52eff94901f43ac08232b59351192cc",
         "total_assets": 1000000000000,
@@ -57,6 +72,21 @@ POOL_REGISTRY = {
                 "0xdd0f28e19C1780eb6396170735D45153D261490d": {
                     "pool_type": "MORPHO",
                     "contract_address": "0xdd0f28e19C1780eb6396170735D45153D261490d",
+                },
+            }
+        },
+    },
+    "Yearn DAI-2 Vaults": {
+        "user_address": "0x92545bCE636E6eE91D88D2D017182cD0bd2fC22e",
+        "assets_and_pools": {
+            "pools": {
+                "0x028eC7330ff87667b6dfb0D94b954c820195336c": {
+                    "pool_type": "YEARN_V3",
+                    "contract_address": "0x028eC7330ff87667b6dfb0D94b954c820195336c",
+                },
+                "0x6164045FC2b2b269ffcaB2197736A74B1725B6C6": {
+                    "pool_type": "YEARN_V3",
+                    "contract_address": "0x6164045FC2b2b269ffcaB2197736A74B1725B6C6",
                 },
             }
         },

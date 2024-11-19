@@ -781,6 +781,19 @@ class TestYearnV3Vault(unittest.TestCase):
         self.assertTrue(isinstance(pool._apr_oracle, Contract))
         self.assertEqual(pool._apr_oracle.address, APR_ORACLE)
 
+        self.assertTrue(hasattr(pool, "_user_deposits"))
+        self.assertTrue(isinstance(pool._user_deposits, int))
+
+        self.assertTrue(hasattr(pool, "_user_asset_balance"))
+        self.assertTrue(isinstance(pool._user_asset_balance, int))
+        print(f"user asset balance: {pool._user_asset_balance}")
+        self.assertGreater(pool._user_asset_balance, 0)
+
+        self.assertTrue(hasattr(pool, "_share_price"))
+        self.assertTrue(isinstance(pool._share_price, int))
+        print(f"morpho vault share price: {pool._share_price}")
+        self.assertGreater(pool._share_price, 0)
+
         # check pool supply_rate
         print(pool.supply_rate(0))
 

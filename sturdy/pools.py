@@ -1124,6 +1124,10 @@ class YearnV3Vault(ChainBasedPoolModel):
     _apr_oracle: Contract = PrivateAttr()
     _max_withdraw: int = PrivateAttr()
     _user_deposits: int = PrivateAttr()
+    _asset: Contract = PrivateAttr()
+    _total_supplied_assets: int = PrivateAttr()
+    _user_asset_balance: int = PrivateAttr()
+    _share_price: int = PrivateAttr()
 
     def pool_init(self, web3_provider: Web3) -> None:
         vault_abi_file_path = Path(__file__).parent / "abi/Yearn_V3_Vault.json"
@@ -1142,6 +1146,15 @@ class YearnV3Vault(ChainBasedPoolModel):
         apr_oracle = web3_provider.eth.contract(abi=apr_oracle_abi, decode_tuples=True)
         self._apr_oracle = retry_with_backoff(apr_oracle, address=APR_ORACLE)
 
+        erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
+        erc20_abi_file = erc20_abi_file_path.open()
+        erc20_abi = json.load(erc20_abi_file)
+        erc20_abi_file.close()
+
+        asset_address = retry_with_backoff(self._vault_contract.functions.asset().call)
+        asset_contract = web3_provider.eth.contract(abi=erc20_abi, decode_tuples=True)
+        self._asset = retry_with_backoff(asset_contract, address=asset_address)
+
     def sync(self, web3_provider: Web3) -> None:
         if not self._initted:
             self.pool_init(web3_provider)
@@ -1149,6 +1162,11 @@ class YearnV3Vault(ChainBasedPoolModel):
         self._max_withdraw = retry_with_backoff(self._vault_contract.functions.maxWithdraw(self.user_address).call)
         user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
         self._user_deposits = retry_with_backoff(self._vault_contract.functions.convertToAssets(user_shares).call)
+        self._total_supplied_assets: Any = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
+        self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
+
+        # get current price per share
+        self._share_price = retry_with_backoff(self._vault_contract.functions.pricePerShare().call)
 
     def supply_rate(self, amount: int) -> int:
         delta = amount - self._user_deposits
@@ -1202,7 +1220,13 @@ def assets_pools_for_challenge_data(
         first_pool = pool_list[0]
         first_pool.sync(web3_provider)
         match first_pool.pool_type:
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET, POOL_TYPES.MORPHO):
+            case T if T in (
+                POOL_TYPES.STURDY_SILO,
+                POOL_TYPES.AAVE_DEFAULT,
+                POOL_TYPES.AAVE_TARGET,
+                POOL_TYPES.MORPHO,
+                POOL_TYPES.YEARN_V3,
+            ):
                 total_assets = first_pool._user_asset_balance
             case _:
                 pass
@@ -1211,11 +1235,13 @@ def assets_pools_for_challenge_data(
             pool.sync(web3_provider)
             total_asset = 0
             match pool.pool_type:
-                case POOL_TYPES.STURDY_SILO:
-                    total_asset += pool._user_deposits
-                case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                    total_asset += pool._user_deposits
-                case POOL_TYPES.MORPHO:
+                case T if T in (
+                    POOL_TYPES.STURDY_SILO,
+                    POOL_TYPES.AAVE_DEFAULT,
+                    POOL_TYPES.AAVE_TARGET,
+                    POOL_TYPES.MORPHO,
+                    POOL_TYPES.YEARN_V3,
+                ):
                     total_asset += pool._user_deposits
                 case _:
                     pass

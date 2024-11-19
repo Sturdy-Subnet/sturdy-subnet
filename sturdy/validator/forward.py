@@ -86,7 +86,7 @@ def get_metadata(pools: dict[str, ChainBasedPoolModel], w3: Web3) -> dict:
     for contract_addr, pool in pools.items():
         pool.sync(w3)
         match pool.pool_type:
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO):
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
                 metadata[contract_addr] = pool._share_price
             case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
                 metadata[contract_addr] = pool._normalized_income

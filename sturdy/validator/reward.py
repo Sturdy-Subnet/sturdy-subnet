@@ -335,7 +335,7 @@ def annualized_yield_pct(
     for contract_addr, pool in pools.items():
         allocation = allocations[contract_addr]
         match pool.pool_type:
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO):
+            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
                 # TODO: temp fix
                 if allocation > 0:
                     last_share_price = extra_metadata[contract_addr]
