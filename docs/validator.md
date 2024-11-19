@@ -27,6 +27,14 @@ You will need `pm2` if you would like to utilize the auto update scripts that co
 1. Install [node and npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
 2. Install [pm2](https://pm2.io)
 
+### Creating the database
+Used to store api keys (only for organic validators), scoring logs, and "active" miner allocations for scoring
+
+First, [install dbmate](https://github.com/amacneil/dbmate?tab=readme-ov-file#installation). then run the command below
+```bash
+dbmate --url "sqlite:validator_database.db" up
+```
+
 
 ## Running a Validator
 
@@ -40,8 +48,20 @@ You have the option of running two kinds of validators:
  - [Synthetic](#synthetic-validator)
  - [Organic](#organic-validator)
 
+Before we get to the differences between them, and how to set each of them up, we must first ensure we have a connection to the Ethereum network.
+
+#### Connecting to Ethereum
+All validators are required to have a connection to an Ethereum RPC to handle requests. It is required to interact with relevant smart contracts in order to perform certain operations i.e. calculate miner allocation yields.
+
+##### Preparing Environment
+The next step involves interacting with an API. We've provided an [.env.example](../.env.example) file which should be copied as a `.env` file in the root of this repository before proceeding.
+
+##### Connecting to a Web3 Provider
+We recommend using a third party service to connect to an RPC to perform on-chain calls such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `WEB3_PROVIDER_URL` alias.
+
+
 ## Synthetic Validator 
-This is the most simple of the two. Synthetic validators generate dummy (fake) pools to send to miners to challenge them. To run a synthetic validator, run:
+This is the most simple of the two. Synthetic validators generate synthetic requests to send to miners to challenge them. To run a synthetic validator, run:
 #### Starting the validator - without PM2
 ```bash
 python3 neurons/validator.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.trace --axon.port PORT --organic False
@@ -76,15 +96,6 @@ Where `ID_OR_PROCESS_NAME` is the `name` OR `id` of the process as noted per the
 
 ## Organic Validator 
 This is the less simple but more exciting of the two! Now you get to sell your bandwidth to whoever you want, with a very simple to use CLI!
-
-#### Connecting to Ethereum
-Organic validators are required to have a connection to an Ethereum RPC to handle organic requests. It is required to interact with relevant smart contracts in order to perform certain operations i.e. calculate miner allocation yields.
-
-##### Preparing Environment
-The next step involves interacting with an API. We've provided an [.env.example](../.env.example) file which should be copied as a `.env` file in the root of this repository before proceeding.
-
-#### Connecting to a Web3 Provider
-We recommend using a third party service to connect to an RPC to perform on-chain calls such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `WEB3_PROVIDER_URL` alias.
 
 #### Spinning Up Organic Validator
 
@@ -137,15 +148,6 @@ Where `ID_OR_PROCESS_NAME` is the `name` OR `id` of the process as noted per the
 
 ## Selling your bandwidth
 
-### Creating the database
-Used to store api keys & scoring logs
-
-First, [install dbmate](https://github.com/amacneil/dbmate?tab=readme-ov-file#installation)
-
-```bash
-dbmate --url "sqlite:validator_database.db" up
-```
-
 ### Managing access
 
 To manage access to the your api server and sell access to anyone you like, using the sturdy-cli is the easiest way.
@@ -169,7 +171,7 @@ To get more info about that command!
 For example:
 
 ```bash
-sturdy create-key 10 60 test
+sturdy create-key --balance 10 --rate-limit-per-minute 60 --name test
 ```
 Creates a test key with a balance of 10 (which corresponds to 10 requests), a rate limit of 60 requests per minute = 1/s, and a name 'test'.
 
@@ -205,22 +207,18 @@ curl -X POST \
     "pools": {
       "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": {
         "pool_type": "STURDY_SILO",
-        "pool_model_disc": "CHAIN",
         "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
       },
        "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b": {
         "pool_type": "STURDY_SILO",
-        "pool_model_disc": "CHAIN",
         "contract_address": "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b"
       },
        "0x26fe402A57D52c8a323bb6e09f06489C8216aC88": {
         "pool_type": "STURDY_SILO",
-        "pool_model_disc": "CHAIN",
         "contract_address": "0x26fe402A57D52c8a323bb6e09f06489C8216aC88"
       },
        "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D": {
         "pool_type": "STURDY_SILO",
-        "pool_model_disc": "CHAIN",
         "contract_address": "0x8dDE9A50a91cc0a5DaBdc5d3931c1AF60408c84D"
       }
     }
@@ -236,8 +234,7 @@ Some annotations are provided below to further help understand the request forma
     "total_assets": 548568963376234830607950, # total assets available to a miner to allocate
     "pools": { # pools available to output allocations for
       "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": { # address used to get relevant info about the the pool
-        "pool_type": "STURDY_SILO", 
-        "pool_model_disc": "CHAIN", # if this is a synthetic or chain (organic) pool 
+        "pool_type": "STURDY_SILO",  # type of pool (i.e sturdy silo, aave pool, yearn vault, etc.)
         "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227" # address used to get relevant info about the the pool
       },
 ```
@@ -248,8 +245,8 @@ And the corresponding response(example) format from the subnet:
     "request_uuid":"1e09d3f1ce574921bd13a2461607f5fe",
     "allocations":{
         "1":{ # miner uid
-            "apy":62133011236204113, # apy of miner's allocations in 18 decimal precision because the asset has the same precision. 
-            "allocations":{ # allocations to pools in wei
+            "rank":1, # rank of the miner based on past performance
+            "allocations":{ # allocations to pools
                 "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":114864688949643874140160,
                 "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":1109027125282399872,
                 "0x26fe402A57D52c8a323bb6e09f06489C8216aC88":71611128603622265323520,
@@ -257,7 +254,7 @@ And the corresponding response(example) format from the subnet:
             }
         },
         "4":{
-            "apy":61332661325287823,
+            "rank":2,
             "allocations":{
                 "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":119201178628424617426944,
                 "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":1290874337673458688,
@@ -266,7 +263,7 @@ And the corresponding response(example) format from the subnet:
             }
         },
         "2":{
-            "apy":31168293423379011,
+            "rank":3,
             "allocations":{
                 "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227":45592862828746122461184,
                 "0x200723063111f9f8f1d44c0F30afAdf0C0b1a04b":172140896186699296,

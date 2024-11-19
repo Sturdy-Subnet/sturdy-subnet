@@ -15,6 +15,7 @@ pyrightconfig.json
 # databases
 db/schema.sql
 validator_database.db
+*test.db
 
 # backups
 *.bak

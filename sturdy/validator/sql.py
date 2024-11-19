@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 
 from fastapi.encoders import jsonable_encoder
 
-from sturdy.protocol import AllocInfo, PoolModel
+from sturdy.constants import DB_DIR, SCORING_WINDOW
+from sturdy.protocol import REQUEST_TYPES, AllocInfo, ChainBasedPoolModel
 
 BALANCE = "balance"
 KEY = "key"
@@ -22,15 +23,17 @@ CREATED_AT = "created_at"
 # allocations table
 ALLOCATION_REQUESTS_TABLE = "allocation_requests"
 ALLOCATIONS_TABLE = "allocations"
+ACTIVE_ALLOCS = "active_allocs"
 REQUEST_UID = "request_uid"
+REQUEST_TYPE = "request_type"
 MINER_UID = "miner_uid"
 USER_ADDRESS = "user_address"
 ALLOCATION = "allocation"
 
 
 @contextmanager
-def get_db_connection():  # noqa: ANN201
-    conn = sqlite3.connect("validator_database.db")
+def get_db_connection(db_dir: str = DB_DIR, uri: bool = False):  # noqa: ANN201
+    conn = sqlite3.connect(db_dir, uri=uri)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     try:
@@ -151,41 +154,106 @@ def to_json_string(input_data) -> str:
 def log_allocations(
     conn: sqlite3.Connection,
     request_uid: str,
-    assets_and_pools: dict[str, dict[str, PoolModel] | int],
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
+    extra_metadata: dict,
     allocations: dict[str, AllocInfo],
+    axon_times: dict[str, float],
+    request_type: REQUEST_TYPES,
+    scoring_period: int,
 ) -> None:
-    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
+    ts_now = datetime.utcnow().timestamp()
+    challenge_end = ts_now + scoring_period
+    scoring_period_end = datetime.fromtimestamp(challenge_end)  # noqa: DTZ006
+    datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
     conn.execute(
-        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?)",
+        f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?, ?, json(?))",
         (
             request_uid,
             json.dumps(jsonable_encoder(assets_and_pools)),
-            datetime.fromtimestamp(ts_now),  # noqa: DTZ006
+            datetime_now,
+            request_type,
+            # TODO: use jsonable_encoder?
+            json.dumps(extra_metadata),
+        ),
+    )
+
+    conn.execute(
+        f"INSERT INTO {ACTIVE_ALLOCS} VALUES (?, ?, ?)",
+        (
+            request_uid,
+            scoring_period_end,
+            datetime_now,
         ),
     )
 
     to_insert = []
-    ts_now = datetime.utcnow().timestamp()  # noqa: DTZ003
     for miner_uid, miner_allocation in allocations.items():
-        row = (
-            request_uid,
-            miner_uid,
-            to_json_string(miner_allocation),
-            datetime.fromtimestamp(ts_now),  # noqa: DTZ006
-        )
+        row = (request_uid, miner_uid, to_json_string(miner_allocation), datetime_now, axon_times[miner_uid])
         to_insert.append(row)
 
-    conn.executemany(f"INSERT INTO {ALLOCATIONS_TABLE} VALUES (?, ?, json(?), ?)", to_insert)
+    conn.executemany(f"INSERT INTO {ALLOCATIONS_TABLE} VALUES (?, ?, json(?), ?, ?)", to_insert)
 
     conn.commit()
 
 
-def get_filtered_allocations(
+# TODO: rename function and database table?
+def get_active_allocs(conn: sqlite3.Connection, scoring_window: float = SCORING_WINDOW) -> list:
+    # TODO: change the logic of handling "active allocations"
+    # for now we simply get ones which are still in their "challenge"
+    # period, and consider them to determine the score of miners
+    query = f"""
+    SELECT * FROM {ACTIVE_ALLOCS}
+    WHERE scoring_period_end >= ?
+    AND scoring_period_end < ?
+    """
+    ts_now = datetime.utcnow().timestamp()
+    window_ts = ts_now - scoring_window
+    datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
+    window_datetime = datetime.fromtimestamp(window_ts)  # noqa: DTZ006
+
+    cur = conn.execute(query, [window_datetime, datetime_now])
+    rows = cur.fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def delete_stale_active_allocs(conn: sqlite3.Connection, scoring_window: int = SCORING_WINDOW) -> int:
+    query = f"""
+    DELETE FROM {ACTIVE_ALLOCS}
+    WHERE scoring_period_end < ?
+    """
+    ts_now = datetime.utcnow().timestamp()
+    expiry_ts = ts_now - scoring_window
+    expiration_date = datetime.fromtimestamp(expiry_ts)  # noqa: DTZ006
+
+    cur = conn.execute(query, [expiration_date])
+    conn.commit()
+
+    return cur.rowcount
+
+
+def delete_active_allocs(conn: sqlite3.Connection, uids_to_delete: list[str]) -> int:
+    if len(uids_to_delete) < 1 or uids_to_delete is None:
+        return 0
+
+    placeholders = ", ".join(["?"] * len(uids_to_delete))
+    query = f"""
+    DELETE FROM {ACTIVE_ALLOCS}
+    WHERE request_uid in ({placeholders})
+    """
+
+    cur = conn.execute(query, uids_to_delete)
+    conn.commit()
+
+    return cur.rowcount
+
+
+def get_miner_responses(
     conn: sqlite3.Connection,
-    request_uid: str | None,
-    miner_uid: str | None,
-    from_ts: int | None,
-    to_ts: int | None,
+    request_uid: str | None = None,
+    miner_uid: str | None = None,
+    from_ts: int | None = None,
+    to_ts: int | None = None,
 ) -> list[dict]:
     query = f"""
     SELECT * FROM {ALLOCATIONS_TABLE}
@@ -216,9 +284,9 @@ def get_filtered_allocations(
 
 def get_request_info(
     conn: sqlite3.Connection,
-    request_uid: str | None,
-    from_ts: int | None,
-    to_ts: int | None,
+    request_uid: str | None = None,
+    from_ts: int | None = None,
+    to_ts: int | None = None,
 ) -> list[dict]:
     query = f"""
     SELECT * FROM {ALLOCATION_REQUESTS_TABLE}

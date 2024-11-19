@@ -17,25 +17,23 @@
 # DEALINGS IN THE SOFTWARE.
 
 
-import os
-import copy
-import torch
-import asyncio
 import argparse
+import asyncio
+import copy
+import os
 import threading
-from web3 import Web3
-import bittensor as bt
-
-from typing import List
 from traceback import print_exception
 
+import bittensor as bt
+import torch
+from dotenv import load_dotenv
+from web3 import Web3
+
 from sturdy.base.neuron import BaseNeuron
+from sturdy.constants import QUERY_RATE
 from sturdy.mock import MockDendrite
 from sturdy.utils.config import add_validator_args
-from sturdy.utils.wandb import init_wandb_validator, should_reinit_wandb, reinit_wandb
-from sturdy.constants import QUERY_RATE
-
-from dotenv import load_dotenv
+from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -54,6 +52,9 @@ class BaseValidatorNeuron(BaseNeuron):
         super().__init__(config=config)
         load_dotenv()
 
+        # set last query block to be 0
+        self.last_query_block = 0
+
         # init wandb
         self.wandb_run_log_count = 0
         if not self.config.wandb.off:
@@ -63,12 +64,12 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        if self.config.organic:
-            w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
-            if w3_provider_url is None:
-                raise ValueError("You must provide a valid web3 provider url as an organic validator!")
+        # set web3 provider url
+        w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
+        if w3_provider_url is None:
+            raise ValueError("You must provide a valid web3 provider url")
 
-            self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
+        self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         if self.config.mock:
@@ -103,7 +104,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
-    def serve_axon(self):
+    def serve_axon(self) -> None:
         """Serve axon to enable external connections."""
 
         bt.logging.info("serving ip to chain...")
@@ -121,17 +122,15 @@ class BaseValidatorNeuron(BaseNeuron):
                 )
             except Exception as e:
                 bt.logging.error(f"Failed to serve Axon with exception: {e}")
-                pass
 
         except Exception as e:
             bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
-            pass
 
-    async def concurrent_forward(self):
+    async def concurrent_forward(self) -> None:
         coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
         await asyncio.gather(*coroutines)
 
-    def run(self):
+    def run(self) -> None:
         """
         Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on
         keyboard interrupts and logs unforeseen errors.
@@ -159,14 +158,13 @@ class BaseValidatorNeuron(BaseNeuron):
         self.sync()
 
         bt.logging.info(f"Validator starting at block: {self.block}")
-        last_query_block = self.block
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
                 # Run multiple forwards concurrently - runs every 2 blocks
                 current_block = self.subtensor.block
-                if current_block - last_query_block > QUERY_RATE:
+                if current_block - self.last_query_block > QUERY_RATE:
                     bt.logging.info(f"step({self.step}) block({self.block})")
 
                     if self.config.organic:
@@ -175,7 +173,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     else:
                         self.loop.run_until_complete(self.concurrent_forward())
 
-                    last_query_block = current_block
+                    self.last_query_block = current_block
                     # Sync metagraph and potentially set weights.
                     self.sync()
 
@@ -192,9 +190,7 @@ class BaseValidatorNeuron(BaseNeuron):
                             sim_penalties = {
                                 f"similarity_penalties/uid_{uid}": score for uid, score in self.similarity_penalties.items()
                             }
-                            apys = {
-                                f"apys/uid_{uid}": apy for uid, apy in self.sorted_apys.items()
-                            }
+                            apys = {f"apys/uid_{uid}": apy for uid, apy in self.sorted_apys.items()}
                             axon_times = {
                                 f"axon_times/uid_{uid}": axon_time for uid, axon_time in self.sorted_axon_times.items()
                             }
@@ -238,13 +234,13 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.error("Error during validation", str(err))
             bt.logging.debug(print_exception(type(err), err, err.__traceback__))
 
-    async def run_concurrent_forward(self):
+    async def run_concurrent_forward(self) -> None:
         try:
             await self.concurrent_forward()
         except Exception as e:
             bt.logging.error(f"Error in concurrent_forward: {e}")
 
-    def run_in_background_thread(self):
+    def run_in_background_thread(self) -> None:
         """
         Starts the validator's operations in a background thread upon entering the context.
         This method facilitates the use of the validator in a 'with' statement.
@@ -257,7 +253,7 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = True
             bt.logging.debug("Started")
 
-    def stop_run_thread(self):
+    def stop_run_thread(self) -> None:
         """
         Stops the validator's operations that are running in the background thread.
         """
@@ -268,11 +264,11 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = False
             bt.logging.debug("Stopped")
 
-    def __enter__(self):
+    def __enter__(self) -> "BaseValidatorNeuron":
         self.run_in_background_thread()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
         """
         Stops the validator's background operations upon exiting the context.
         This method facilitates the use of the validator in a 'with' statement.
@@ -298,7 +294,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 bt.logging.debug("closed wandb connection")
             bt.logging.success("Validator killed")
 
-    def set_weights(self):
+    def set_weights(self) -> None:
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights
         determine the trust and incentive level the validator assigns to miner nodes on the network.
@@ -354,7 +350,7 @@ class BaseValidatorNeuron(BaseNeuron):
         else:
             bt.logging.error("set_weights failed", msg)
 
-    def resync_metagraph(self):
+    def resync_metagraph(self) -> None:
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
         bt.logging.info("resync_metagraph()")
 
@@ -386,7 +382,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Update the hotkeys.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-    def update_scores(self, rewards: torch.Tensor, uids: list[int]):
+    def update_scores(self, rewards: torch.Tensor, uids: list[int]) -> None:
         """Performs exponential moving average on the scores based on the rewards received from the miners."""
 
         # Check if rewards contains NaN values.
@@ -396,10 +392,7 @@ class BaseValidatorNeuron(BaseNeuron):
             rewards = torch.nan_to_num(rewards, 0)
 
         # Check if `uids` is already a tensor and clone it to avoid the warning.
-        if isinstance(uids, torch.Tensor):
-            uids_tensor = uids.clone().detach()
-        else:
-            uids_tensor = torch.tensor(uids).to(self.device)
+        uids_tensor = uids.clone().detach() if isinstance(uids, torch.Tensor) else torch.tensor(uids).to(self.device)
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # shape: [ metagraph.n ]
@@ -412,21 +405,17 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores: torch.Tensor = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
-    def save_state(self):
+    def save_state(self) -> None:
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
 
         # Save the state of the validator to file.
         torch.save(
-            {
-                "step": self.step,
-                "scores": self.scores,
-                "hotkeys": self.hotkeys,
-            },
+            {"step": self.step, "scores": self.scores, "hotkeys": self.hotkeys, "last_query_block": self.last_query_block},
             self.config.neuron.full_path + "/state.pt",
         )
 
-    def load_state(self):
+    def load_state(self) -> None:
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
 
@@ -435,3 +424,4 @@ class BaseValidatorNeuron(BaseNeuron):
         self.step = state["step"]
         self.scores = state["scores"]
         self.hotkeys = state["hotkeys"]
+        self.last_query_block = state["last_query_block"]

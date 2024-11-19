@@ -54,17 +54,13 @@ class BaseMinerNeuron(BaseNeuron):
 
         w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
         if w3_provider_url is None:
-            raise ValueError(
-                "You must provide a valid web3 provider url in order to handle organic requests!"
-            )
+            raise ValueError("You must provide a valid web3 provider url in order to handle organic requests!")
 
         self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
 
         # Warn if allowing incoming requests from anyone.
         if not self.config.blacklist.force_validator_permit:
-            bt.logging.warning(
-                "You are allowing non-validators to send requests to your miner. This is a security risk."
-            )
+            bt.logging.warning("You are allowing non-validators to send requests to your miner. This is a security risk.")
         if self.config.blacklist.allow_non_registered:
             bt.logging.warning(
                 "You are allowing non-registered entities to send requests to your miner. This is a security risk."
@@ -132,10 +128,7 @@ class BaseMinerNeuron(BaseNeuron):
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while not self.should_exit:
-                while (
-                    self.block - self.metagraph.last_update[self.uid]
-                    < self.config.neuron.epoch_length
-                ):
+                while self.block - self.metagraph.last_update[self.uid] < self.config.neuron.epoch_length:
                     # Wait before checking again.
                     time.sleep(1)
 

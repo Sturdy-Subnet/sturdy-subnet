@@ -10,7 +10,8 @@ from web3.contract.contract import Contract
 
 from sturdy.constants import APR_ORACLE
 from sturdy.pools import (
-    AaveV3DefaultInterestRatePool,
+    AaveV3DefaultInterestRateV2Pool,
+    AaveV3RateTargetBaseInterestRatePool,
     CompoundV3Pool,
     DaiSavingsRate,
     MorphoVault,
@@ -37,7 +38,7 @@ class TestAavePool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20233401,
+                        "blockNumber": 21150770,
                     },
                 },
             ],
@@ -79,7 +80,7 @@ class TestAavePool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21150770,
                     },
                 },
             ],
@@ -97,7 +98,7 @@ class TestAavePool(unittest.TestCase):
     def test_pool_contract(self) -> None:
         print("----==== test_pool_contract ====----")
         # we call the aave3 weth atoken proxy contract in this example
-        pool = AaveV3DefaultInterestRatePool(
+        pool = AaveV3RateTargetBaseInterestRatePool(
             contract_address=self.atoken_address,
         )
 
@@ -110,13 +111,13 @@ class TestAavePool(unittest.TestCase):
 
     # TODO: test syncing after time travel
     def test_sync(self) -> None:
-        print("----==== test_sync ====----")
-        pool = AaveV3DefaultInterestRatePool(
+        print("----==== TestAavePool | test_sync ====----")
+        pool = AaveV3DefaultInterestRateV2Pool(
             contract_address=self.atoken_address,
         )
 
         # sync pool params
-        pool.sync(self.account.address, web3_provider=self.w3)
+        pool.sync(web3_provider=self.w3)
 
         self.assertTrue(hasattr(pool, "_atoken_contract"))
         self.assertTrue(isinstance(pool._atoken_contract, Contract))
@@ -124,35 +125,37 @@ class TestAavePool(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_pool_contract"))
         self.assertTrue(isinstance(pool._pool_contract, Contract))
 
-    # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
+        self.assertTrue(hasattr(pool, "_normalized_income"))
+        self.assertTrue(isinstance(pool._normalized_income, int))
+        self.assertGreaterEqual(pool._normalized_income, int(1e27))
+        print(f"normalized income: {pool._normalized_income}")
+
     def test_supply_rate_alloc(self) -> None:
-        print("----==== test_supply_rate_increase_alloc ====----")
-        pool = AaveV3DefaultInterestRatePool(
+        print("----==== TestAavePool | test_supply_rate_increase_alloc ====----")
+        pool = AaveV3DefaultInterestRateV2Pool(
             contract_address=self.atoken_address,
         )
 
         # sync pool params
-        pool.sync(self.account.address, web3_provider=self.w3)
+        pool.sync(web3_provider=self.w3)
 
         reserve_data = retry_with_backoff(pool._pool_contract.functions.getReserveData(pool._underlying_asset_address).call)
 
         apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
         print(f"apy before supplying: {apy_before}")
 
-        # calculate predicted future supply rate after supplying 10000 ETH
-        apy_after = pool.supply_rate(int(10000e18))
-        print(f"apy after supplying 10000 ETH: {apy_after}")
+        # calculate predicted future supply rate after supplying 2000000 ETH
+        apy_after = pool.supply_rate(int(2000000e18))
+        print(f"apy after supplying 2000000 ETH: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertLess(apy_after, apy_before)
 
     def test_supply_rate_decrease_alloc(self) -> None:
-        print("----==== test_supply_rate_decrease_alloc ====----")
-        pool = AaveV3DefaultInterestRatePool(
-            contract_address=self.atoken_address,
-        )
+        print("----==== TestAavePool | test_supply_rate_decrease_alloc ====----")
+        pool = AaveV3DefaultInterestRateV2Pool(contract_address=self.atoken_address, user_address=self.account.address)
 
         # sync pool params
-        pool.sync(self.account.address, web3_provider=self.w3)
+        pool.sync(web3_provider=self.w3)
 
         tx = self.weth_contract.functions.deposit().build_transaction(
             {
@@ -217,7 +220,7 @@ class TestAavePool(unittest.TestCase):
         print(f"apy before rebalancing ether: {apy_before}")
 
         # calculate predicted future supply rate after removing 1000 ETH to end up with 9000 ETH in the pool
-        pool.sync(self.account.address, self.w3)
+        pool.sync(self.w3)
         apy_after = pool.supply_rate(int(9000e18))
         print(f"apy after rebalancing ether: {apy_after}")
         self.assertNotEqual(apy_after, 0)
@@ -237,7 +240,8 @@ class TestSturdySiloStrategy(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20233401,
+                        # "blockNumber": 20233401,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -268,7 +272,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -285,13 +289,11 @@ class TestSturdySiloStrategy(unittest.TestCase):
 
     def test_silo_strategy_contract(self) -> None:
         print("----==== test_pool_contract ====----")
-        # we call the aave3 weth atoken proxy contract in this example
-        pool = VariableInterestSturdySiloStrategy(
-            contract_address=self.contract_address,
-        )  # type: ignore[]
         whale_addr = self.w3.to_checksum_address("0x0669091F451142b3228171aE6aD794cF98288124")
 
-        pool.sync(whale_addr, self.w3)
+        pool = VariableInterestSturdySiloStrategy(contract_address=self.contract_address, user_address=whale_addr)  # type: ignore[]
+
+        pool.sync(self.w3)
 
         self.assertTrue(hasattr(pool, "_silo_strategy_contract"))
         self.assertTrue(isinstance(pool._silo_strategy_contract, Contract))
@@ -304,6 +306,10 @@ class TestSturdySiloStrategy(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_rate_model_contract"))
         self.assertTrue(isinstance(pool._rate_model_contract, Contract))
         print(f"rate model contract: {pool._rate_model_contract.address}")
+
+        self.assertTrue(hasattr(pool, "_share_price"))
+        self.assertTrue(isinstance(pool._share_price, int))
+        print(f"price per share: {pool._share_price}")
 
         # don't change deposit amount to pool by much
         prev_supply_rate = pool.supply_rate(int(630e18))
@@ -363,7 +369,7 @@ class TestCompoundV3Pool(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -496,7 +502,7 @@ class TestDaiSavingsRate(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -582,7 +588,7 @@ class TestMorphoVault(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -621,12 +627,24 @@ class TestMorphoVault(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_asset_decimals"))
         self.assertTrue(isinstance(pool._asset_decimals, int))
 
-        self.assertTrue(hasattr(pool, "_total_assets"))
-        self.assertTrue(isinstance(pool._total_assets, int))
-        self.assertTrue(hasattr(pool, "_user_assets"))
-        self.assertTrue(isinstance(pool._user_assets, int))
+        self.assertTrue(hasattr(pool, "_total_supplied_assets"))
+        self.assertTrue(isinstance(pool._total_supplied_assets, int))
+        self.assertTrue(hasattr(pool, "_user_deposits"))
+        self.assertTrue(isinstance(pool._user_deposits, int))
         self.assertTrue(hasattr(pool, "_curr_borrows"))
         self.assertTrue(isinstance(pool._curr_borrows, int))
+
+        self.assertTrue(hasattr(pool, "_underlying_asset_contract"))
+        self.assertTrue(isinstance(pool._underlying_asset_contract, Contract))
+        self.assertTrue(hasattr(pool, "_user_asset_balance"))
+        self.assertTrue(isinstance(pool._user_asset_balance, int))
+        print(f"user asset balance: {pool._user_asset_balance}")
+        self.assertGreater(pool._user_asset_balance, 0)
+
+        self.assertTrue(hasattr(pool, "_share_price"))
+        self.assertTrue(isinstance(pool._share_price, int))
+        print(f"morpho vault share price: {pool._share_price}")
+        self.assertGreater(pool._share_price, 0)
 
         # check pool supply_rate
         print(pool.supply_rate(0))
@@ -731,7 +749,7 @@ class TestYearnV3Vault(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        "blockNumber": 20976304,
+                        "blockNumber": 21080765,
                     },
                 },
             ],
@@ -761,6 +779,19 @@ class TestYearnV3Vault(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_apr_oracle"))
         self.assertTrue(isinstance(pool._apr_oracle, Contract))
         self.assertEqual(pool._apr_oracle.address, APR_ORACLE)
+
+        self.assertTrue(hasattr(pool, "_user_deposits"))
+        self.assertTrue(isinstance(pool._user_deposits, int))
+
+        self.assertTrue(hasattr(pool, "_user_asset_balance"))
+        self.assertTrue(isinstance(pool._user_asset_balance, int))
+        print(f"user asset balance: {pool._user_asset_balance}")
+        self.assertGreater(pool._user_asset_balance, 0)
+
+        self.assertTrue(hasattr(pool, "_share_price"))
+        self.assertTrue(isinstance(pool._share_price, int))
+        print(f"morpho vault share price: {pool._share_price}")
+        self.assertGreater(pool._share_price, 0)
 
         # check pool supply_rate
         print(pool.supply_rate(0))
@@ -810,6 +841,143 @@ class TestYearnV3Vault(unittest.TestCase):
         # calculate predicted future supply rate after removing 1000000 USDC
         apy_after = pool.supply_rate(new_balance)
         print(f"apy after removing 1000000 USDC: {apy_after}")
+        self.assertNotEqual(apy_after, 0)
+        self.assertGreater(apy_after, apy_before)
+
+
+# TODO: make testaavepool and this test use the same block number but different address
+# right now they both use the same pool but from different blocks in the past.
+class TestAaveTargetPool(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # runs tests on local mainnet fork at block: 20233401
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21150770,
+                    },
+                },
+            ],
+        )
+
+        # spark dai
+        cls.atoken_address = "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B"
+        # Create a funded account for testing
+        # cls.account = Account.create()
+        cls.account_address = "0x0Fd6abA4272a96Bb8CcbbA69B825075cb2047D1D"  # spDai holder (~17.5k spDai at time of writing)
+        cls.w3.eth.send_transaction(
+            {
+                "to": cls.account_address,
+                "from": cls.w3.eth.accounts[0],
+                "value": cls.w3.to_wei(200000, "ether"),
+            }
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+        print(f"snapshot id: {cls.snapshot_id}")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        # run this after tests to restore original forked state
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+        w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21150770,
+                    },
+                },
+            ],
+        )
+
+    def setUp(self) -> None:
+        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+        print(f"snapshot id: {self.snapshot_id}")
+
+    def tearDown(self) -> None:
+        # Optional: Revert to the original snapshot after each test
+        print("reverting to original evm snapshot")
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+
+    def test_pool_contract(self) -> None:
+        print("----==== test_pool_contract ====----")
+        # we call the aave3 weth atoken proxy contract in this example
+        pool = AaveV3RateTargetBaseInterestRatePool(
+            contract_address=self.atoken_address,
+        )
+
+        pool.pool_init(self.w3)
+        self.assertTrue(hasattr(pool, "_atoken_contract"))
+        self.assertTrue(isinstance(pool._atoken_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_pool_contract"))
+        self.assertTrue(isinstance(pool._pool_contract, Contract))
+
+    # TODO: test syncing after time travel
+    def test_sync(self) -> None:
+        print("----==== test_sync ====----")
+        pool = AaveV3RateTargetBaseInterestRatePool(
+            contract_address=self.atoken_address,
+        )
+
+        # sync pool params
+        pool.sync(web3_provider=self.w3)
+
+        self.assertTrue(hasattr(pool, "_atoken_contract"))
+        self.assertTrue(isinstance(pool._atoken_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_pool_contract"))
+        self.assertTrue(isinstance(pool._pool_contract, Contract))
+
+        self.assertTrue(hasattr(pool, "_normalized_income"))
+        self.assertTrue(isinstance(pool._normalized_income, int))
+        self.assertGreaterEqual(pool._normalized_income, int(1e27))
+        print(f"normalized income: {pool._normalized_income}")
+
+    # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
+    def test_supply_rate_alloc(self) -> None:
+        print("----==== test_supply_rate_increase_alloc ====----")
+        pool = AaveV3RateTargetBaseInterestRatePool(contract_address=self.atoken_address, user_address=self.account_address)
+
+        # sync pool params
+        pool.sync(web3_provider=self.w3)
+
+        reserve_data = retry_with_backoff(pool._pool_contract.functions.getReserveData(pool._underlying_asset_address).call)
+
+        apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
+        print(f"apy before supplying: {apy_before}")
+
+        # calculate predicted future supply rate after supplying 100000 DAI
+        apy_after = pool.supply_rate(int(100000e18))
+        print(f"apy after supplying 100000 DAI: {apy_after}")
+        self.assertNotEqual(apy_after, 0)
+        self.assertLess(apy_after, apy_before)
+
+    def test_supply_rate_decrease_alloc(self) -> None:
+        print("----==== test_supply_rate_decrease_alloc ====----")
+        pool = AaveV3RateTargetBaseInterestRatePool(contract_address=self.atoken_address, user_address=self.account_address)
+
+        # sync pool params
+        pool.sync(web3_provider=self.w3)
+
+        reserve_data = retry_with_backoff(pool._pool_contract.functions.getReserveData(pool._underlying_asset_address).call)
+
+        apy_before = Web3.to_wei(reserve_data.currentLiquidityRate / 1e27, "ether")
+        print(f"apy before rebalancing ether: {apy_before}")
+
+        # calculate predicted future supply rate after removing 100000 DAI to end up with 9000 DAI in the pool
+        pool.sync(self.w3)
+        apy_after = pool.supply_rate(int(9000e18))
+        print(f"apy after rebalancing ether: {apy_after}")
         self.assertNotEqual(apy_after, 0)
         self.assertGreater(apy_after, apy_before)
 

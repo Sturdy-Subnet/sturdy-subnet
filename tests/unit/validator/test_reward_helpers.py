@@ -9,15 +9,20 @@ from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
 from neurons.validator import Validator
+from sturdy.algo import naive_algorithm
+from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.pools import *
+from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from sturdy.validator.reward import (
     adjust_rewards_for_plagiarism,
+    annualized_yield_pct,
     calculate_penalties,
     calculate_rewards_with_adjusted_penalties,
-    dynamic_normalize_zscore,
     format_allocations,
+    get_allocation_similarity_matrix,
+    get_apy_similarity_matrix,
     get_distance,
-    get_similarity_matrix,
+    normalize_exp,
 )
 
 load_dotenv()
@@ -85,7 +90,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_basic_normalization(self) -> None:
         # Test a simple AllocationsDict with large values
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 2e16}, "3": {"apy": 3e16}, "4": {"apy": 4e16}}
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Check if output is normalized between 0 and 1
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -100,7 +105,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 5e16},
             "5": {"apy": 1e17},
         }
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Check that outliers don't affect the overall normalization
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -115,7 +120,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 1e17},
             "5": {"apy": 2e17},
         }
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Check that the function correctly handles high outliers
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -124,7 +129,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_uniform_values(self) -> None:
         # Test where all values are the same
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e16}, "3": {"apy": 1e16}, "4": {"apy": 1e16}}
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # If all values are the same, the output should also be uniform (or handle gracefully)
         self.assertTrue(
@@ -142,7 +147,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
             "4": {"apy": 1.03e16},
             "5": {"apy": 1.04e16},
         }
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Check if normalization happens correctly
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
@@ -151,27 +156,9 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
     def test_high_variance(self) -> None:
         # Test with high variance data
         apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e17}, "3": {"apy": 5e17}, "4": {"apy": 1e18}}
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
+        normalized = normalize_exp(apys_and_allocations)
 
         # Ensure that the normalization works even with high variance
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_quantile_logic(self) -> None:
-        # Test a case where the lower quartile range affects the lower bound decision
-        apys_and_allocations = {
-            "1": {"apy": 1e16},
-            "2": {"apy": 2e16},
-            "3": {"apy": 3e16},
-            "4": {"apy": 4e16},
-            "5": {"apy": 1e17},
-            "6": {"apy": 2e17},
-            "7": {"apy": 3e17},
-            "8": {"apy": 4e17},
-        }
-        normalized = dynamic_normalize_zscore(apys_and_allocations)
-
-        # Ensure that quantile-based clipping works as expected
         self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
         self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
 
@@ -211,122 +198,6 @@ class TestRewardFunctions(unittest.TestCase):
         # Optional: Revert to the original snapshot after each test
         self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
-    def test_check_allocations_valid(self) -> None:
-        allocations = {ADDRESS_ZERO: int(5e18), BEEF: int(3e18)}
-        assets_and_pools = {
-            "total_assets": int(8e18),
-            "pools": {
-                ADDRESS_ZERO: BasePool(
-                    contract_address=ADDRESS_ZERO,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(2e18),
-                    reserve_size=0,
-                ),
-                BEEF: BasePool(
-                    contract_address=BEEF,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(1e18),
-                    reserve_size=0,
-                ),
-            },
-        }
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertTrue(result)
-
-    def test_check_allocations_overallocate(self) -> None:
-        allocations = {ADDRESS_ZERO: int(10e18), BEEF: int(3e18)}
-        assets_and_pools = {
-            "total_assets": int(10e18),
-            "pools": {
-                ADDRESS_ZERO: BasePool(
-                    contract_address=ADDRESS_ZERO,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(2e18),
-                    reserve_size=0,
-                ),
-                BEEF: BasePool(
-                    contract_address=BEEF,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(1e18),
-                    reserve_size=0,
-                ),
-            },
-        }
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertFalse(result)
-
-    def test_check_allocations_below_borrow(self) -> None:
-        allocations = {ADDRESS_ZERO: int(1e18), BEEF: 0}
-        assets_and_pools = {
-            "total_assets": int(10e18),
-            "pools": {
-                ADDRESS_ZERO: BasePool(
-                    contract_address=ADDRESS_ZERO,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(2e18),
-                    reserve_size=0,
-                ),
-                BEEF: BasePool(
-                    contract_address=BEEF,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(1e18),
-                    reserve_size=0,
-                ),
-            },
-        }
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertFalse(result)
-
-    def test_check_allocations_below_alloc_threshold(self) -> None:
-        allocations = {ADDRESS_ZERO: int(4e18), BEEF: int(4e18)}
-        assets_and_pools = {
-            "total_assets": int(10e18),
-            "pools": {
-                ADDRESS_ZERO: BasePool(
-                    contract_address=ADDRESS_ZERO,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(2e18),
-                    reserve_size=0,
-                ),
-                BEEF: BasePool(
-                    contract_address=BEEF,
-                    base_rate=0,
-                    base_slope=0,
-                    kink_slope=0,
-                    optimal_util_rate=0,
-                    borrow_amount=int(1e18),
-                    reserve_size=0,
-                ),
-            },
-        }
-
-        result = check_allocations(assets_and_pools, allocations)
-        self.assertFalse(result)
-
     def test_check_allocations_sturdy(self) -> None:
         A = "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
         VAULT = "0x73E4C11B670Ef9C025A030A20b72CB9150E54523"
@@ -343,12 +214,12 @@ class TestRewardFunctions(unittest.TestCase):
         }
 
         pool_a: VariableInterestSturdySiloStrategy = assets_and_pools["pools"][A]
-        pool_a.sync(VAULT, web3_provider=self.w3)
+        pool_a.sync(web3_provider=self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
-        pool_a._totalAssets = int(100e23)
+        pool_a._total_supplied_assets = int(100e23)
         pool_a._totalBorrow = int(10e23)
-        pool_a._curr_deposit_amount = int(5e23)
+        pool_a._user_deposits = int(5e23)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -356,7 +227,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._totalBorrow = int(97e23)
-        pool_a._curr_deposit_amount = int(5e23)
+        pool_a._user_deposits = int(5e23)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations)
@@ -364,7 +235,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # should return True
         pool_a._totalBorrow = int(97e23)
-        pool_a._curr_deposit_amount = int(5e23)
+        pool_a._user_deposits = int(5e23)
         allocations[A] = int(4e23)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -372,7 +243,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._totalBorrow = int(10e23)
-        pool_a._curr_deposit_amount = int(1e23)
+        pool_a._user_deposits = int(1e23)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -398,21 +269,21 @@ class TestRewardFunctions(unittest.TestCase):
         assets_and_pools = {
             "total_assets": int(200e18),
             "pools": {
-                A: AaveV3DefaultInterestRatePool(
+                A: AaveV3DefaultInterestRateV2Pool(
                     user_address=ADDRESS_ZERO,
                     contract_address=A,
                 ),
             },
         }
 
-        pool_a: AaveV3DefaultInterestRatePool = assets_and_pools["pools"][A]
-        pool_a.sync(ADDRESS_ZERO, self.w3)
+        pool_a: AaveV3DefaultInterestRateV2Pool = assets_and_pools["pools"][A]
+        pool_a.sync(self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
-        pool_a._total_supplied = int(100e6)
+        pool_a._total_supplied_assets = int(100e6)
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(10e6)
-        pool_a._collateral_amount = int(5e18)
+        pool_a._user_deposits = int(5e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -421,7 +292,7 @@ class TestRewardFunctions(unittest.TestCase):
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._collateral_amount = int(5e18)
+        pool_a._user_deposits = int(5e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -430,7 +301,7 @@ class TestRewardFunctions(unittest.TestCase):
         # should return True
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._collateral_amount = int(5e18)
+        pool_a._user_deposits = int(5e18)
         allocations[A] = int(4e18)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -439,7 +310,7 @@ class TestRewardFunctions(unittest.TestCase):
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._nextTotalStableDebt = 0
         pool_a._totalVariableDebt = int(97e6)
-        pool_a._collateral_amount = int(1e18)
+        pool_a._user_deposits = int(1e18)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -463,9 +334,9 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a.sync(self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
-        pool_a._total_supply = int(100e14)
+        pool_a._total_supplied_assets = int(100e14)
         pool_a._total_borrow = int(10e14)
-        pool_a._deposit_amount = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -473,7 +344,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._total_borrow = int(97e14)
-        pool_a._deposit_amount = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -481,7 +352,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # should return True
         pool_a._total_borrow = int(97e14)
-        pool_a._deposit_amount = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = int(4e26)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -489,7 +360,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._total_borrow = int(97e14)
-        pool_a._deposit_amount = int(1e14)
+        pool_a._user_deposits = int(1e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -525,9 +396,9 @@ class TestRewardFunctions(unittest.TestCase):
         pool_a.sync(self.w3)
 
         # case: borrow_amount <= assets_available, deposit_amount < assets_available
-        pool_a._total_assets = int(100e14)
+        pool_a._total_supplied_assets = int(100e14)
         pool_a._curr_borrows = int(10e14)
-        pool_a._user_assets = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -535,7 +406,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount >= assets_available
         pool_a._curr_borrows = int(97e14)
-        pool_a._user_assets = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -543,7 +414,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # should return True
         pool_a._curr_borrows = int(97e14)
-        pool_a._user_assets = int(5e14)
+        pool_a._user_deposits = int(5e14)
         allocations[A] = int(4e14)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -551,7 +422,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: borrow_amount > assets_available, deposit_amount < assets_available
         pool_a._curr_borrows = int(97e14)
-        pool_a._user_assets = int(1e14)
+        pool_a._user_deposits = int(1e14)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -576,7 +447,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: max withdraw = deposit amount
         pool_a._max_withdraw = int(1e9)
-        pool_a._curr_deposit = int(1e9)
+        pool_a._user_deposits = int(1e9)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -584,7 +455,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # case: max withdraw = 0
         pool_a._max_withdraw = 0
-        pool_a._curr_deposit = int(1e9)
+        pool_a._user_deposits = int(1e9)
         allocations[A] = 1
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -592,7 +463,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         # should return True
         pool_a._max_withdraw = int(1e9)
-        pool_a._curr_deposit = int(5e9)
+        pool_a._user_deposits = int(5e9)
         allocations[A] = int(4e9)
 
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
@@ -636,48 +507,71 @@ class TestRewardFunctions(unittest.TestCase):
 
         self.assertEqual(result, expected_output)
 
-    def test_get_similarity_matrix(self) -> None:
+    def test_get_allocation_similarity_matrix(self) -> None:
         apys_and_allocations = {
             "miner_1": {
                 "apy": int(0.05e18),
-                "allocations": {"pool_1": 30, "pool_2": 20},
+                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
             },
             "miner_2": {
                 "apy": int(0.04e18),
-                "allocations": {"pool_1": 40, "pool_2": 10},
+                "allocations": {"pool_1": 40e18, "pool_2": 10e18},
             },
             "miner_3": {
                 "apy": int(0.06e18),
-                "allocations": {"pool_1": 30, "pool_2": 20},
+                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
             },
         }
         assets_and_pools = {
             "pools": {
-                "pool_1": {"reserve_size": 100},
-                "pool_2": {"reserve_size": 100},
+                "pool_1": {"reserve_size": 100e18},
+                "pool_2": {"reserve_size": 100e18},
             },
-            "total_assets": 100,
+            "total_assets": 10e18,
         }
 
         total_assets = assets_and_pools["total_assets"]
-        normalization_factor = np.sqrt(float(2 * total_assets**2))  # √(2 * total_assets^2)
 
         expected_similarity_matrix = {
-            "miner_1": {
-                "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / normalization_factor,
-                "miner_3": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / normalization_factor,
-            },
             "miner_2": {
-                "miner_1": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / normalization_factor,
-                "miner_3": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / normalization_factor,
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    total_assets,
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    total_assets,
+                ),
+            },
+            "miner_1": {
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
+                    total_assets,
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    total_assets,
+                ),
             },
             "miner_3": {
-                "miner_1": np.linalg.norm(np.array([30, 20]) - np.array([30, 20])) / normalization_factor,
-                "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / normalization_factor,
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    total_assets,
+                ),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
+                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
+                    total_assets,
+                ),
             },
         }
 
-        result = get_similarity_matrix(apys_and_allocations, assets_and_pools)
+        result = get_allocation_similarity_matrix(apys_and_allocations, assets_and_pools)
 
         for miner_a in expected_similarity_matrix:
             for miner_b in expected_similarity_matrix[miner_a]:
@@ -687,7 +581,72 @@ class TestRewardFunctions(unittest.TestCase):
                     places=5,
                 )
 
-    def test_get_similarity_matrix_empty(self) -> None:
+    def test_get_apy_similarity_matrix(self) -> None:
+        apys_and_allocations = {
+            "miner_1": {
+                "apy": int(0.05e18),
+                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
+            },
+            "miner_2": {
+                "apy": int(0.04e18),
+                "allocations": {"pool_1": 40e18, "pool_2": 10e18},
+            },
+            "miner_3": {
+                "apy": int(0.06e18),
+                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
+            },
+        }
+
+        expected_similarity_matrix = {
+            "miner_1": {
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    gmpy2.mpz(0.05e18),
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
+                    gmpy2.mpz(0.06e18),
+                ),
+            },
+            "miner_2": {
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    gmpy2.mpz(0.05e18),
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
+                    gmpy2.mpz(0.06e18),
+                ),
+            },
+            "miner_3": {
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    gmpy2.mpz(0.06e18),
+                ),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    gmpy2.mpz(0.06e18),
+                ),
+            },
+        }
+
+        result = get_apy_similarity_matrix(apys_and_allocations)
+
+        for miner_a in expected_similarity_matrix:
+            for miner_b in expected_similarity_matrix[miner_a]:
+                self.assertAlmostEqual(
+                    result[miner_a][miner_b],
+                    expected_similarity_matrix[miner_a][miner_b],
+                    places=5,
+                )
+
+    def test_get_allocation_similarity_matrix_empty(self) -> None:
         apys_and_allocations = {
             "miner_1": {
                 "apy": int(0.05e18),
@@ -708,21 +667,91 @@ class TestRewardFunctions(unittest.TestCase):
         }
 
         total_assets = assets_and_pools["total_assets"]
-        normalization_factor = np.sqrt(float(2 * total_assets**2))  # √(2 * total_assets^2)
 
         expected_similarity_matrix = {
             "miner_1": {
-                "miner_2": np.linalg.norm(np.array([30, 20]) - np.array([40, 10])) / normalization_factor,
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(30), gmpy2.mpz(20)], dtype=object),
+                    np.array([gmpy2.mpz(40), gmpy2.mpz(10)], dtype=object),
+                    total_assets,
+                ),
                 "miner_3": float("inf"),
             },
             "miner_2": {
-                "miner_1": np.linalg.norm(np.array([40, 10]) - np.array([30, 20])) / normalization_factor,
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(40), gmpy2.mpz(10)], dtype=object),
+                    np.array([gmpy2.mpz(30), gmpy2.mpz(20)], dtype=object),
+                    total_assets,
+                ),
                 "miner_3": float("inf"),
             },
             "miner_3": {"miner_1": float("inf"), "miner_2": float("inf")},
         }
 
-        result = get_similarity_matrix(apys_and_allocations, assets_and_pools)
+        result = get_allocation_similarity_matrix(apys_and_allocations, assets_and_pools)
+
+        for miner_a in expected_similarity_matrix:
+            for miner_b in expected_similarity_matrix[miner_a]:
+                self.assertAlmostEqual(
+                    result[miner_a][miner_b],
+                    expected_similarity_matrix[miner_a][miner_b],
+                    places=5,
+                )
+
+    def test_get_apy_similarity_matrix_empty(self) -> None:
+        apys_and_allocations = {
+            "miner_1": {
+                "apy": int(0.05e18),
+                "allocations": {"pool_1": 30, "pool_2": 20},
+            },
+            "miner_2": {
+                "apy": int(0.04e18),
+                "allocations": {"pool_1": 40, "pool_2": 10},
+            },
+            "miner_3": {"apy": 0, "allocations": None},
+        }
+        assets_and_pools = {
+            "pools": {
+                "pool_1": {"reserve_size": 100},
+                "pool_2": {"reserve_size": 100},
+            },
+            "total_assets": 100,
+        }
+
+        total_assets = assets_and_pools["total_assets"]
+
+        expected_similarity_matrix = {
+            "miner_1": {
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    gmpy2.mpz(0.05e18),
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object), np.array([gmpy2.mpz(0)], dtype=object), gmpy2.mpz(0.05e18)
+                ),
+            },
+            "miner_2": {
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
+                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
+                    gmpy2.mpz(0.05e18),
+                ),
+                "miner_3": get_distance(
+                    np.array([gmpy2.mpz(0.04e18)], dtype=object), np.array([gmpy2.mpz(0)], dtype=object), gmpy2.mpz(0.04e18)
+                ),
+            },
+            "miner_3": {
+                "miner_1": get_distance(
+                    np.array([gmpy2.mpz(0)], dtype=object), np.array([gmpy2.mpz(0.05e18)], dtype=object), gmpy2.mpz(0.05e18)
+                ),
+                "miner_2": get_distance(
+                    np.array([gmpy2.mpz(0)], dtype=object), np.array([gmpy2.mpz(0.04e18)], dtype=object), gmpy2.mpz(0.04e18)
+                ),
+            },
+        }
+
+        result = get_apy_similarity_matrix(apys_and_allocations)
 
         for miner_a in expected_similarity_matrix:
             for miner_b in expected_similarity_matrix[miner_a]:
@@ -733,44 +762,112 @@ class TestRewardFunctions(unittest.TestCase):
                 )
 
     def test_calculate_penalties(self) -> None:
-        similarity_matrix = {
+        allocation_similarity_matrix = {
+            "1": {"2": 0.05, "3": 0.2},
+            "2": {"1": 0.05, "3": 0.1},
+            "3": {"1": 0.2, "2": 0.1},
+        }
+        apy_similarity_matrix = {
             "1": {"2": 0.05, "3": 0.2},
             "2": {"1": 0.05, "3": 0.1},
             "3": {"1": 0.2, "2": 0.1},
         }
         axon_times = {"1": 1.0, "2": 2.0, "3": 3.0}
-        similarity_threshold = 0.1
+
+        allocation_similarity_threshold = 0.2
+        apy_similarity_threshold = 0.1
 
         expected_penalties = {"1": 0, "2": 1, "3": 1}
-        result = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
+        result = calculate_penalties(
+            allocation_similarity_matrix,
+            apy_similarity_matrix,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
+        )
+
+        self.assertEqual(result, expected_penalties)
+
+    def test_calculate_penalties_no_apy_similarities(self) -> None:
+        allocation_similarity_matrix = {
+            "1": {"2": 0.05, "3": 0.2},
+            "2": {"1": 0.05, "3": 0.1},
+            "3": {"1": 0.2, "2": 0.1},
+        }
+        apy_similarity_matrix = {
+            "1": {"2": 0.05, "3": 0.2},
+            "2": {"1": 0.05, "3": 0.1},
+            "3": {"1": 0.2, "2": 0.1},
+        }
+        axon_times = {"1": 1.0, "2": 2.0, "3": 3.0}
+        allocation_similarity_threshold = 0.2
+        apy_similarity_threshold = 0.05
+
+        expected_penalties = {"1": 0, "2": 1, "3": 0}
+        result = calculate_penalties(
+            allocation_similarity_matrix,
+            apy_similarity_matrix,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
+        )
 
         self.assertEqual(result, expected_penalties)
 
     def test_calculate_penalties_no_similarities(self) -> None:
-        similarity_matrix = {
+        allocation_similarity_matrix = {
+            "1": {"2": 0.5, "3": 0.6},
+            "2": {"1": 0.5, "3": 0.7},
+            "3": {"1": 0.6, "2": 0.7},
+        }
+        apy_similarity_matrix = {
             "1": {"2": 0.5, "3": 0.6},
             "2": {"1": 0.5, "3": 0.7},
             "3": {"1": 0.6, "2": 0.7},
         }
         axon_times = {"1": 1.0, "2": 2.0, "3": 3.0}
-        similarity_threshold = 0.1
+
+        allocation_similarity_threshold = 0.3
+        apy_similarity_threshold = 0.1
 
         expected_penalties = {"1": 0, "2": 0, "3": 0}
-        result = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
+        result = calculate_penalties(
+            allocation_similarity_matrix,
+            apy_similarity_matrix,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
+        )
 
         self.assertEqual(result, expected_penalties)
 
     def test_calculate_penalties_equal_times(self) -> None:
-        similarity_matrix = {
+        allocation_similarity_matrix = {
             "1": {"2": 0.05, "3": 0.05},
             "2": {"1": 0.05, "3": 0.05},
             "3": {"1": 0.05, "2": 0.05},
         }
+        apy_similarity_matrix = {
+            "1": {"2": 0.05, "3": 0.05},
+            "2": {"1": 0.05, "3": 0.05},
+            "3": {"1": 0.05, "2": 0.05},
+        }
+
         axon_times = {"1": 1.0, "2": 1.0, "3": 1.0}
-        similarity_threshold = 0.1
+
+        allocation_similarity_threshold = 0.1
+
+        apy_similarity_threshold = 0.2
 
         expected_penalties = {"1": 2, "2": 2, "3": 2}
-        result = calculate_penalties(similarity_matrix, axon_times, similarity_threshold)
+
+        result = calculate_penalties(
+            allocation_similarity_matrix,
+            apy_similarity_matrix,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
+        )
 
         self.assertEqual(result, expected_penalties)
 
@@ -797,9 +894,9 @@ class TestRewardFunctions(unittest.TestCase):
     def test_adjust_rewards_for_plagiarism(self) -> None:
         rewards_apy = torch.Tensor([0.05 / 0.05, 0.04 / 0.05, 0.03 / 0.05])
         apys_and_allocations = {
-            "0": {"apy": 0.05, "allocations": {"asset_1": 200, "asset_2": 300}},
-            "1": {"apy": 0.04, "allocations": {"asset_1": 202, "asset_2": 303}},
-            "2": {"apy": 0.03, "allocations": {"asset_1": 200, "asset_2": 400}},
+            "0": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},  # APY: int
+            "1": {"apy": 40, "allocations": {"asset_1": 202, "asset_2": 303}},
+            "2": {"apy": 30, "allocations": {"asset_1": 200, "asset_2": 400}},
         }
         assets_and_pools = {
             "total_assets": 500,
@@ -808,9 +905,21 @@ class TestRewardFunctions(unittest.TestCase):
         uids = ["0", "1", "2"]
         axon_times = {"0": 1.0, "1": 2.0, "2": 3.0}
 
+        allocation_similarity_threshold = 0.1
+
+        apy_similarity_threshold = 0.2
+
         expected_rewards = torch.Tensor([1.0, 0.0, 0.03 / 0.05])
+
         result = adjust_rewards_for_plagiarism(
-            self.vali, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
+            self.vali,
+            rewards_apy,
+            apys_and_allocations,
+            assets_and_pools,
+            uids,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
         )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
@@ -818,8 +927,8 @@ class TestRewardFunctions(unittest.TestCase):
     def test_adjust_rewards_for_one_plagiarism(self) -> None:
         rewards_apy = torch.Tensor([1.0, 1.0])
         apys_and_allocations = {
-            "0": {"apy": 0.05, "allocations": {"asset_1": 200, "asset_2": 300}},
-            "1": {"apy": 0.05, "allocations": {"asset_1": 200, "asset_2": 300}},
+            "0": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},
+            "1": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},
         }
         assets_and_pools = {
             "total_assets": 500,
@@ -829,11 +938,213 @@ class TestRewardFunctions(unittest.TestCase):
         axon_times = {"0": 1.0, "1": 2.0}
 
         expected_rewards = torch.Tensor([1.0, 0.0])
+
+        allocation_similarity_threshold = 0.1
+        apy_similarity_threshold = 0.2
+
         result = adjust_rewards_for_plagiarism(
-            self.vali, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times
+            self.vali,
+            rewards_apy,
+            apys_and_allocations,
+            assets_and_pools,
+            uids,
+            axon_times,
+            allocation_similarity_threshold,
+            apy_similarity_threshold,
         )
 
         torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
+
+
+class TestCalculateApy(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # runs tests on local mainnet fork at block: 20233401
+        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        assert cls.w3.is_connected()
+
+        cls.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21080765,
+                    },
+                },
+            ],
+        )
+
+        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+
+    def tearDown(self) -> None:
+        # Optional: Revert to the original snapshot after each test
+        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+
+    def test_calculate_apy_sturdy(self) -> None:
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21075005,
+                    },
+                },
+            ],
+        )
+
+        selected_entry = POOL_REGISTRY["Sturdy Crvusd Aggregator"]
+        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+
+        assets_and_pools = selected["assets_and_pools"]
+        user_address = selected["user_address"]
+        synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
+            assets_and_pools=assets_and_pools,
+            user_address=user_address,
+        )
+
+        allocations = naive_algorithm(self, synapse)
+
+        extra_metadata = {}
+        for contract_address, pool in assets_and_pools["pools"].items():
+            pool.sync(self.w3)
+            extra_metadata[contract_address] = pool._share_price
+
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21080765,
+                    },
+                },
+            ],
+        )
+
+        for pool in assets_and_pools["pools"].values():
+            pool.sync(self.w3)
+
+        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
+        self.assertGreater(apy, 0)
+
+    def test_calculate_apy_aave(self) -> None:
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21075005,
+                    },
+                },
+            ],
+        )
+
+        # aave pools - with yearn strategies being their users
+        selected_entry = {
+            "assets_and_pools": {
+                "pools": {
+                    "0x018008bfb33d285247A21d44E50697654f754e63": {
+                        "pool_type": "AAVE_DEFAULT",
+                        "contract_address": "0x018008bfb33d285247A21d44E50697654f754e63",
+                        "user_address": "0xF0825750791A4444c5E70743270DcfA8Bb38f959",
+                    },
+                    "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B": {
+                        "pool_type": "AAVE_TARGET",
+                        "contract_address": "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B",
+                        "user_address": "0x1fd862499e9b9402de6c599b6c391f83981180ab",
+                    },
+                }
+            }
+        }
+
+        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+
+        assets_and_pools = selected["assets_and_pools"]
+        synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
+            assets_and_pools=assets_and_pools,
+        )
+
+        allocations = naive_algorithm(self, synapse)
+
+        extra_metadata = {}
+        for contract_address, pool in assets_and_pools["pools"].items():
+            pool.sync(self.w3)
+            extra_metadata[contract_address] = pool._normalized_income
+
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21080765,
+                    },
+                },
+            ],
+        )
+
+        for pool in assets_and_pools["pools"].values():
+            pool.sync(self.w3)
+
+        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
+        self.assertGreater(apy, 0)
+
+    def test_calculate_apy_morpho(self) -> None:
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21075005,
+                    },
+                },
+            ],
+        )
+
+        selected_entry = POOL_REGISTRY["Morpho USDC Vaults"]
+        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+
+        assets_and_pools = selected["assets_and_pools"]
+        user_address = selected["user_address"]
+        synapse = AllocateAssets(
+            request_type=REQUEST_TYPES.SYNTHETIC,
+            assets_and_pools=assets_and_pools,
+            user_address=user_address,
+        )
+
+        allocations = naive_algorithm(self, synapse)
+
+        extra_metadata = {}
+        for contract_address, pool in assets_and_pools["pools"].items():
+            pool.sync(self.w3)
+            extra_metadata[contract_address] = pool._share_price
+
+        self.w3.provider.make_request(
+            "hardhat_reset",  # type: ignore[]
+            [
+                {
+                    "forking": {
+                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "blockNumber": 21080765,
+                    },
+                },
+            ],
+        )
+
+        for pool in assets_and_pools["pools"].values():
+            pool.sync(self.w3)
+
+        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
+        self.assertGreater(apy, 0)
 
 
 if __name__ == "__main__":

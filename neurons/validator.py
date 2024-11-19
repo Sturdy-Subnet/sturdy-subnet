@@ -36,6 +36,7 @@ from web3.constants import ADDRESS_ZERO
 
 # import base validator class which takes care of most of the boilerplate
 from sturdy.base.validator import BaseValidatorNeuron
+from sturdy.constants import DB_DIR, ORGANIC_SCORING_PERIOD
 
 # Bittensor Validator Template:
 from sturdy.pools import PoolFactory
@@ -51,7 +52,6 @@ from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
 from sturdy.validator import forward, query_and_score_miners, sql
-from sturdy.validator.simulator import Simulator
 
 
 class Validator(BaseValidatorNeuron):
@@ -73,7 +73,6 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info("load_state()")
         self.load_state()
         self.uid_to_response = {}
-        self.simulator = Simulator()
 
     async def forward(self) -> Any:
         """
@@ -185,7 +184,6 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
               ...
               "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": {
                 "pool_type": "STURDY_SILO",
-                "pool_model_disc: "CHAIN",
                 "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
               },
               ...
@@ -216,33 +214,20 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     new_pools = {}
     for uid, pool in pools.items():
-        match synapse.request_type:
-            case REQUEST_TYPES.SYNTHETIC:
-                new_pool = PoolFactory.create_pool(
-                    pool_type=pool.pool_type,
-                    contract_address=pool.contract_address,
-                    base_rate=pool.base_rate,
-                    base_slope=pool.base_slope,
-                    kink_slope=pool.kink_slope,
-                    optimal_util_rate=pool.optimal_util_rate,
-                    borrow_amount=pool.borrow_amount,
-                    reserve_size=pool.reserve_size,
-                )
-                new_pools[uid] = new_pool
-            case _:  # TODO: We assume this is an "organic request"
-                new_pool = PoolFactory.create_pool(
-                    pool_type=pool.pool_type,
-                    web3_provider=core_validator.w3,  # type: ignore[]
-                    user_address=(
-                        pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
-                    ),  # TODO: is there a cleaner way to do this?
-                    contract_address=pool.contract_address,
-                )
-                new_pools[uid] = new_pool
+        new_pool = PoolFactory.create_pool(
+            pool_type=pool.pool_type,
+            web3_provider=core_validator.w3,  # type: ignore[]
+            user_address=(
+                pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
+            ),  # TODO: is there a cleaner way to do this?
+            contract_address=pool.contract_address,
+        )
+        new_pools[uid] = new_pool
 
     synapse.assets_and_pools["pools"] = new_pools
 
-    result = await query_and_score_miners(
+    bt.logging.info("Querying miners...")
+    axon_times, result = await query_and_score_miners(
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
         request_type=synapse.request_type,
@@ -250,10 +235,28 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     )
     request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
-    to_ret = dict(list(result.items())[:body.num_allocs])
+    to_ret = dict(list(result.items())[: body.num_allocs])
     ret = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
+    to_log = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
+
+    metadata = {}
+    pools = synapse.assets_and_pools["pools"]
+
+    for contract_addr, pool in pools.items():
+        pool.sync(core_validator.w3)
+        metadata[contract_addr] = pool._share_price
+
     with sql.get_db_connection() as conn:
-        sql.log_allocations(conn, ret.request_uuid, synapse.assets_and_pools, ret.allocations)
+        sql.log_allocations(
+            conn,
+            to_log.request_uuid,
+            synapse.assets_and_pools,
+            metadata,
+            to_log.allocations,
+            axon_times,
+            REQUEST_TYPES.ORGANIC,
+            ORGANIC_SCORING_PERIOD,
+        )
 
     return ret
 
@@ -264,9 +267,10 @@ async def get_allocations(
     miner_uid: str | None = None,
     from_ts: int | None = None,
     to_ts: int | None = None,
+    db_dir: str = DB_DIR,
 ) -> list[dict]:
-    with sql.get_db_connection() as conn:
-        allocations = sql.get_filtered_allocations(conn, request_uid, miner_uid, from_ts, to_ts)
+    with sql.get_db_connection(db_dir) as conn:
+        allocations = sql.get_miner_responses(conn, request_uid, miner_uid, from_ts, to_ts)
     if not allocations:
         raise HTTPException(status_code=404, detail="No allocations found")
     return allocations
@@ -277,8 +281,9 @@ async def request_info(
     request_uid: str | None = None,
     from_ts: int | None = None,
     to_ts: int | None = None,
+    db_dir: str = DB_DIR,
 ) -> list[dict]:
-    with sql.get_db_connection() as conn:
+    with sql.get_db_connection(db_dir) as conn:
         info = sql.get_request_info(conn, request_uid, from_ts, to_ts)
     if not info:
         raise HTTPException(status_code=404, detail="No request info found")

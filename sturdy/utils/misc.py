@@ -18,6 +18,7 @@
 
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 from functools import lru_cache, update_wrapper
 from math import floor
 from typing import Any
@@ -34,6 +35,18 @@ from sturdy.constants import (
 from sturdy.utils.ethmath import wei_div, wei_mul
 
 # TODO: cleanup functions - lay them out better across files?
+
+
+def time_diff_seconds(start: str, end: str, format_str: str = "%Y-%m-%d %H:%M:%S.%f") -> int:
+    start_datetime = datetime.strptime(start, format_str).replace(tzinfo=timezone.utc)  # noqa: UP017
+    end_datetime = datetime.strptime(end, format_str).replace(tzinfo=timezone.utc)  # noqa: UP017
+    return (end_datetime - start_datetime).seconds
+
+
+def get_scoring_period_length(active_allocation: dict) -> int:
+    scoring_period_start = active_allocation["created_at"]
+    scoring_period_end = active_allocation["scoring_period_end"]
+    return time_diff_seconds(scoring_period_start, scoring_period_end)
 
 
 # rand range but float
@@ -114,7 +127,6 @@ def borrow_rate(util_rate, pool) -> int:
             pool.kink_slope,
         )
     )
-
 
 
 def supply_rate(util_rate, pool) -> int:
