@@ -36,6 +36,7 @@ AllocationsDict = dict[str, int]
 
 
 class AllocInfo(TypedDict):
+    rank: int
     allocations: AllocationsDict | None
 
 
