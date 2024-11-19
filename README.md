@@ -94,7 +94,13 @@ There are three core files.
             first_pool = pool_list[0]
             first_pool.sync(web3_provider)
             match first_pool.pool_type:
-                case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET, POOL_TYPES.MORPHO):
+                case T if T in (
+                    POOL_TYPES.STURDY_SILO,
+                    POOL_TYPES.AAVE_DEFAULT,
+                    POOL_TYPES.AAVE_TARGET,
+                    POOL_TYPES.MORPHO,
+                    POOL_TYPES.YEARN_V3,
+                ):
                     total_assets = first_pool._user_asset_balance
                 case _:
                     pass
@@ -103,11 +109,13 @@ There are three core files.
                 pool.sync(web3_provider)
                 total_asset = 0
                 match pool.pool_type:
-                    case POOL_TYPES.STURDY_SILO:
-                        total_asset += pool._user_deposits
-                    case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                        total_asset += pool._user_deposits
-                    case POOL_TYPES.MORPHO:
+                    case T if T in (
+                        POOL_TYPES.STURDY_SILO,
+                        POOL_TYPES.AAVE_DEFAULT,
+                        POOL_TYPES.AAVE_TARGET,
+                        POOL_TYPES.MORPHO,
+                        POOL_TYPES.YEARN_V3,
+                    ):
                         total_asset += pool._user_deposits
                     case _:
                         pass
@@ -121,6 +129,7 @@ There are three core files.
             challenge_data["user_address"] = global_user_address
 
         return challenge_data
+
     ```
     Validators can optionally run an API server and sell their bandwidth to outside users to send
     their own pools (organic requests) to the subnet. For more information on this process - please read

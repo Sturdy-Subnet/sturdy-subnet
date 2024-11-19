@@ -27,6 +27,14 @@ You will need `pm2` if you would like to utilize the auto update scripts that co
 1. Install [node and npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
 2. Install [pm2](https://pm2.io)
 
+### Creating the database
+Used to store api keys (only for organic validators), scoring logs, and "active" miner allocations for scoring
+
+First, [install dbmate](https://github.com/amacneil/dbmate?tab=readme-ov-file#installation). then run the command below
+```bash
+dbmate --url "sqlite:validator_database.db" up
+```
+
 
 ## Running a Validator
 
@@ -140,15 +148,6 @@ Where `ID_OR_PROCESS_NAME` is the `name` OR `id` of the process as noted per the
 
 ## Selling your bandwidth
 
-### Creating the database
-Used to store api keys & scoring logs
-
-First, [install dbmate](https://github.com/amacneil/dbmate?tab=readme-ov-file#installation)
-
-```bash
-dbmate --url "sqlite:validator_database.db" up
-```
-
 ### Managing access
 
 To manage access to the your api server and sell access to anyone you like, using the sturdy-cli is the easiest way.
@@ -172,7 +171,7 @@ To get more info about that command!
 For example:
 
 ```bash
-sturdy create-key 10 60 test
+sturdy create-key --balance 10 --rate-limit-per-minute 60 --name test
 ```
 Creates a test key with a balance of 10 (which corresponds to 10 requests), a rate limit of 60 requests per minute = 1/s, and a name 'test'.
 
