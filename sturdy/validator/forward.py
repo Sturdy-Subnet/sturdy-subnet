@@ -29,7 +29,13 @@ from sturdy.constants import MAX_SCORING_PERIOD, MIN_SCORING_PERIOD, QUERY_TIMEO
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.reward import filter_allocations, get_rewards
-from sturdy.validator.sql import delete_stale_active_allocs, get_active_allocs, get_db_connection, log_allocations
+from sturdy.validator.sql import (
+    delete_active_allocs,
+    delete_stale_active_allocs,
+    get_active_allocs,
+    get_db_connection,
+    log_allocations,
+)
 
 
 async def forward(self) -> Any:
@@ -179,7 +185,10 @@ async def query_and_score_miners(
 
     bt.logging.debug(f"Active allocs: {active_alloc_rows}")
 
+    uids_to_delete = []
     for active_alloc in active_alloc_rows:
+        request_uid = active_alloc["request_uid"]
+        uids_to_delete.append(request_uid)
         # calculate rewards for previous active allocations
         miner_uids, rewards = get_rewards(self, active_alloc)
         bt.logging.debug(f"miner rewards: {rewards}")
@@ -192,6 +201,12 @@ async def query_and_score_miners(
         # update the moving average scores of the miners
         int_miner_uids = [int(uid) for uid in miner_uids]
         self.update_scores(rewards, int_miner_uids)
+
+    # wipe these allocations from the db after scoring them
+    if len(uids_to_delete) > 0:
+        with get_db_connection(self.config.db_dir) as conn:
+            rows_affected = delete_active_allocs(conn, uids_to_delete)
+            bt.logging.debug(f"Scored and removed {rows_affected} active allocation requests")
 
     # before logging latest allocations
     # filter them

@@ -232,6 +232,22 @@ def delete_stale_active_allocs(conn: sqlite3.Connection, scoring_window: int = S
     return cur.rowcount
 
 
+def delete_active_allocs(conn: sqlite3.Connection, uids_to_delete: list[str]) -> int:
+    if len(uids_to_delete) < 1 or uids_to_delete is None:
+        return 0
+
+    placeholders = ", ".join(["?"] * len(uids_to_delete))
+    query = f"""
+    DELETE FROM {ACTIVE_ALLOCS}
+    WHERE request_uid in ({placeholders})
+    """
+
+    cur = conn.execute(query, uids_to_delete)
+    conn.commit()
+
+    return cur.rowcount
+
+
 def get_miner_responses(
     conn: sqlite3.Connection,
     request_uid: str | None = None,
