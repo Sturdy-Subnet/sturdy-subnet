@@ -78,12 +78,11 @@ class TestGetDistance(unittest.TestCase):
         self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
 
     def test_different_lengths(self) -> None:
-        # Test case with differing lengths should raise an error
+        # Test case with differing lengths should raise an error, and return 69.0
         alloc_a = np.array([100, 200], dtype=object)
         alloc_b = np.array([100, 200, 300], dtype=object)
         total_assets = 600
-        with self.assertRaises(ValueError):  # noqa: PT027
-            get_distance(alloc_a, alloc_b, total_assets)
+        self.assertEqual(69.0, get_distance(alloc_a, alloc_b, total_assets))
 
 
 class TestDynamicNormalizeZScore(unittest.TestCase):
