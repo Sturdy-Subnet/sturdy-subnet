@@ -32,6 +32,6 @@ ADD COLUMN axon_time FLOAT NOT NULL DEFAULT 99999.0; -- large number for now
 
 -- migrate:down
 
-DROP TABLE IF EXISTS fulfilled_allocs;
+DROP TABLE IF EXISTS active_allocs;
 DROP TABLE IF EXISTS allocations;
 DROP TABLE IF EXISTS allocation_requests;

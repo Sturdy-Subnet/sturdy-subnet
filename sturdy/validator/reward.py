@@ -139,9 +139,14 @@ def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties) ->
 
 
 def get_distance(alloc_a: npt.NDArray, alloc_b: npt.NDArray, total_assets: int) -> float:
-    diff = alloc_a - alloc_b
-    norm = gmpy2.sqrt(sum(x**2 for x in diff))
-    return norm / gmpy2.sqrt(float(2 * total_assets**2))
+    try:
+        diff = alloc_a - alloc_b
+        norm = gmpy2.sqrt(sum(x**2 for x in diff))
+        return norm / gmpy2.sqrt(2 * total_assets**2)
+    except Exception as e:
+        bt.logging.error("Could not obtain distance - default to 69.0")
+        bt.logging.error(e)
+        return 69.0
 
 
 def get_allocation_similarity_matrix(
