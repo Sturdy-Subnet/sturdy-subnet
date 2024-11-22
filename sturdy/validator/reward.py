@@ -148,6 +148,7 @@ def get_distance(alloc_a: npt.NDArray, alloc_b: npt.NDArray, total_assets: int) 
         bt.logging.error(e)
         return 69.0
 
+
 def get_allocation_similarity_matrix(
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
