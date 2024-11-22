@@ -323,7 +323,7 @@ async def main() -> None:
         with core_validator:
             while True:
                 bt.logging.debug("Running synthetic vali...")
-                time.sleep(10)  # noqa: ASYNC251
+                time.sleep(300)  # noqa: ASYNC251
 
 
 def start() -> None:
