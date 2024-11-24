@@ -218,7 +218,6 @@ async def query_and_score_miners(
         assets_and_pools=assets_and_pools,
     )
 
-    # TODO: sort the miners' by their current scores and return their respective allocations
     sorted_indices = [idx for idx, val in sorted(enumerate(self.scores), key=lambda k: k[1], reverse=True)]
 
     sorted_allocs = {}

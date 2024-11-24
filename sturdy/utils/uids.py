@@ -1,7 +1,7 @@
-import torch
 import random
-import bittensor as bt
-from typing import List
+
+import numpy as np
+from numpy import typing as npt
 
 
 def check_uid_availability(metagraph: "bt.metagraph.Metagraph", uid: int, vpermit_tao_limit: int) -> bool:
@@ -14,13 +14,10 @@ def check_uid_availability(metagraph: "bt.metagraph.Metagraph", uid: int, vpermi
         bool: True if uid is available, False otherwise
     """
     # Filter non serving axons.
-    if not metagraph.axons[uid].is_serving:
-        return False
-    # Available otherwise.
-    return True
+    return metagraph.axons[uid].is_serving
 
 
-def get_random_uids(self, k: int, exclude: list[int] = None) -> torch.LongTensor:
+def get_random_uids(self, k: int, exclude: list[int] = None) -> npt.NDArray:
     """Returns k available random uids from the metagraph.
     Args:
         k (int): Number of uids to return.
@@ -49,5 +46,4 @@ def get_random_uids(self, k: int, exclude: list[int] = None) -> torch.LongTensor
             [uid for uid in avail_uids if uid not in candidate_uids],
             k - len(candidate_uids),
         )
-    uids = torch.tensor(random.sample(available_uids, k))
-    return uids
+    return np.array(random.sample(available_uids, k))

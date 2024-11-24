@@ -20,12 +20,12 @@ import math
 from decimal import Decimal
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 import bittensor as bt
 import numpy as np
 from eth_account import Account
-from pydantic import BaseModel, Field, PrivateAttr, root_validator, validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 from web3.contract.contract import Contract
@@ -153,7 +153,6 @@ class ChainBasedPoolModel(BaseModel):
 
     class Config:
         use_enum_values = True  # This will use the enum's value instead of the enum itself
-        smart_union = True
 
     pool_type: POOL_TYPES | int | str = Field(..., description="type of pool")
     user_address: str = Field(
@@ -164,7 +163,7 @@ class ChainBasedPoolModel(BaseModel):
 
     _initted: bool = PrivateAttr(False)  # noqa: FBT003
 
-    @validator("pool_type", pre=True)
+    @field_validator("pool_type", mode="before")
     def validator_pool_type(cls, value) -> POOL_TYPES | int | str:
         if isinstance(value, POOL_TYPES):
             return value
@@ -177,13 +176,12 @@ class ChainBasedPoolModel(BaseModel):
                 raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
         raise ValueError(f"Invalid value: {value}")
 
-    @root_validator
+    @model_validator(mode="after")
     def check_params(cls, values):  # noqa: ANN201
-        if not Web3.is_address(values.get("contract_address")):
+        if not Web3.is_address(values.contract_address):
             raise ValueError("pool address is invalid!")
-        if not Web3.is_address(values.get("user_address")):
+        if not Web3.is_address(values.user_address):
             raise ValueError("user address is invalid!")
-
         return values
 
     def pool_init(self, **args: Any) -> None:
@@ -221,7 +219,7 @@ class PoolFactory:
 class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_DEFAULT, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.AAVE_DEFAULT] = POOL_TYPES.AAVE_DEFAULT
 
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
@@ -432,7 +430,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
 class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_TARGET, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.AAVE_TARGET] = POOL_TYPES.AAVE_TARGET
 
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
@@ -642,7 +640,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
 
 
 class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
-    pool_type: POOL_TYPES = Field(POOL_TYPES.STURDY_SILO, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.STURDY_SILO] = POOL_TYPES.STURDY_SILO
 
     _silo_strategy_contract: Contract = PrivateAttr()
     _pair_contract: Contract = PrivateAttr()
@@ -786,7 +784,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
 class CompoundV3Pool(ChainBasedPoolModel):
     """Model for Compound V3 Pools"""
 
-    pool_type: POOL_TYPES = Field(POOL_TYPES.COMPOUND_V3, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.COMPOUND_V3] = POOL_TYPES.COMPOUND_V3
 
     _ctoken_contract: Contract = PrivateAttr()
     _base_oracle_contract: Contract = PrivateAttr()
@@ -900,7 +898,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
 class DaiSavingsRate(ChainBasedPoolModel):
     """Model for DAI Savings Rate"""
 
-    pool_type: POOL_TYPES = Field(POOL_TYPES.DAI_SAVINGS, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.DAI_SAVINGS] = POOL_TYPES.DAI_SAVINGS
 
     _sdai_contract: Contract = PrivateAttr()
     _pot_contract: Contract = PrivateAttr()
@@ -952,7 +950,7 @@ class DaiSavingsRate(ChainBasedPoolModel):
 class MorphoVault(ChainBasedPoolModel):
     """Model for Morpho Vaults"""
 
-    pool_type: POOL_TYPES = Field(POOL_TYPES.MORPHO, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.MORPHO] = POOL_TYPES.MORPHO
 
     _vault_contract: Contract = PrivateAttr()
     _morpho_contract: Contract = PrivateAttr()
@@ -1118,7 +1116,7 @@ class MorphoVault(ChainBasedPoolModel):
 
 
 class YearnV3Vault(ChainBasedPoolModel):
-    pool_type: POOL_TYPES = Field(POOL_TYPES.YEARN_V3, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.YEARN_V3] = POOL_TYPES.YEARN_V3
 
     _vault_contract: Contract = PrivateAttr()
     _apr_oracle: Contract = PrivateAttr()
