@@ -1009,7 +1009,7 @@ class TestCalculateApy(unittest.TestCase):
         extra_metadata = {}
         for contract_address, pool in assets_and_pools["pools"].items():
             pool.sync(self.w3)
-            extra_metadata[contract_address] = pool._share_price
+            extra_metadata[contract_address] = pool._yield_index
 
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
@@ -1074,7 +1074,7 @@ class TestCalculateApy(unittest.TestCase):
         extra_metadata = {}
         for contract_address, pool in assets_and_pools["pools"].items():
             pool.sync(self.w3)
-            extra_metadata[contract_address] = pool._normalized_income
+            extra_metadata[contract_address] = pool._yield_index
 
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
@@ -1124,7 +1124,7 @@ class TestCalculateApy(unittest.TestCase):
         extra_metadata = {}
         for contract_address, pool in assets_and_pools["pools"].items():
             pool.sync(self.w3)
-            extra_metadata[contract_address] = pool._share_price
+            extra_metadata[contract_address] = pool._yield_index
 
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]

@@ -125,10 +125,10 @@ class TestAavePool(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_pool_contract"))
         self.assertTrue(isinstance(pool._pool_contract, Contract))
 
-        self.assertTrue(hasattr(pool, "_normalized_income"))
-        self.assertTrue(isinstance(pool._normalized_income, int))
-        self.assertGreaterEqual(pool._normalized_income, int(1e27))
-        print(f"normalized income: {pool._normalized_income}")
+        self.assertTrue(hasattr(pool, "_yield_index"))
+        self.assertTrue(isinstance(pool._yield_index, int))
+        self.assertGreaterEqual(pool._yield_index, int(1e27))
+        print(f"normalized income: {pool._yield_index}")
 
     def test_supply_rate_alloc(self) -> None:
         print("----==== TestAavePool | test_supply_rate_increase_alloc ====----")
@@ -307,9 +307,9 @@ class TestSturdySiloStrategy(unittest.TestCase):
         self.assertTrue(isinstance(pool._rate_model_contract, Contract))
         print(f"rate model contract: {pool._rate_model_contract.address}")
 
-        self.assertTrue(hasattr(pool, "_share_price"))
-        self.assertTrue(isinstance(pool._share_price, int))
-        print(f"price per share: {pool._share_price}")
+        self.assertTrue(hasattr(pool, "_yield_index"))
+        self.assertTrue(isinstance(pool._yield_index, int))
+        print(f"price per share: {pool._yield_index}")
 
         # don't change deposit amount to pool by much
         prev_supply_rate = pool.supply_rate(int(630e18))
@@ -641,10 +641,10 @@ class TestMorphoVault(unittest.TestCase):
         print(f"user asset balance: {pool._user_asset_balance}")
         self.assertGreater(pool._user_asset_balance, 0)
 
-        self.assertTrue(hasattr(pool, "_share_price"))
-        self.assertTrue(isinstance(pool._share_price, int))
-        print(f"morpho vault share price: {pool._share_price}")
-        self.assertGreater(pool._share_price, 0)
+        self.assertTrue(hasattr(pool, "_yield_index"))
+        self.assertTrue(isinstance(pool._yield_index, int))
+        print(f"morpho vault share price: {pool._yield_index}")
+        self.assertGreater(pool._yield_index, 0)
 
         # check pool supply_rate
         print(pool.supply_rate(0))
@@ -788,10 +788,10 @@ class TestYearnV3Vault(unittest.TestCase):
         print(f"user asset balance: {pool._user_asset_balance}")
         self.assertGreater(pool._user_asset_balance, 0)
 
-        self.assertTrue(hasattr(pool, "_share_price"))
-        self.assertTrue(isinstance(pool._share_price, int))
-        print(f"morpho vault share price: {pool._share_price}")
-        self.assertGreater(pool._share_price, 0)
+        self.assertTrue(hasattr(pool, "_yield_index"))
+        self.assertTrue(isinstance(pool._yield_index, int))
+        print(f"morpho vault share price: {pool._yield_index}")
+        self.assertGreater(pool._yield_index, 0)
 
         # check pool supply_rate
         print(pool.supply_rate(0))
@@ -938,10 +938,10 @@ class TestAaveTargetPool(unittest.TestCase):
         self.assertTrue(hasattr(pool, "_pool_contract"))
         self.assertTrue(isinstance(pool._pool_contract, Contract))
 
-        self.assertTrue(hasattr(pool, "_normalized_income"))
-        self.assertTrue(isinstance(pool._normalized_income, int))
-        self.assertGreaterEqual(pool._normalized_income, int(1e27))
-        print(f"normalized income: {pool._normalized_income}")
+        self.assertTrue(hasattr(pool, "_yield_index"))
+        self.assertTrue(isinstance(pool._yield_index, int))
+        self.assertGreaterEqual(pool._yield_index, int(1e27))
+        print(f"normalized income: {pool._yield_index}")
 
     # TODO: get snapshots working correctly so we are not under the mercy of the automatic ordering of tests
     def test_supply_rate_alloc(self) -> None:

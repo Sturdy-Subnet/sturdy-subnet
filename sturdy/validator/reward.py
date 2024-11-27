@@ -340,33 +340,24 @@ def annualized_yield_pct(
     for contract_addr, pool in pools.items():
         allocation = allocations[contract_addr]
         match pool.pool_type:
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
+            case T if T in (
+                POOL_TYPES.STURDY_SILO,
+                POOL_TYPES.MORPHO,
+                POOL_TYPES.YEARN_V3,
+                POOL_TYPES.AAVE_DEFAULT,
+                POOL_TYPES.AAVE_TARGET,
+            ):
                 # TODO: temp fix
                 if allocation > 0:
                     last_share_price = extra_metadata[contract_addr]
-                    curr_share_price = pool._share_price
+                    curr_share_price = pool._yield_index
                     pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
                     deposit_delta = allocation - pool._user_deposits
                     try:
                         adjusted_pct_delta = (
                             (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta + 1) * pct_delta
                         )
-                        annualized_pct_yield = ((1 + adjusted_pct_delta) ** (seconds_per_year / seconds_passed)) - 1
-                        total_yield += int(allocation * annualized_pct_yield)
-                    except Exception as e:
-                        bt.logging.error("Error calculating annualized pct yield, skipping:")
-                        bt.logging.error(e)
-            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                if allocation > 0:
-                    last_income = extra_metadata[contract_addr]
-                    curr_income = pool._normalized_income
-                    pct_delta = float(curr_income - last_income) / float(last_income)
-                    deposit_delta = allocation - pool._user_deposits
-                    try:
-                        adjusted_pct_delta = (
-                            (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta) * pct_delta
-                        )
-                        annualized_pct_yield = ((1 + adjusted_pct_delta) ** (seconds_per_year / seconds_passed)) - 1
+                        annualized_pct_yield =  adjusted_pct_delta * (seconds_per_year / seconds_passed)
                         total_yield += int(allocation * annualized_pct_yield)
                     except Exception as e:
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
