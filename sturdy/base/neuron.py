@@ -16,16 +16,17 @@
 # DEALINGS IN THE SOFTWARE.
 
 import copy
-
-import bittensor as bt
-
 from abc import ABC, abstractmethod
 
-# Sync calls set weights and also resyncs the metagraph.
-from sturdy.utils.config import check_config, add_args, config
-from sturdy.utils.misc import ttl_get_block
+import bittensor as bt
+from bittensor_wallet.mock import get_mock_wallet
+
 from sturdy import __spec_version__ as spec_version
-from sturdy.mock import MockSubtensor, MockMetagraph
+from sturdy.mock import MockMetagraph, MockSubtensor
+
+# Sync calls set weights and also resyncs the metagraph.
+from sturdy.utils.config import add_args, check_config, config
+from sturdy.utils.misc import ttl_get_block
 
 
 class BaseNeuron(ABC):
@@ -89,7 +90,8 @@ class BaseNeuron(ABC):
 
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
-            self.wallet = bt.MockWallet(config=self.config)
+            # self.wallet = MockWallet(config=self.config)
+            self.wallet = get_mock_wallet()
             self.subtensor = MockSubtensor(self.config.netuid, n=self.config.mock_n, wallet=self.wallet)
             self.metagraph = MockMetagraph(self.config.netuid, subtensor=self.subtensor)
         else:

@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
 import numpy as np
-import torch
 from dotenv import load_dotenv
 from freezegun import freeze_time
 from web3 import Web3
@@ -281,9 +280,9 @@ class TestValidator(IsolatedAsyncioTestCase):
             print(f"sim penalities: {validator.similarity_penalties}")
 
             # rewards should not all be the same
-            to_compare = torch.empty(rewards.shape)
-            torch.fill(to_compare, rewards[0])
-            self.assertFalse(torch.equal(rewards, to_compare))
+            to_compare = np.empty(rewards.shape)
+            to_compare.fill(rewards[0])
+            self.assertFalse((rewards == to_compare).all())
 
         freezer.stop()
 
@@ -411,8 +410,8 @@ class TestValidator(IsolatedAsyncioTestCase):
             print(f"sim penalities: {validator.similarity_penalties}")
 
             # rewards should not all be the same
-            to_compare = torch.zeros_like(rewards)
-            self.assertTrue(torch.equal(rewards, to_compare))
+            to_compare = np.zeros_like(rewards)
+            self.assertTrue((rewards == to_compare).all())
 
         freezer.stop()
 

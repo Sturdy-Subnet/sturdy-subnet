@@ -23,7 +23,6 @@ import bittensor as bt
 import gmpy2
 import numpy as np
 import numpy.typing as npt
-import torch
 
 from sturdy.constants import ALLOCATION_SIMILARITY_THRESHOLD, APY_SIMILARITY_THRESHOLD, QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
@@ -84,16 +83,16 @@ def format_allocations(
     return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
 
-def normalize_exp(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) -> torch.Tensor:
+def normalize_exp(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) -> npt.NDArray:
     raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
 
     if len(raw_apys) <= 1:
-        return torch.zeros(len(raw_apys))
+        return np.zeros(len(raw_apys))
 
-    apys = torch.tensor(list(raw_apys.values()), dtype=torch.float32)
+    apys = np.array(list(raw_apys.values()), dtype=np.float32)
     normed = (apys - apys.min()) / (apys.max() - apys.min() + epsilon)
 
-    return torch.pow(normed, 8)
+    return np.pow(normed, 8)
 
 
 def calculate_penalties(
@@ -121,8 +120,8 @@ def calculate_penalties(
     return penalties
 
 
-def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties) -> torch.Tensor:
-    rewards = torch.zeros(len(miners))
+def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties) -> npt.NDArray:
+    rewards = np.zeros(len(miners))
     max_penalty = max(penalties.values())
     if max_penalty == 0:
         return rewards_apy
@@ -241,14 +240,14 @@ def get_apy_similarity_matrix(
 
 def adjust_rewards_for_plagiarism(
     self,
-    rewards_apy: torch.Tensor,
+    rewards_apy: npt.NDArray,
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     uids: list,
     axon_times: dict[str, float],
     allocation_similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
     apy_similarity_threshold: float = APY_SIMILARITY_THRESHOLD,
-) -> torch.Tensor:
+) -> npt.NDArray:
     """
     Adjusts the annual percentage yield (APY) rewards for miners based on the similarity of their allocations
     to others and their arrival times, penalizing plagiarized or overly similar strategies.
@@ -302,7 +301,7 @@ def _get_rewards(
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     uids: list[str],
     axon_times: dict[str, float],
-) -> torch.Tensor:
+) -> npt.NDArray:
     """
     Rewards miner responses to request. This method returns a reward
     value for the miner, which is used to update the miner's score.
@@ -311,7 +310,7 @@ def _get_rewards(
     - adjusted_rewards: The reward values for the miners.
     """
 
-    rewards_apy = normalize_exp(apys_and_allocations).to(self.device)
+    rewards_apy = normalize_exp(apys_and_allocations)
 
     return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 
