@@ -24,7 +24,6 @@ from sturdy.validator.sql import (
 TEST_DB = "test.db"
 
 
-# TODO: place this in a seperate file?
 def create_tables(conn: sqlite3.Connection) -> None:
     query = """CREATE TABLE api_keys (
         key TEXT PRIMARY KEY,
