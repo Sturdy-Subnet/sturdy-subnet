@@ -238,7 +238,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
     _total_supplied_assets: int = PrivateAttr()
     _decimals: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
-    _normalized_income: int = PrivateAttr()
+    _yield_index: int = PrivateAttr()
 
     class Config:
         arbitrary_types_allowed = True
@@ -387,7 +387,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
                 self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
             )
 
-            self._normalized_income = retry_with_backoff(
+            self._yield_index = retry_with_backoff(
                 self._pool_contract.functions.getReserveNormalizedIncome(self._underlying_asset_address).call
             )
 
@@ -449,7 +449,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
     _total_supplied_assets: int = PrivateAttr()
     _decimals: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
-    _normalized_income: int = PrivateAttr()
+    _yield_index: int = PrivateAttr()
 
     class Config:
         arbitrary_types_allowed = True
@@ -598,7 +598,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
                 self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
             )
 
-            self._normalized_income = retry_with_backoff(
+            self._yield_index = retry_with_backoff(
                 self._pool_contract.functions.getReserveNormalizedIncome(self._underlying_asset_address).call
             )
 
@@ -662,7 +662,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _asset: Contract = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
     _user_total_assets: int = PrivateAttr()
-    _share_price: Contract = PrivateAttr()
+    _yield_index: Contract = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
@@ -748,7 +748,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
         # get current price per share
-        self._share_price = retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
+        self._yield_index = retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
@@ -967,7 +967,7 @@ class MorphoVault(ChainBasedPoolModel):
     _asset_decimals: int = PrivateAttr()
     _underlying_asset_contract: Contract = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
-    _share_price: int = PrivateAttr()
+    _yield_index: int = PrivateAttr()
 
     _VIRTUAL_SHARES: ClassVar[int] = 1e6
     _VIRTUAL_ASSETS: ClassVar[int] = 1
@@ -1055,7 +1055,7 @@ class MorphoVault(ChainBasedPoolModel):
         )
         self._curr_borrows = total_borrows
 
-        self._share_price = retry_with_backoff(self._vault_contract.functions.convertToAssets(int(1e18)).call)
+        self._yield_index = retry_with_backoff(self._vault_contract.functions.convertToAssets(int(1e18)).call)
 
     @classmethod
     def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
@@ -1127,7 +1127,7 @@ class YearnV3Vault(ChainBasedPoolModel):
     _asset: Contract = PrivateAttr()
     _total_supplied_assets: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
-    _share_price: int = PrivateAttr()
+    _yield_index: int = PrivateAttr()
 
     def pool_init(self, web3_provider: Web3) -> None:
         vault_abi_file_path = Path(__file__).parent / "abi/Yearn_V3_Vault.json"
@@ -1166,7 +1166,7 @@ class YearnV3Vault(ChainBasedPoolModel):
         self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
         # get current price per share
-        self._share_price = retry_with_backoff(self._vault_contract.functions.pricePerShare().call)
+        self._yield_index = retry_with_backoff(self._vault_contract.functions.pricePerShare().call)
 
     def supply_rate(self, amount: int) -> int:
         delta = amount - self._user_deposits
