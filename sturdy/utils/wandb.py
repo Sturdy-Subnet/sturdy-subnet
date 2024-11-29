@@ -36,7 +36,6 @@ def init_wandb_miner(self, reinit=False):
     )
     bt.logging.success(
         prefix="Started a new wandb run for miner",
-        sufix=f"<blue> {self.wandb.name} </blue>",
     )
 
 
