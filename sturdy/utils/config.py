@@ -20,7 +20,6 @@ import argparse
 import os
 
 import bittensor as bt
-import torch
 from loguru import logger
 
 from sturdy import __spec_version__ as spec_version
@@ -66,13 +65,6 @@ def add_args(cls, parser):
     """
 
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
-
-    parser.add_argument(
-        "--neuron.device",
-        type=str,
-        help="Device to run on.",
-        default="cuda" if torch.cuda.is_available() else "cpu",
-    )
 
     parser.add_argument(
         "--neuron.epoch_length",

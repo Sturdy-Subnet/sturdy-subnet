@@ -23,7 +23,6 @@ import bittensor as bt
 import gmpy2
 import numpy as np
 import numpy.typing as npt
-import torch
 
 from sturdy.constants import ALLOCATION_SIMILARITY_THRESHOLD, APY_SIMILARITY_THRESHOLD, QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
@@ -84,16 +83,16 @@ def format_allocations(
     return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
 
 
-def normalize_exp(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) -> torch.Tensor:
+def normalize_exp(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) -> npt.NDArray:
     raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
 
     if len(raw_apys) <= 1:
-        return torch.zeros(len(raw_apys))
+        return np.zeros(len(raw_apys))
 
-    apys = torch.tensor(list(raw_apys.values()), dtype=torch.float32)
+    apys = np.array(list(raw_apys.values()), dtype=np.float32)
     normed = (apys - apys.min()) / (apys.max() - apys.min() + epsilon)
 
-    return torch.pow(normed, 8)
+    return np.pow(normed, 8)
 
 
 def calculate_penalties(
@@ -121,8 +120,8 @@ def calculate_penalties(
     return penalties
 
 
-def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties) -> torch.Tensor:
-    rewards = torch.zeros(len(miners))
+def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties) -> npt.NDArray:
+    rewards = np.zeros(len(miners))
     max_penalty = max(penalties.values())
     if max_penalty == 0:
         return rewards_apy
@@ -241,14 +240,14 @@ def get_apy_similarity_matrix(
 
 def adjust_rewards_for_plagiarism(
     self,
-    rewards_apy: torch.Tensor,
+    rewards_apy: npt.NDArray,
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     uids: list,
     axon_times: dict[str, float],
     allocation_similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
     apy_similarity_threshold: float = APY_SIMILARITY_THRESHOLD,
-) -> torch.Tensor:
+) -> npt.NDArray:
     """
     Adjusts the annual percentage yield (APY) rewards for miners based on the similarity of their allocations
     to others and their arrival times, penalizing plagiarized or overly similar strategies.
@@ -302,7 +301,7 @@ def _get_rewards(
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     uids: list[str],
     axon_times: dict[str, float],
-) -> torch.Tensor:
+) -> npt.NDArray:
     """
     Rewards miner responses to request. This method returns a reward
     value for the miner, which is used to update the miner's score.
@@ -311,7 +310,7 @@ def _get_rewards(
     - adjusted_rewards: The reward values for the miners.
     """
 
-    rewards_apy = normalize_exp(apys_and_allocations).to(self.device)
+    rewards_apy = normalize_exp(apys_and_allocations)
 
     return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
 
@@ -340,33 +339,24 @@ def annualized_yield_pct(
     for contract_addr, pool in pools.items():
         allocation = allocations[contract_addr]
         match pool.pool_type:
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
+            case T if T in (
+                POOL_TYPES.STURDY_SILO,
+                POOL_TYPES.MORPHO,
+                POOL_TYPES.YEARN_V3,
+                POOL_TYPES.AAVE_DEFAULT,
+                POOL_TYPES.AAVE_TARGET,
+            ):
                 # TODO: temp fix
                 if allocation > 0:
                     last_share_price = extra_metadata[contract_addr]
-                    curr_share_price = pool._share_price
+                    curr_share_price = pool._yield_index
                     pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
                     deposit_delta = allocation - pool._user_deposits
                     try:
                         adjusted_pct_delta = (
                             (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta + 1) * pct_delta
                         )
-                        annualized_pct_yield = ((1 + adjusted_pct_delta) ** (seconds_per_year / seconds_passed)) - 1
-                        total_yield += int(allocation * annualized_pct_yield)
-                    except Exception as e:
-                        bt.logging.error("Error calculating annualized pct yield, skipping:")
-                        bt.logging.error(e)
-            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                if allocation > 0:
-                    last_income = extra_metadata[contract_addr]
-                    curr_income = pool._normalized_income
-                    pct_delta = float(curr_income - last_income) / float(last_income)
-                    deposit_delta = allocation - pool._user_deposits
-                    try:
-                        adjusted_pct_delta = (
-                            (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta) * pct_delta
-                        )
-                        annualized_pct_yield = ((1 + adjusted_pct_delta) ** (seconds_per_year / seconds_passed)) - 1
+                        annualized_pct_yield =  adjusted_pct_delta * (seconds_per_year / seconds_passed)
                         total_yield += int(allocation * annualized_pct_yield)
                     except Exception as e:
                         bt.logging.error("Error calculating annualized pct yield, skipping:")

@@ -25,6 +25,7 @@ from typing import Any
 
 import bittensor as bt
 import numpy as np
+import numpy.typing as npt
 from pydantic import BaseModel
 
 from sturdy.constants import (
@@ -35,6 +36,26 @@ from sturdy.constants import (
 from sturdy.utils.ethmath import wei_div, wei_mul
 
 # TODO: cleanup functions - lay them out better across files?
+
+def normalize_numpy(arr, p=1, axis=0, epsilon=1e-12) -> npt.NDArray:
+    """
+    Normalize the input array along the specified axis to have unit p-norm.
+
+    Parameters:
+    - arr (np.ndarray): Input array to normalize.
+    - p (float or int): Order of the norm (e.g., 1 for L1, 2 for L2). Default is 2.
+    - axis (int): Axis along which to compute the norms. Default is 1.
+    - epsilon (float): Small value to avoid division by zero. Default is 1e-12.
+
+    Returns:
+    - np.ndarray: p-norm normalized array.
+    """
+    # Compute the p-norm along the specified axis
+    p_norm = np.linalg.norm(arr, ord=p, axis=axis, keepdims=True)
+    # Avoid division by zero
+    p_norm = np.maximum(p_norm, epsilon)
+    # Divide the array by its p-norm
+    return arr / p_norm
 
 
 def time_diff_seconds(start: str, end: str, format_str: str = "%Y-%m-%d %H:%M:%S.%f") -> int:

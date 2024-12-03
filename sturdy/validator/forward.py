@@ -92,9 +92,9 @@ def get_metadata(pools: dict[str, ChainBasedPoolModel], w3: Web3) -> dict:
         pool.sync(w3)
         match pool.pool_type:
             case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
-                metadata[contract_addr] = pool._share_price
+                metadata[contract_addr] = pool._yield_index
             case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                metadata[contract_addr] = pool._normalized_income
+                metadata[contract_addr] = pool._yield_index
             case _:
                 pass
 
@@ -218,7 +218,6 @@ async def query_and_score_miners(
         assets_and_pools=assets_and_pools,
     )
 
-    # TODO: sort the miners' by their current scores and return their respective allocations
     sorted_indices = [idx for idx, val in sorted(enumerate(self.scores), key=lambda k: k[1], reverse=True)]
 
     sorted_allocs = {}

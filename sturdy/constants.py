@@ -28,15 +28,15 @@ MAX_STOCHASTICITY = 0.002  # max stochasticity
 STOCHASTICITY_STEP = 0.0001
 POOL_RESERVE_SIZE = int(100e18)  # 100
 
-QUERY_RATE = 50  # how often synthetic validator queries miners (blocks)
+QUERY_RATE = 50 # how often synthetic validator queries miners (blocks)
 QUERY_TIMEOUT = 45  # timeout (seconds)
 
 ORGANIC_SCORING_PERIOD = 28800  # scoring period in seconds
 MIN_SCORING_PERIOD = 7200  # scoring period in seconds
-MAX_SCORING_PERIOD = 43200  # scoring period in seconds
-SCORING_PERIOD_STEP = 3600  # scoring period in seconds
+MAX_SCORING_PERIOD = 43200 # scoring period in seconds
+SCORING_PERIOD_STEP = 3600 # scoring period in seconds
 
-SCORING_WINDOW = 420  # scoring window (seconds)
+SCORING_WINDOW = 420 # scoring window (seconds)
 
 TOTAL_ALLOC_THRESHOLD = 0.98
 ALLOCATION_SIMILARITY_THRESHOLD = 1e-4  # similarity threshold for plagiarism checking

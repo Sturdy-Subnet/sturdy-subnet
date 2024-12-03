@@ -3,7 +3,6 @@ import unittest
 
 import gmpy2
 import numpy as np
-import torch
 from dotenv import load_dotenv
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
@@ -132,8 +131,8 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
 
         # If all values are the same, the output should also be uniform (or handle gracefully)
         self.assertTrue(
-            torch.allclose(
-                normalized, torch.zeros_like(torch.tensor([v["apy"] for v in apys_and_allocations.values()])), atol=1e-8
+            np.allclose(
+                normalized, np.zeros_like(np.array([v["apy"] for v in apys_and_allocations.values()])), atol=1e-8
             )
         )
 
@@ -872,26 +871,26 @@ class TestRewardFunctions(unittest.TestCase):
 
     def test_calculate_rewards_with_adjusted_penalties(self) -> None:
         miners = ["1", "2", "3"]
-        rewards_apy = torch.Tensor([1.0, 1.0, 1.0])
+        rewards_apy = np.array([1.0, 1.0, 1.0])
         penalties = {"1": 0, "2": 1, "3": 2}
 
-        expected_rewards = torch.Tensor([1.0, 0.5, 0.0])
+        expected_rewards = np.array([1.0, 0.5, 0.0])
         result = calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties)
 
-        torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
+        np.testing.assert_allclose(result, expected_rewards, rtol=0, atol=1e-5)
 
     def test_calculate_rewards_with_no_penalties(self) -> None:
         miners = ["1", "2", "3"]
-        rewards_apy = torch.Tensor([0.05, 0.04, 0.03])
+        rewards_apy = np.array([0.05, 0.04, 0.03])
         penalties = {"1": 0, "2": 0, "3": 0}
 
-        expected_rewards = torch.Tensor([0.05, 0.04, 0.03])
+        expected_rewards = np.array([0.05, 0.04, 0.03])
         result = calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties)
 
-        torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
+        np.testing.assert_allclose(result, expected_rewards, rtol=0, atol=1e-5)
 
     def test_adjust_rewards_for_plagiarism(self) -> None:
-        rewards_apy = torch.Tensor([0.05 / 0.05, 0.04 / 0.05, 0.03 / 0.05])
+        rewards_apy = np.array([0.05 / 0.05, 0.04 / 0.05, 0.03 / 0.05])
         apys_and_allocations = {
             "0": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},  # APY: int
             "1": {"apy": 40, "allocations": {"asset_1": 202, "asset_2": 303}},
@@ -908,7 +907,7 @@ class TestRewardFunctions(unittest.TestCase):
 
         apy_similarity_threshold = 0.2
 
-        expected_rewards = torch.Tensor([1.0, 0.0, 0.03 / 0.05])
+        expected_rewards = np.array([1.0, 0.0, 0.03 / 0.05])
 
         result = adjust_rewards_for_plagiarism(
             self.vali,
@@ -921,10 +920,10 @@ class TestRewardFunctions(unittest.TestCase):
             apy_similarity_threshold,
         )
 
-        torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
+        np.testing.assert_array_almost_equal(result, expected_rewards, decimal=5)
 
     def test_adjust_rewards_for_one_plagiarism(self) -> None:
-        rewards_apy = torch.Tensor([1.0, 1.0])
+        rewards_apy = np.array([1.0, 1.0])
         apys_and_allocations = {
             "0": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},
             "1": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},
@@ -936,7 +935,7 @@ class TestRewardFunctions(unittest.TestCase):
         uids = ["0", "1"]
         axon_times = {"0": 1.0, "1": 2.0}
 
-        expected_rewards = torch.Tensor([1.0, 0.0])
+        expected_rewards = np.array([1.0, 0.0])
 
         allocation_similarity_threshold = 0.1
         apy_similarity_threshold = 0.2
@@ -952,7 +951,7 @@ class TestRewardFunctions(unittest.TestCase):
             apy_similarity_threshold,
         )
 
-        torch.testing.assert_close(result, expected_rewards, rtol=0, atol=1e-5)
+        np.testing.assert_array_almost_equal(result, expected_rewards, decimal=5)
 
 
 class TestCalculateApy(unittest.TestCase):
@@ -1009,7 +1008,7 @@ class TestCalculateApy(unittest.TestCase):
         extra_metadata = {}
         for contract_address, pool in assets_and_pools["pools"].items():
             pool.sync(self.w3)
-            extra_metadata[contract_address] = pool._share_price
+            extra_metadata[contract_address] = pool._yield_index
 
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
@@ -1074,7 +1073,7 @@ class TestCalculateApy(unittest.TestCase):
         extra_metadata = {}
         for contract_address, pool in assets_and_pools["pools"].items():
             pool.sync(self.w3)
-            extra_metadata[contract_address] = pool._normalized_income
+            extra_metadata[contract_address] = pool._yield_index
 
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
@@ -1124,7 +1123,7 @@ class TestCalculateApy(unittest.TestCase):
         extra_metadata = {}
         for contract_address, pool in assets_and_pools["pools"].items():
             pool.sync(self.w3)
-            extra_metadata[contract_address] = pool._share_price
+            extra_metadata[contract_address] = pool._yield_index
 
         self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]

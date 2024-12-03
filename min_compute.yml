@@ -10,7 +10,7 @@
 # Even then - storage isn't utilized very often - so disk performance won't really be a bottleneck vs, CPU, RAM, 
 # and network bandwidth.
 
-version: '2.0.1' # update this version key as needed, ideally should match your release version
+version: '2.1.0' # update this version key as needed, ideally should match your release version
 
 compute_spec:
 

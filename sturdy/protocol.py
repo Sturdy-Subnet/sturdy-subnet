@@ -19,7 +19,7 @@
 from enum import IntEnum
 
 import bittensor as bt
-from pydantic import BaseModel, Field, root_validator, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing_extensions import TypedDict
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
@@ -43,7 +43,7 @@ class AllocInfo(TypedDict):
 class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
-        smart_union = True
+
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int] = Field(
@@ -56,7 +56,7 @@ class AllocateAssetsRequest(BaseModel):
     )
     num_allocs: int = Field(default=1, description="number of miner allocations to receive")
 
-    @validator("request_type", pre=True)
+    @field_validator("request_type", mode="before")
     def validator_pool_type(cls, value) -> REQUEST_TYPES:
         if isinstance(value, REQUEST_TYPES):
             return value
@@ -69,9 +69,9 @@ class AllocateAssetsRequest(BaseModel):
                 raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
         raise ValueError(f"Invalid value: {value}")
 
-    @root_validator
+    @model_validator(mode="after")
     def check_params(cls, values):  # noqa: ANN201
-        user_addr = values.get("user_address")
+        user_addr = values.user_address
         if not Web3.is_address(user_addr):
             raise ValueError("user address is invalid!")
 
@@ -101,7 +101,7 @@ class AllocateAssetsBase(BaseModel):
 
     class Config:
         use_enum_values = True
-        smart_union = True
+
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int] = Field(
@@ -119,7 +119,7 @@ class AllocateAssetsBase(BaseModel):
         description="allocations produce by miners",
     )
 
-    @validator("request_type", pre=True)
+    @field_validator("request_type", mode="before")
     def validator_pool_type(cls, value):  # noqa: ANN201
         if isinstance(value, REQUEST_TYPES):
             return value
@@ -132,13 +132,13 @@ class AllocateAssetsBase(BaseModel):
                 raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
         raise ValueError(f"Invalid value: {value}")
 
-    @root_validator
+    @model_validator(mode="after")
     def check_params(cls, values):  # noqa: ANN201
-        user_addr = values.get("user_address")
+        user_addr = values.user_address
         if not Web3.is_address(user_addr):
             raise ValueError("user address is invalid!")
 
-        allocs = values.get("allocations")
+        allocs = values.allocations
         if allocs is not None:
             for alloc_dict_key in allocs:
                 if not Web3.is_address(alloc_dict_key):

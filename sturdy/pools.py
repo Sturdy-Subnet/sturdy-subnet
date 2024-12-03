@@ -20,12 +20,12 @@ import math
 from decimal import Decimal
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 import bittensor as bt
 import numpy as np
 from eth_account import Account
-from pydantic import BaseModel, Field, PrivateAttr, root_validator, validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 from web3.contract.contract import Contract
@@ -153,7 +153,6 @@ class ChainBasedPoolModel(BaseModel):
 
     class Config:
         use_enum_values = True  # This will use the enum's value instead of the enum itself
-        smart_union = True
 
     pool_type: POOL_TYPES | int | str = Field(..., description="type of pool")
     user_address: str = Field(
@@ -164,7 +163,7 @@ class ChainBasedPoolModel(BaseModel):
 
     _initted: bool = PrivateAttr(False)  # noqa: FBT003
 
-    @validator("pool_type", pre=True)
+    @field_validator("pool_type", mode="before")
     def validator_pool_type(cls, value) -> POOL_TYPES | int | str:
         if isinstance(value, POOL_TYPES):
             return value
@@ -177,13 +176,12 @@ class ChainBasedPoolModel(BaseModel):
                 raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
         raise ValueError(f"Invalid value: {value}")
 
-    @root_validator
+    @model_validator(mode="after")
     def check_params(cls, values):  # noqa: ANN201
-        if not Web3.is_address(values.get("contract_address")):
+        if not Web3.is_address(values.contract_address):
             raise ValueError("pool address is invalid!")
-        if not Web3.is_address(values.get("user_address")):
+        if not Web3.is_address(values.user_address):
             raise ValueError("user address is invalid!")
-
         return values
 
     def pool_init(self, **args: Any) -> None:
@@ -221,7 +219,7 @@ class PoolFactory:
 class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_DEFAULT, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.AAVE_DEFAULT] = POOL_TYPES.AAVE_DEFAULT
 
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
@@ -238,7 +236,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
     _total_supplied_assets: int = PrivateAttr()
     _decimals: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
-    _normalized_income: int = PrivateAttr()
+    _yield_index: int = PrivateAttr()
 
     class Config:
         arbitrary_types_allowed = True
@@ -387,7 +385,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
                 self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
             )
 
-            self._normalized_income = retry_with_backoff(
+            self._yield_index = retry_with_backoff(
                 self._pool_contract.functions.getReserveNormalizedIncome(self._underlying_asset_address).call
             )
 
@@ -432,7 +430,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
 class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
     """This class defines the default pool type for Aave"""
 
-    pool_type: POOL_TYPES = Field(default=POOL_TYPES.AAVE_TARGET, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.AAVE_TARGET] = POOL_TYPES.AAVE_TARGET
 
     _atoken_contract: Contract = PrivateAttr()
     _pool_contract: Contract = PrivateAttr()
@@ -449,7 +447,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
     _total_supplied_assets: int = PrivateAttr()
     _decimals: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
-    _normalized_income: int = PrivateAttr()
+    _yield_index: int = PrivateAttr()
 
     class Config:
         arbitrary_types_allowed = True
@@ -598,7 +596,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
                 self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
             )
 
-            self._normalized_income = retry_with_backoff(
+            self._yield_index = retry_with_backoff(
                 self._pool_contract.functions.getReserveNormalizedIncome(self._underlying_asset_address).call
             )
 
@@ -642,7 +640,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
 
 
 class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
-    pool_type: POOL_TYPES = Field(POOL_TYPES.STURDY_SILO, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.STURDY_SILO] = POOL_TYPES.STURDY_SILO
 
     _silo_strategy_contract: Contract = PrivateAttr()
     _pair_contract: Contract = PrivateAttr()
@@ -662,7 +660,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _asset: Contract = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
     _user_total_assets: int = PrivateAttr()
-    _share_price: Contract = PrivateAttr()
+    _yield_index: Contract = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
@@ -748,7 +746,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
         # get current price per share
-        self._share_price = retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
+        self._yield_index = retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
     @ttl_cache(maxsize=256, ttl=60)
@@ -786,7 +784,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
 class CompoundV3Pool(ChainBasedPoolModel):
     """Model for Compound V3 Pools"""
 
-    pool_type: POOL_TYPES = Field(POOL_TYPES.COMPOUND_V3, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.COMPOUND_V3] = POOL_TYPES.COMPOUND_V3
 
     _ctoken_contract: Contract = PrivateAttr()
     _base_oracle_contract: Contract = PrivateAttr()
@@ -900,7 +898,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
 class DaiSavingsRate(ChainBasedPoolModel):
     """Model for DAI Savings Rate"""
 
-    pool_type: POOL_TYPES = Field(POOL_TYPES.DAI_SAVINGS, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.DAI_SAVINGS] = POOL_TYPES.DAI_SAVINGS
 
     _sdai_contract: Contract = PrivateAttr()
     _pot_contract: Contract = PrivateAttr()
@@ -952,7 +950,7 @@ class DaiSavingsRate(ChainBasedPoolModel):
 class MorphoVault(ChainBasedPoolModel):
     """Model for Morpho Vaults"""
 
-    pool_type: POOL_TYPES = Field(POOL_TYPES.MORPHO, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.MORPHO] = POOL_TYPES.MORPHO
 
     _vault_contract: Contract = PrivateAttr()
     _morpho_contract: Contract = PrivateAttr()
@@ -967,7 +965,7 @@ class MorphoVault(ChainBasedPoolModel):
     _asset_decimals: int = PrivateAttr()
     _underlying_asset_contract: Contract = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
-    _share_price: int = PrivateAttr()
+    _yield_index: int = PrivateAttr()
 
     _VIRTUAL_SHARES: ClassVar[int] = 1e6
     _VIRTUAL_ASSETS: ClassVar[int] = 1
@@ -1055,7 +1053,7 @@ class MorphoVault(ChainBasedPoolModel):
         )
         self._curr_borrows = total_borrows
 
-        self._share_price = retry_with_backoff(self._vault_contract.functions.convertToAssets(int(1e18)).call)
+        self._yield_index = retry_with_backoff(self._vault_contract.functions.convertToAssets(int(1e18)).call)
 
     @classmethod
     def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
@@ -1118,7 +1116,7 @@ class MorphoVault(ChainBasedPoolModel):
 
 
 class YearnV3Vault(ChainBasedPoolModel):
-    pool_type: POOL_TYPES = Field(POOL_TYPES.YEARN_V3, const=True, description="type of pool")
+    pool_type: Literal[POOL_TYPES.YEARN_V3] = POOL_TYPES.YEARN_V3
 
     _vault_contract: Contract = PrivateAttr()
     _apr_oracle: Contract = PrivateAttr()
@@ -1127,7 +1125,7 @@ class YearnV3Vault(ChainBasedPoolModel):
     _asset: Contract = PrivateAttr()
     _total_supplied_assets: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
-    _share_price: int = PrivateAttr()
+    _yield_index: int = PrivateAttr()
 
     def pool_init(self, web3_provider: Web3) -> None:
         vault_abi_file_path = Path(__file__).parent / "abi/Yearn_V3_Vault.json"
@@ -1166,7 +1164,7 @@ class YearnV3Vault(ChainBasedPoolModel):
         self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
         # get current price per share
-        self._share_price = retry_with_backoff(self._vault_contract.functions.pricePerShare().call)
+        self._yield_index = retry_with_backoff(self._vault_contract.functions.pricePerShare().call)
 
     def supply_rate(self, amount: int) -> int:
         delta = amount - self._user_deposits
