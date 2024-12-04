@@ -380,7 +380,7 @@ class BaseValidatorNeuron(BaseNeuron):
             min_len = min(len(self.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             # zero out nans
-            self.scores = np.nan_to_num(new_moving_average)
+            self.scores = np.clip(np.nan_to_num(new_moving_average), a_min=0, a_max=1)
 
         # Update the hotkeys.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
@@ -406,7 +406,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: npt.NDArray = np.nan_to_num(alpha * scattered_rewards + (1 - alpha) * self.scores)
+        self.scores: npt.NDArray = np.clip(np.nan_to_num(alpha * scattered_rewards + (1 - alpha) * self.scores), a_min=0, a_max=1)
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
     def save_state(self) -> None:
