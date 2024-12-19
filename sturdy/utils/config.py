@@ -228,7 +228,7 @@ def add_validator_args(cls, parser):
         "--wandb.run_log_limit",
         type=int,
         help="Number of wandb.log() calls after which we should init a new wandb run",
-        default=280,
+        default=80,
     )
 
     parser.add_argument(
