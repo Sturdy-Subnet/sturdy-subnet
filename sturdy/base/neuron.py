@@ -70,14 +70,6 @@ class BaseNeuron(ABC):
         # Set up logging with the provided configuration and directory.
         bt.logging(config=self.config, logging_dir=self.config.full_path)
 
-        # TODO: Surely there's a better way to do this right?
-        # Had to add this because of logging infra changes from bittensor>=6.10.0
-        bt.logging.before_enable_default()
-        if self.config.logging.debug:
-            bt.debug()
-        if self.config.logging.trace:
-            bt.trace()
-
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 
