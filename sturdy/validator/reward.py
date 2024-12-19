@@ -44,10 +44,10 @@ def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, 
         responses (list[Response]): list of Response objects corresponding to each axon.
 
     Returns:
-        list[Tuple[int, float]]: A sorted list of tuples, where each tuple contains an axon's uid and its response time.
+        dict[str, float]: a dictionary: uid -> process_time
 
     Example:
-        >>> get_sorted_response_times(
+        >>> get_response_times(
         ...     [1, 2, 3],
         ...     [
         ...         response1,
@@ -61,7 +61,6 @@ def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, 
         str(uids[idx]): (response.dendrite.process_time if response.dendrite.process_time is not None else timeout)
         for idx, response in enumerate(responses)
     }
-    # Sorting in ascending order since lower process time is better
 
 
 def format_allocations(
@@ -409,7 +408,7 @@ def filter_allocations(
         # used to filter out miners who timed out
         # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
-        if response.allocations is not None or axon_times[uids[response_idx]] < QUERY_TIMEOUT:
+        if response.allocations is not None and axon_times[uids[response_idx]] < QUERY_TIMEOUT:
             filtered_allocs[uids[response_idx]] = {
                 "allocations": response.allocations,
             }
