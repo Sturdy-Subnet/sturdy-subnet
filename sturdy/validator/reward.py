@@ -485,7 +485,13 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         miner_uid = miner["miner_uid"]
         if miners_to_score:
             try:
-                if self.metagraph.hotkeys[int(miner_uid)] != miners_to_score[int(miner_uid)]:
+                prev_hotkey = self.metagraph.hotkeys[int(miner_uid)]
+                new_hotkey = miners_to_score[int(miner_uid)]
+                if new_hotkey != prev_hotkey:
+                    bt.logging.info(
+                        f"Miner with uid {miner_uid} and hotkey {new_hotkey} recently replaced {prev_hotkey}. \
+                        It will not be scored"
+                    )
                     continue
             except Exception as e:
                 bt.logging.error(e)
