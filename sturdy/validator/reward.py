@@ -336,7 +336,12 @@ def annualized_yield_pct(
 
     # TODO: refactor?
     for contract_addr, pool in pools.items():
-        allocation = allocations[contract_addr]
+        # assume there is no allocation to that pool if not found
+        try:
+            allocation = allocations[contract_addr]
+        except Exception as e:
+            bt.logging.warning(e)
+            bt.logging.warning(f"could not find allocation to {contract_addr}, assuming it is 0...")
         match pool.pool_type:
             case T if T in (
                 POOL_TYPES.STURDY_SILO,
@@ -355,7 +360,7 @@ def annualized_yield_pct(
                         adjusted_pct_delta = (
                             (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta + 1) * pct_delta
                         )
-                        annualized_pct_yield =  adjusted_pct_delta * (seconds_per_year / seconds_passed)
+                        annualized_pct_yield = adjusted_pct_delta * (seconds_per_year / seconds_passed)
                         total_yield += int(allocation * annualized_pct_yield)
                     except Exception as e:
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
@@ -472,11 +477,31 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
 
     assets_and_pools["pools"] = new_pools
 
+    try:
+        miners_to_score = json.loads(active_allocation["miners"])
+    except Exception as _:
+        bt.logging.error("Failed to load miners to score - scoring all by default")
+        miners_to_score = None
+
     # calculate the yield the pools accrued during the scoring period
     for miner in miners:
         allocations = json.loads(miner["allocation"])["allocations"]
         extra_metadata = json.loads(request_info["metadata"])
         miner_uid = miner["miner_uid"]
+        if miners_to_score:
+            try:
+                prev_hotkey = self.metagraph.hotkeys[int(miner_uid)]
+                new_hotkey = miners_to_score[int(miner_uid)]
+                if new_hotkey != prev_hotkey:
+                    bt.logging.info(
+                        f"Miner with uid {miner_uid} and hotkey {new_hotkey} recently replaced {prev_hotkey}. \
+                        It will not be scored"
+                    )
+                    continue
+            except Exception as e:
+                bt.logging.error(e)
+                bt.logging.error("Failed miner hotkey check, continuing loop...")
+                continue
         miner_apy = annualized_yield_pct(allocations, assets_and_pools, scoring_period_length, extra_metadata)
         miner_axon_time = miner["axon_time"]
 

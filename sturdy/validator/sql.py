@@ -154,6 +154,7 @@ def to_json_string(input_data) -> str:
 def log_allocations(
     conn: sqlite3.Connection,
     request_uid: str,
+    miners: list[str],
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     extra_metadata: dict,
     allocations: dict[str, AllocInfo],
@@ -161,6 +162,24 @@ def log_allocations(
     request_type: REQUEST_TYPES,
     scoring_period: int,
 ) -> None:
+    """
+    Logs allocation data into the database.
+
+    Parameters:
+    conn (sqlite3.Connection): SQLite connection.
+    request_uid (str): Allocation request UUID.
+    miners (list[str]): List mapping miner UIDs to miner hotkeys.
+    assets_and_pools (dict[str, dict[str, ChainBasedPoolModel] | int]):
+        Assets and pools for which miners returned allocations.
+    extra_metadata (dict): Extra metadata used during scoring.
+    allocations (dict[str, AllocInfo]): Allocations to pools returned by miners.
+    axon_times (dict[str, float]): Miner response times.
+    request_type (REQUEST_TYPES): Type of the request.
+    scoring_period (int): Scoring interval in blocks.
+
+    Returns:
+    None
+    """
     ts_now = datetime.utcnow().timestamp()
     challenge_end = ts_now + scoring_period
     scoring_period_end = datetime.fromtimestamp(challenge_end)  # noqa: DTZ006
@@ -178,11 +197,12 @@ def log_allocations(
     )
 
     conn.execute(
-        f"INSERT INTO {ACTIVE_ALLOCS} VALUES (?, ?, ?)",
+        f"INSERT INTO {ACTIVE_ALLOCS} VALUES (?, ?, ?, json(?))",
         (
             request_uid,
             scoring_period_end,
             datetime_now,
+            json.dumps(miners),
         ),
     )
 

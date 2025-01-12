@@ -77,6 +77,7 @@ async def forward(self) -> Any:
         log_allocations(
             conn,
             request_uuid,
+            self.metagraph.hotkeys,
             assets_and_pools,
             metadata,
             allocations,

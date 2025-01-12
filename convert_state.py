@@ -10,36 +10,38 @@ bt.wallet.add_args(parser)
 bt.logging.add_args(parser)
 
 parser.add_argument(
-	"--neuron.name",
-	type=str,
-	help="Trials for this neuron go in neuron.root / (wallet_cold - wallet_hot) / neuron.name. ",
-	default="validator",
+    "--neuron.name",
+    type=str,
+    help="Trials for this neuron go in neuron.root / (wallet_cold - wallet_hot) / neuron.name. ",
+    default="validator",
 )
 
 parser.add_argument(
-	"--netuid",
-	type=int,
-	help="netuid",
-	default=10, 
+    "--netuid",
+    type=int,
+    help="netuid",
+    default=10,
 )
 
 conf = bt.config(parser)
 
 
 full_path = os.path.expanduser(  # noqa: PTH111
-	"{}/{}/{}/netuid{}/{}".format(  # noqa: UP032
-		conf.logging.logging_dir,
-		conf.wallet.name,
-		conf.wallet.hotkey,
-		conf.netuid,
-		conf.neuron.name,
-	)
+    "{}/{}/{}/netuid{}/{}".format(  # noqa: UP032
+        conf.logging.logging_dir,
+        conf.wallet.name,
+        conf.wallet.hotkey,
+        conf.netuid,
+        conf.neuron.name,
+    )
 )
 
 conf.neuron.full_path = os.path.expanduser(full_path)  # noqa: PTH111
 
+
 def backup_state(state, config):
     state = torch.save(state, config.neuron.full_path + "/backup_state.pt")
+
 
 def load_torch_state(to_load, config) -> None:
     """Loads the state of the validator from a file."""
@@ -63,7 +65,8 @@ def save_torch_state_as_np(state, config) -> None:
         hotkeys=to_save["hotkeys"],
         last_query_block=to_save["last_query_block"],
     )
-    
+
+
 if __name__ == "__main__":
     state = {}
     print("---CONFIG---")
@@ -76,4 +79,6 @@ if __name__ == "__main__":
     print("---STATE---")
     print(dict(state))
     print()
-    print(">>> COMPLETE! Please contact @shr1ftyy on discord if you see this message, and include the outputs provided above! <<<")
+    print(
+        ">>> COMPLETE! Please contact @shr1ftyy on discord if you see this message, and include the outputs provided above! <<<"
+    )

@@ -82,9 +82,13 @@ class BaseNeuron(ABC):
 
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
-            # self.wallet = MockWallet(config=self.config)
             self.wallet = get_mock_wallet()
-            self.subtensor = MockSubtensor(self.config.netuid, n=self.config.mock_n, wallet=self.wallet)
+            self.subtensor = MockSubtensor(
+                self.config.netuid,
+                n=self.config.mock_n,
+                max_allowed_uids=self.config.mock_max_uids,
+                wallet=self.wallet,
+            )
             self.metagraph = MockMetagraph(self.config.netuid, subtensor=self.subtensor)
         else:
             self.wallet = bt.wallet(config=self.config)
@@ -173,16 +177,14 @@ class BaseNeuron(ABC):
         ) > self.config.neuron.epoch_length and self.neuron_type != "MinerNeuron"  # don't set weights if you're a miner
 
     # Urrgghh - these are ssooo annoying, they flood the logs - gotta remove em
-    def save_state(self):
-        pass
-        # bt.logging.warning(
-        #     "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or \
-        #      other useful data."
-        # )
+    def save_state(self) -> None:
+        bt.logging.warning(
+            "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or \
+             other useful data."
+        )
 
-    def load_state(self):
-        pass
-        # bt.logging.warning(
-        #     "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or \
-        #      other useful data."
-        # )
+    def load_state(self) -> None:
+        bt.logging.warning(
+            "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or \
+             other useful data."
+        )

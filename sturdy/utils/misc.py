@@ -37,6 +37,7 @@ from sturdy.utils.ethmath import wei_div, wei_mul
 
 # TODO: cleanup functions - lay them out better across files?
 
+
 def normalize_numpy(arr, p=1, axis=0, epsilon=1e-12) -> npt.NDArray:
     """
     Normalize the input array along the specified axis to have unit p-norm.

@@ -31,11 +31,15 @@ def generate_array_with_sum(rng_gen: np.random.RandomState, total_sum: int, min_
 
 
 class MockSubtensor(bt.MockSubtensor):
-    def __init__(self, netuid, n=16, wallet=None, network="mock") -> None:
+    def __init__(self, netuid, n=16, max_allowed_uids=16, wallet=None, network="mock") -> None:
         super().__init__(network=network)
 
         if not self.subnet_exists(netuid):
             self.create_subnet(netuid)
+
+        # set max allowed uids
+        self.chain_state["SubtensorModule"]["MaxAllowedUids"][netuid][0] = max_allowed_uids
+        uids_left = n
 
         # Register ourself (the validator) as a neuron at uid=0
         if wallet is not None:
@@ -46,9 +50,10 @@ class MockSubtensor(bt.MockSubtensor):
                 balance=100000,
                 stake=100000,
             )
+            uids_left -= 1
 
         # Register n mock neurons who will be miners
-        for i in range(1, n + 1):
+        for i in range(1, uids_left + 1):
             self.force_register_neuron(
                 netuid=netuid,
                 hotkey=f"miner-hotkey-{i}",
