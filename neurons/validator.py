@@ -250,6 +250,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
         sql.log_allocations(
             conn,
             to_log.request_uuid,
+            core_validator.metagraph.hotkeys,
             synapse.assets_and_pools,
             metadata,
             to_log.allocations,

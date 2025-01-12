@@ -472,11 +472,25 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
 
     assets_and_pools["pools"] = new_pools
 
+    try:
+        miners_to_score = json.loads(active_allocation["miners"])
+    except Exception as _:
+        bt.logging.error("Failed to load miners to score - scoring all by default")
+        miners_to_score = None
+
     # calculate the yield the pools accrued during the scoring period
     for miner in miners:
         allocations = json.loads(miner["allocation"])["allocations"]
         extra_metadata = json.loads(request_info["metadata"])
         miner_uid = miner["miner_uid"]
+        if miners_to_score:
+            try:
+                if self.metagraph.hotkeys[int(miner_uid)] != miners_to_score[int(miner_uid)]:
+                    continue
+            except Exception as e:
+                bt.logging.error(e)
+                bt.logging.error("Failed miner hotkey check, continuing loop...")
+                continue
         miner_apy = annualized_yield_pct(allocations, assets_and_pools, scoring_period_length, extra_metadata)
         miner_axon_time = miner["axon_time"]
 

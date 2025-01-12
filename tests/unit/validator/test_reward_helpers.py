@@ -131,9 +131,7 @@ class TestDynamicNormalizeZScore(unittest.TestCase):
 
         # If all values are the same, the output should also be uniform (or handle gracefully)
         self.assertTrue(
-            np.allclose(
-                normalized, np.zeros_like(np.array([v["apy"] for v in apys_and_allocations.values()])), atol=1e-8
-            )
+            np.allclose(normalized, np.zeros_like(np.array([v["apy"] for v in apys_and_allocations.values()])), atol=1e-8)
         )
 
     def test_low_variance(self) -> None:
@@ -173,6 +171,7 @@ class TestRewardFunctions(unittest.TestCase):
                 "mock": True,
                 "wandb": {"off": True},
                 "mock_n": 16,
+                "mock_max_uids": 16,
                 "neuron": {"dont_save_events": True},
                 "netuid": 420,
             }

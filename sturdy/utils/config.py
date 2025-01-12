@@ -274,5 +274,6 @@ def config(cls) -> bt.config:
     cls.add_args(parser)
     conf = bt.config(parser)
     conf.mock_n = 64  # default number of mock miners for testing
+    conf.mock_max_uids = 64  # default number of max allowed ids in a subnet for testing
     conf.spec_version = spec_version
     return conf

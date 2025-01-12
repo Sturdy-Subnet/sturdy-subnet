@@ -15,6 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import sqlite3
 from typing import Union
 
 from bittensor import (
@@ -167,3 +168,57 @@ class MockConsole:
         output_no_syntax = Text.from_ansi(Text.from_markup(text).plain).plain
 
         return output_no_syntax
+
+
+def create_tables(conn: sqlite3.Connection) -> None:
+    query = """CREATE TABLE api_keys (
+        key TEXT PRIMARY KEY,
+        name TEXT,
+        balance REAL,
+        rate_limit_per_minute INTEGER DEFAULT 60,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+
+    CREATE TABLE logs (
+        key TEXT,
+        endpoint TEXT,
+        cost REAL,
+        balance REAL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(key) REFERENCES api_keys(key) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS allocation_requests (
+        request_uid TEXT PRIMARY KEY,
+        assets_and_pools TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE active_allocs (
+        request_uid TEXT PRIMARY KEY,
+        scoring_period_end TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (request_uid) REFERENCES allocation_requests (request_uid)
+    );
+
+    CREATE TABLE IF NOT EXISTS allocations (
+        request_uid TEXT,
+        miner_uid TEXT,
+        allocation TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (request_uid, miner_uid),
+        FOREIGN KEY (request_uid) REFERENCES allocation_requests (request_uid)
+    );
+
+    -- This alter statement adds a new column to the allocations table if it exists
+    ALTER TABLE allocation_requests
+    ADD COLUMN request_type TEXT NOT NULL DEFAULT 1;
+    ALTER TABLE allocation_requests
+    ADD COLUMN metadata TEXT;
+    ALTER TABLE allocations
+    ADD COLUMN axon_time FLOAT NOT NULL DEFAULT 99999.0; -- large number for now
+    ALTER TABLE active_allocs
+    ADD COLUMN miners text"""
+
+    conn.executescript(query)
