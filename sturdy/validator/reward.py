@@ -355,7 +355,7 @@ def annualized_yield_pct(
                         adjusted_pct_delta = (
                             (pool._total_supplied_assets) / (pool._total_supplied_assets + deposit_delta + 1) * pct_delta
                         )
-                        annualized_pct_yield =  adjusted_pct_delta * (seconds_per_year / seconds_passed)
+                        annualized_pct_yield = adjusted_pct_delta * (seconds_per_year / seconds_passed)
                         total_yield += int(allocation * annualized_pct_yield)
                     except Exception as e:
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
