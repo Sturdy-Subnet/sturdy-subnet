@@ -342,6 +342,7 @@ def annualized_yield_pct(
         except Exception as e:
             bt.logging.warning(e)
             bt.logging.warning(f"could not find allocation to {contract_addr}, assuming it is 0...")
+            allocation = 0
         match pool.pool_type:
             case T if T in (
                 POOL_TYPES.STURDY_SILO,
