@@ -1025,7 +1025,7 @@ class TestCalculateApy(unittest.TestCase):
             pool.sync(self.w3)
 
         apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
-        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
+        print(f"annualized yield: {(float(apy) / 1e18) * 100}%")
         self.assertGreater(apy, 0)
 
     def test_calculate_apy_aave(self) -> None:
@@ -1090,7 +1090,7 @@ class TestCalculateApy(unittest.TestCase):
             pool.sync(self.w3)
 
         apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
-        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
+        print(f"annualized yield: {(float(apy) / 1e18) * 100}%")
         self.assertGreater(apy, 0)
 
     def test_calculate_apy_morpho(self) -> None:
@@ -1140,7 +1140,7 @@ class TestCalculateApy(unittest.TestCase):
             pool.sync(self.w3)
 
         apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
-        print(f"annualized yield: {(float(apy)/1e18) * 100}%")
+        print(f"annualized yield: {(float(apy) / 1e18) * 100}%")
         self.assertGreater(apy, 0)
 
 
