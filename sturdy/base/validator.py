@@ -129,6 +129,7 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
 
     async def concurrent_forward(self) -> None:
+        bt.logging.info("Running concurrent_forward()")
         coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
         await asyncio.gather(*coroutines)
 
@@ -173,7 +174,7 @@ class BaseValidatorNeuron(BaseNeuron):
                         future = asyncio.run_coroutine_threadsafe(self.concurrent_forward(), self.loop)
                         future.result()  # Wait for the coroutine to complete
                     else:
-                        self.loop.run_until_complete(self.concurrent_forward())
+                        asyncio.run(self.concurrent_forward())
 
                     self.last_query_block = current_block
                     # Sync metagraph and potentially set weights.

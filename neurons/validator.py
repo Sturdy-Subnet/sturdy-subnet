@@ -103,7 +103,8 @@ def _get_api_key(request: Request) -> Any:
 
 @app.middleware("http")
 async def api_key_validator(request, call_next) -> Response:
-    if request.url.path in ["/docs", "/openapi.json", "/favicon.ico", "/redoc"]:
+    # TODO: getting status works but seeing two "invalid requests" logs afterwards
+    if request.url.path in ["/docs", "/openapi.json", "/favicon.ico", "/redoc", "/status"]:
         return await call_next(request)
 
     api_key = _get_api_key(request)
