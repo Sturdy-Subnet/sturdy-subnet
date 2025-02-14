@@ -26,6 +26,7 @@ import bittensor as bt
 from web3 import Web3
 
 from sturdy.base.neuron import BaseNeuron
+from sturdy.constants import MINER_SYNC_FREQUENCY
 from sturdy.utils.config import add_miner_args
 from sturdy.utils.wandb import init_wandb_miner
 from dotenv import load_dotenv
@@ -123,18 +124,17 @@ class BaseMinerNeuron(BaseNeuron):
         # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
 
-        bt.logging.info(f"Miner starting at block: {self.block}")
+        bt.logging.info("Miner starting...")
 
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while not self.should_exit:
-                while self.block - self.metagraph.last_update[self.uid] < self.config.neuron.epoch_length:
-                    # Wait before checking again.
-                    time.sleep(1)
+                # Wait before checking again.
+                time.sleep(MINER_SYNC_FREQUENCY)  # 12 seconds per block
 
-                    # Check if we should exit.
-                    if self.should_exit:
-                        break
+                # Check if we should exit.
+                if self.should_exit:
+                    break
 
                 # Sync metagraph and potentially set weights.
                 self.sync()

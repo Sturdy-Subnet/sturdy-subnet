@@ -161,7 +161,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Check that validator is registered on the network.
         self.sync()
 
-        bt.logging.info(f"Validator starting at block: {self.block}")
+        bt.logging.info(f"Validator starting...")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
@@ -169,7 +169,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Run multiple forwards concurrently - runs every QUERY_FREQUENCY seconds
                 current_time = time.time()
                 if current_time - self.last_query_time > QUERY_FREQUENCY:
-                    bt.logging.info(f"step({self.step}) block({self.block})")
+                    bt.logging.info(f"step({self.step})")
 
                     if self.config.organic:
                         future = asyncio.run_coroutine_threadsafe(self.concurrent_forward(), self.loop)
@@ -188,7 +188,6 @@ class BaseValidatorNeuron(BaseNeuron):
                                 f"miner_scores/score_uid_{uid}": float(score) for uid, score in enumerate(self.scores)
                             }
                             other_metrics = {
-                                "block": self.block,
                                 "validator_run_step": self.step,
                             }
                             sim_penalties = {
@@ -202,7 +201,7 @@ class BaseValidatorNeuron(BaseNeuron):
                             metrics_to_log.update(sim_penalties)
                             metrics_to_log.update(apys)
                             metrics_to_log.update(axon_times)
-                            self.wandb.log(metrics_to_log, step=self.block)
+                            self.wandb.log(metrics_to_log)
                             self.wandb_run_log_count += 1
                             bt.logging.info(
                                 f"wandb log count: {self.wandb_run_log_count} | \

@@ -31,6 +31,8 @@ POOL_RESERVE_SIZE = int(100e18)  # 100
 QUERY_FREQUENCY = 600  # time in seconds between validator queries
 QUERY_TIMEOUT = 45  # timeout (seconds)
 
+MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
+
 ORGANIC_SCORING_PERIOD = 28800  # scoring period in seconds
 MIN_SCORING_PERIOD = 7200  # min. synthetic scoring period in seconds
 MAX_SCORING_PERIOD = 43200  # max. synthetic scoring period in seconds
