@@ -63,7 +63,6 @@ def save_torch_state_as_np(state, config) -> None:
         step=to_save["step"],
         scores=to_save["scores"],
         hotkeys=to_save["hotkeys"],
-        last_query_block=to_save["last_query_block"],
     )
 
 

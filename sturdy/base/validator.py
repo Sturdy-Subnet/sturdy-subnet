@@ -22,6 +22,7 @@ import asyncio
 import copy
 import os
 import threading
+import time
 from traceback import print_exception
 
 import bittensor as bt
@@ -31,7 +32,7 @@ from numpy import typing as npt
 from web3 import Web3
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import QUERY_RATE
+from sturdy.constants import QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
@@ -54,8 +55,8 @@ class BaseValidatorNeuron(BaseNeuron):
         super().__init__(config=config)
         load_dotenv()
 
-        # set last query block to be 0
-        self.last_query_block = 0
+        # set last query time to be 0
+        self.last_query_time = 0
 
         # init wandb
         self.wandb_run_log_count = 0
@@ -165,9 +166,9 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                # Run multiple forwards concurrently - runs every 2 blocks
-                current_block = self.subtensor.block
-                if current_block - self.last_query_block > QUERY_RATE:
+                # Run multiple forwards concurrently - runs every QUERY_FREQUENCY seconds
+                current_time = time.time()
+                if current_time - self.last_query_time > QUERY_FREQUENCY:
                     bt.logging.info(f"step({self.step}) block({self.block})")
 
                     if self.config.organic:
@@ -176,7 +177,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     else:
                         asyncio.run(self.concurrent_forward())
 
-                    self.last_query_block = current_block
+                    self.last_query_time = current_time
                     # Sync metagraph and potentially set weights.
                     self.sync()
 
@@ -422,7 +423,6 @@ class BaseValidatorNeuron(BaseNeuron):
             step=self.step,
             scores=self.scores,
             hotkeys=self.hotkeys,
-            last_query_block=self.last_query_block,
         )
 
     def load_state(self) -> None:
@@ -434,4 +434,3 @@ class BaseValidatorNeuron(BaseNeuron):
         self.step = state["step"]
         self.scores = state["scores"]
         self.hotkeys = state["hotkeys"]
-        self.last_query_block = state["last_query_block"]

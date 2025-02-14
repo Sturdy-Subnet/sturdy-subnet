@@ -28,7 +28,7 @@ MAX_STOCHASTICITY = 0.002  # max stochasticity
 STOCHASTICITY_STEP = 0.0001
 POOL_RESERVE_SIZE = int(100e18)  # 100
 
-QUERY_RATE = 50  # how often synthetic validator queries miners (blocks)
+QUERY_FREQUENCY = 600  # time in seconds between validator queries
 QUERY_TIMEOUT = 45  # timeout (seconds)
 
 ORGANIC_SCORING_PERIOD = 28800  # scoring period in seconds
