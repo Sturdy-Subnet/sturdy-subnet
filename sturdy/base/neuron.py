@@ -113,9 +113,6 @@ class BaseNeuron(ABC):
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
-    @abstractmethod
-    def run(self): ...
-
     def sync(self):
         """
         Wrapper for synchronizing the state of the network for the given miner or validator.

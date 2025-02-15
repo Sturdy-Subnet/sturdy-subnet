@@ -1,34 +1,14 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# Copyright © 2023 Syeam Bin Abdullah
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
-
 import argparse
 import asyncio
 import copy
 import os
 import threading
 import time
-from traceback import print_exception
 
 import bittensor as bt
 import numpy as np
+import numpy.typing as npt
 from dotenv import load_dotenv
-from numpy import typing as npt
 from web3 import Web3
 
 from sturdy.base.neuron import BaseNeuron
@@ -107,6 +87,80 @@ class BaseValidatorNeuron(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
+        self._stop_event = asyncio.Event()
+        self._tasks = []
+        self.last_query_time = 0
+
+    async def start(self) -> None:
+        """Start validator tasks"""
+        self._tasks.append(asyncio.create_task(self.run_main_loop()))
+
+    async def stop(self) -> None:
+        """Stop all validator tasks"""
+        self._stop_event.set()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+            self._tasks.clear()
+
+    async def __aenter__(self) -> "BaseValidatorNeuron":
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self.stop()
+        if self.wandb:
+            self.wandb.finish()
+
+    async def run_main_loop(self) -> None:
+        """Main validator loop"""
+        self.sync()
+        bt.logging.info("Validator starting...")
+
+        try:
+            while not self._stop_event.is_set():
+                current_time = time.time()
+                if current_time - self.last_query_time > QUERY_FREQUENCY:
+                    bt.logging.info(f"step({self.step})")
+
+                    try:
+                        await self.concurrent_forward()
+                    except Exception as e:
+                        bt.logging.error(f"Error in concurrent forward: {e}")
+
+                    self.last_query_time = current_time
+                    self.sync()
+                    await self.log_metrics()
+
+                await asyncio.sleep(1)
+
+        except Exception as e:
+            bt.logging.error(f"Error in main loop: {e}")
+
+    async def log_metrics(self) -> None:
+        """Log metrics to wandb"""
+        if self.config.wandb.off:
+            return
+
+        try:
+            metrics = {f"miner_scores/score_uid_{uid}": float(score) for uid, score in enumerate(self.scores)}
+            metrics.update(
+                {
+                    "validator_run_step": self.step,
+                    **{f"similarity_penalties/uid_{uid}": score for uid, score in self.similarity_penalties.items()},
+                    **{f"apys/uid_{uid}": apy for uid, apy in self.sorted_apys.items()},
+                    **{f"axon_times/uid_{uid}": time for uid, time in self.sorted_axon_times.items()},
+                }
+            )
+
+            self.wandb.log(metrics)
+            self.wandb_run_log_count += 1
+
+            if should_reinit_wandb(self):
+                await reinit_wandb()
+
+        except Exception as e:
+            bt.logging.error(f"Failed to log metrics: {e}")
+
     def serve_axon(self) -> None:
         """Serve axon to enable external connections."""
 
@@ -134,168 +188,6 @@ class BaseValidatorNeuron(BaseNeuron):
         coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
         await asyncio.gather(*coroutines)
 
-    def run(self) -> None:
-        """
-        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on
-        keyboard interrupts and logs unforeseen errors.
-
-        This function performs the following primary tasks:
-        1. Check for registration on the Bittensor network.
-        2. Continuously forwards queries to the miners on the network, rewarding their responses and updating the scores
-        accordingly.
-        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting
-        weights.
-
-        The essence of the validator's operations is in the forward function, which is called every step. The forward function
-        is responsible for querying the network and scoring the responses.
-
-        Note:
-            - The function leverages the global configurations set during the initialization of the miner.
-            - The miner's axon serves as its interface to the Bittensor network, handling incoming and outgoing requests.
-
-        Raises:
-            KeyboardInterrupt: If the miner is stopped by a manual interruption.
-            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
-        """
-
-        # Check that validator is registered on the network.
-        self.sync()
-
-        bt.logging.info(f"Validator starting...")
-
-        # This loop maintains the validator's operations until intentionally stopped.
-        try:
-            while True:
-                # Run multiple forwards concurrently - runs every QUERY_FREQUENCY seconds
-                current_time = time.time()
-                if current_time - self.last_query_time > QUERY_FREQUENCY:
-                    bt.logging.info(f"step({self.step})")
-
-                    if self.config.organic:
-                        future = asyncio.run_coroutine_threadsafe(self.concurrent_forward(), self.loop)
-                        future.result()  # Wait for the coroutine to complete
-                    else:
-                        asyncio.run(self.concurrent_forward())
-
-                    self.last_query_time = current_time
-                    # Sync metagraph and potentially set weights.
-                    self.sync()
-
-                    if not self.config.wandb.off:
-                        bt.logging.debug("Logging info to wandb")
-                        try:
-                            metrics_to_log = {
-                                f"miner_scores/score_uid_{uid}": float(score) for uid, score in enumerate(self.scores)
-                            }
-                            other_metrics = {
-                                "validator_run_step": self.step,
-                            }
-                            sim_penalties = {
-                                f"similarity_penalties/uid_{uid}": score for uid, score in self.similarity_penalties.items()
-                            }
-                            apys = {f"apys/uid_{uid}": apy for uid, apy in self.sorted_apys.items()}
-                            axon_times = {
-                                f"axon_times/uid_{uid}": axon_time for uid, axon_time in self.sorted_axon_times.items()
-                            }
-                            metrics_to_log.update(other_metrics)
-                            metrics_to_log.update(sim_penalties)
-                            metrics_to_log.update(apys)
-                            metrics_to_log.update(axon_times)
-                            self.wandb.log(metrics_to_log)
-                            self.wandb_run_log_count += 1
-                            bt.logging.info(
-                                f"wandb log count: {self.wandb_run_log_count} | \
-                                until reinit: {self.config.wandb.run_log_limit - self.wandb_run_log_count}"
-                            )
-                        except Exception as e:
-                            bt.logging.error("Failed to log info into wandb!")
-                            bt.logging.error(e)
-
-                        # rollover to new wandb run if needed:
-                        if should_reinit_wandb(self):
-                            try:
-                                reinit_wandb(self)
-                                self.wandb_run_log_count = 0
-                            except Exception as e:
-                                bt.logging.error("Failed reinit wandb run!")
-                                bt.logging.error(e)
-
-                # Check if we should exit.
-                if self.should_exit:
-                    break
-
-                self.step += 1
-
-        # If someone intentionally stops the validator, it'll safely terminate operations.
-        except KeyboardInterrupt:
-            self.axon.stop()
-            bt.logging.success("Validator killed by keyboard interrupt.")
-            exit()
-
-        # In case of unforeseen errors, the validator will log the error and continue operations.
-        except Exception as err:
-            bt.logging.error("Error during validation", str(err))
-            bt.logging.debug(print_exception(type(err), err, err.__traceback__))
-
-    async def run_concurrent_forward(self) -> None:
-        try:
-            await self.concurrent_forward()
-        except Exception as e:
-            bt.logging.error(f"Error in concurrent_forward: {e}")
-
-    def run_in_background_thread(self) -> None:
-        """
-        Starts the validator's operations in a background thread upon entering the context.
-        This method facilitates the use of the validator in a 'with' statement.
-        """
-        if not self.is_running:
-            bt.logging.debug("Starting validator in background thread.")
-            self.should_exit = False
-            self.thread = threading.Thread(target=self.run, daemon=True)
-            self.thread.start()
-            self.is_running = True
-            bt.logging.debug("Started")
-
-    def stop_run_thread(self) -> None:
-        """
-        Stops the validator's operations that are running in the background thread.
-        """
-        if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
-            self.should_exit = True
-            self.thread.join(5)
-            self.is_running = False
-            bt.logging.debug("Stopped")
-
-    def __enter__(self) -> "BaseValidatorNeuron":
-        self.run_in_background_thread()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
-        """
-        Stops the validator's background operations upon exiting the context.
-        This method facilitates the use of the validator in a 'with' statement.
-
-        Args:
-            exc_type: The type of the exception that caused the context to be exited.
-                      None if the context was exited without an exception.
-            exc_value: The instance of the exception that caused the context to be exited.
-                       None if the context was exited without an exception.
-            traceback: A traceback object encoding the stack trace.
-                       None if the context was exited without an exception.
-        """
-        if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
-            self.should_exit = True
-            self.thread.join(5)
-            self.is_running = False
-            bt.logging.debug("Stopped")
-
-            if self.wandb is not None:
-                bt.logging.debug("closing wandb connection")
-                self.wandb.finish()
-                bt.logging.debug("closed wandb connection")
-            bt.logging.success("Validator killed")
 
     def set_weights(self) -> None:
         """

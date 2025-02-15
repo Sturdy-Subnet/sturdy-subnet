@@ -18,7 +18,6 @@
 
 
 import asyncio
-import time
 import uuid
 from typing import Any
 
@@ -291,41 +290,27 @@ async def request_info(
         raise HTTPException(status_code=404, detail="No request info found")
     return info
 
-
-# Function to run the main loop
-async def run_main_loop() -> None:
-    try:
-        core_validator.run_in_background_thread()  # type: ignore[]
-    except KeyboardInterrupt:
-        bt.logging.info("Keyboard interrupt received, exiting...")
-
-
-# Function to run the Uvicorn server
-async def run_uvicorn_server() -> None:
-    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")  # noqa: S104 # type: ignore[]
-    server = uvicorn.Server(config)
-    await server.serve()
-
-
 async def main() -> None:
     global core_validator  # noqa: PLW0603
     core_validator = Validator()
+
     if not (core_validator.config.synthetic or core_validator.config.organic):
-        bt.logging.error(
-            "You did not select a validator type to run! Ensure you select to run either a synthetic or organic validator. \
-             Shutting down...",
-        )
+        bt.logging.error("No validator type selected. Shutting down...")
         return
 
-    bt.logging.info(f"organic: {core_validator.config.organic}")
+    try:
+        if core_validator.config.organic:
+            config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port)
+            server = uvicorn.Server(config)
 
-    if core_validator.config.organic:
-        await asyncio.gather(run_uvicorn_server(), run_main_loop())
-    else:
-        with core_validator:
-            while True:
-                bt.logging.debug("Running synthetic vali...")
-                time.sleep(300)  # noqa: ASYNC251
+            async with core_validator:
+                await server.serve()
+        else:
+            async with core_validator:
+                await core_validator._stop_event.wait()
+
+    except KeyboardInterrupt:
+        bt.logging.info("Shutting down...")
 
 
 def start() -> None:
