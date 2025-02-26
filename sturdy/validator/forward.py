@@ -25,7 +25,13 @@ import numpy as np
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
-from sturdy.constants import MAX_SCORING_PERIOD, MIN_SCORING_PERIOD, QUERY_TIMEOUT, SCORING_PERIOD_STEP
+from sturdy.constants import (
+    MAX_SCORING_PERIOD,
+    MIN_SCORING_PERIOD,
+    MIN_TOTAL_ASSETS_AMOUNT,
+    QUERY_TIMEOUT,
+    SCORING_PERIOD_STEP,
+)
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.reward import filter_allocations, get_rewards
@@ -48,16 +54,26 @@ async def forward(self) -> Any:
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
 
     """
-    # delete stale active allocations after expiry time
-    bt.logging.debug("Purging stale active allocation requests")
-    with get_db_connection(self.config.db_dir) as conn:
-        rows_affected = delete_stale_active_allocs(conn)
-    bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
-    # initialize pools and assets
-    challenge_data = generate_challenge_data(self.w3)
-    request_uuid = str(uuid.uuid4()).replace("-", "")
-    user_address = challenge_data.get("user_address", None)
+    while True:
+        # delete stale active allocations after expiry time
+        bt.logging.debug("Purging stale active allocation requests")
+        with get_db_connection(self.config.db_dir) as conn:
+            rows_affected = delete_stale_active_allocs(conn)
+        bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
+
+        # initialize pools and assets
+        challenge_data = generate_challenge_data(self.w3)
+        request_uuid = str(uuid.uuid4()).replace("-", "")
+        user_address = challenge_data.get("user_address", None)
+
+        # check if there are enough assets to move around
+        total_assets = challenge_data["assets_and_pools"]["total_assets"]
+
+        if total_assets < MIN_TOTAL_ASSETS_AMOUNT:
+            bt.logging.error(f"Total assets are too low: {total_assets}, retrying...")
+            continue
+        break
 
     bt.logging.info("Querying miners...")
     axon_times, allocations = await query_and_score_miners(

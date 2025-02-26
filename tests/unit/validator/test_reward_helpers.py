@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
-from neurons.validator import Validator
 from sturdy.algo import naive_algorithm
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.pools import *
@@ -166,16 +165,10 @@ class TestRewardFunctions(unittest.TestCase):
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
 
-        cls.vali = Validator(
-            config={
-                "mock": True,
-                "wandb": {"off": True},
-                "mock_n": 16,
-                "mock_max_uids": 16,
-                "neuron": {"dont_save_events": True},
-                "netuid": 420,
-            }
-        )
+        class EmptyVali:
+            pass
+
+        cls.vali = EmptyVali()
 
         cls.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
@@ -707,15 +700,6 @@ class TestRewardFunctions(unittest.TestCase):
             },
             "miner_3": {"apy": 0, "allocations": None},
         }
-        assets_and_pools = {
-            "pools": {
-                "pool_1": {"reserve_size": 100},
-                "pool_2": {"reserve_size": 100},
-            },
-            "total_assets": 100,
-        }
-
-        total_assets = assets_and_pools["total_assets"]
 
         expected_similarity_matrix = {
             "miner_1": {

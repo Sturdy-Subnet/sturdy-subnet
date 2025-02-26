@@ -46,6 +46,8 @@ APY_SIMILARITY_THRESHOLD = 1e-4
 
 DB_DIR = "validator_database.db"  # default validator database dir
 
+MIN_TOTAL_ASSETS_AMOUNT = int(1000e6)  # min total assets required in a request to query miners
+
 # The following constants are for different pool models
 # Aave
 RESERVE_FACTOR_START_BIT_POSITION = 64

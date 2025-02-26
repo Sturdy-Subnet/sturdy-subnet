@@ -15,21 +15,21 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import os
-import time
-import asyncio
-import threading
 import argparse
+import asyncio
+import os
+import threading
+import time
 import traceback
 
 import bittensor as bt
+from dotenv import load_dotenv
 from web3 import Web3
 
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import MINER_SYNC_FREQUENCY
 from sturdy.utils.config import add_miner_args
 from sturdy.utils.wandb import init_wandb_miner
-from dotenv import load_dotenv
 
 
 class BaseMinerNeuron(BaseNeuron):
@@ -55,7 +55,7 @@ class BaseMinerNeuron(BaseNeuron):
 
         w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
         if w3_provider_url is None:
-            raise ValueError("You must provide a valid web3 provider url in order to handle organic requests!")
+            raise ValueError("You must provide a valid web3 provider url!")
 
         self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
 
@@ -149,59 +149,18 @@ class BaseMinerNeuron(BaseNeuron):
         except Exception as e:  # noqa
             bt.logging.error(traceback.format_exc())
 
-    def run_in_background_thread(self):
-        """
-        Starts the miner's operations in a separate background thread.
-        This is useful for non-blocking operations.
-        """
-        if not self.is_running:
-            bt.logging.debug("Starting miner in background thread.")
-            self.should_exit = False
-            self.thread = threading.Thread(target=self.run, daemon=True)
-            self.thread.start()
-            self.is_running = True
-            bt.logging.debug("Started")
-
-    def stop_run_thread(self):
-        """
-        Stops the miner's operations that are running in the background thread.
-        """
-        if self.is_running:
-            bt.logging.debug("Stopping miner in background thread.")
-            self.should_exit = True
-            self.thread.join(5)
-            self.is_running = False
-            bt.logging.debug("Stopped")
-
+    # create "with" entry and exit functions to call run() in the background for syncing, etc.
     def __enter__(self):
-        """
-        Starts the miner's operations in a background thread upon entering the context.
-        This method facilitates the use of the miner in a 'with' statement.
-        """
-        self.run_in_background_thread()
+        self.should_exit = False
+        self.thread = threading.Thread(target=self.run)
+        self.thread.start()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        """
-        Stops the miner's background operations upon exiting the context.
-        This method facilitates the use of the miner in a 'with' statement.
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.should_exit = True
+        self.thread.join()
 
-        Args:
-            exc_type: The type of the exception that caused the context to be exited.
-                      None if the context was exited without an exception.
-            exc_value: The instance of the exception that caused the context to be exited.
-                       None if the context was exited without an exception.
-            traceback: A traceback object encoding the stack trace.
-                       None if the context was exited without an exception.
-        """
-        self.stop_run_thread()
-        if self.wandb is not None:
-            bt.logging.debug("closing wandb connection")
-            self.wandb.finish()
-            bt.logging.debug("closed wandb connection")
-        bt.logging.success("Miner killed")
-
-    def resync_metagraph(self):
+    def resync_metagraph(self) -> None:
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
 
         # Sync the metagraph.

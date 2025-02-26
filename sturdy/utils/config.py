@@ -26,7 +26,7 @@ from sturdy import __spec_version__ as spec_version
 from sturdy.constants import DB_DIR, QUERY_TIMEOUT
 
 
-def check_config(cls, config: "bt.Config") -> None:
+def check_config(_cls, config: "bt.Config") -> None:
     r"""Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 
@@ -59,7 +59,7 @@ def check_config(cls, config: "bt.Config") -> None:
         )
 
 
-def add_args(cls, parser):
+def add_args(_cls, parser) -> None:
     """
     Adds relevant arguments to the parser for operation.
     """
@@ -116,7 +116,7 @@ def add_args(cls, parser):
     )
 
 
-def add_miner_args(cls, parser):
+def add_miner_args(_cls, parser) -> None:
     """Add miner specific arguments to the parser."""
 
     parser.add_argument(
@@ -162,7 +162,7 @@ def add_miner_args(cls, parser):
     )
 
 
-def add_validator_args(cls, parser):
+def add_validator_args(_cls, parser) -> None:
     """Add validator specific arguments to the parser."""
 
     parser.add_argument(
@@ -238,22 +238,6 @@ def add_validator_args(cls, parser):
         default=9000,
     )
 
-    parser.add_argument(
-        "--synthetic",
-        help="If you want to run a synthetic validator",
-        type=lambda x: (str(x).lower() == "true"),
-        default=True,
-    )
-
-    parser.add_argument(
-        "--organic",
-        help="If you want to run a organic validator",
-        type=lambda x: (str(x).lower() == "true"),
-        default=False,
-    )
-
-    # TODO: make this available for organic validators so that it can be used to in prod
-    # - not just testing?
     parser.add_argument(
         "--db_dir",
         type=str,

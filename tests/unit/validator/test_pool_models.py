@@ -240,7 +240,7 @@ class TestSturdySiloStrategy(unittest.TestCase):
                 {
                     "forking": {
                         "jsonRpcUrl": WEB3_PROVIDER_URL,
-                        # "blockNumber": 20233401,
+                        # previously: "blockNumber": 20233401,
                         "blockNumber": 21080765,
                     },
                 },
@@ -869,7 +869,6 @@ class TestAaveTargetPool(unittest.TestCase):
         # spark dai
         cls.atoken_address = "0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B"
         # Create a funded account for testing
-        # cls.account = Account.create()
         cls.account_address = "0x0Fd6abA4272a96Bb8CcbbA69B825075cb2047D1D"  # spDai holder (~17.5k spDai at time of writing)
         cls.w3.eth.send_transaction(
             {

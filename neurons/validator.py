@@ -18,7 +18,6 @@
 
 
 import asyncio
-import time
 import uuid
 from typing import Any
 
@@ -36,7 +35,7 @@ from web3.constants import ADDRESS_ZERO
 
 # import base validator class which takes care of most of the boilerplate
 from sturdy.base.validator import BaseValidatorNeuron
-from sturdy.constants import DB_DIR, ORGANIC_SCORING_PERIOD
+from sturdy.constants import DB_DIR, MIN_TOTAL_ASSETS_AMOUNT, ORGANIC_SCORING_PERIOD
 
 # Bittensor Validator Template:
 from sturdy.pools import PoolFactory
@@ -212,6 +211,14 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     synapse: Any = get_synapse_from_body(body=body, synapse_model=AllocateAssets)
     bt.logging.debug(f"Synapse:\n{synapse}")
     pools: Any = synapse.assets_and_pools["pools"]
+    total_assets: int = synapse.assets_and_pools["total_assets"]
+
+    # return error if total assets is less <= 0
+    if total_assets <= MIN_TOTAL_ASSETS_AMOUNT:
+        raise HTTPException(
+            status_code=400,
+            detail="Total assets must be greater than 0",
+        )
 
     new_pools = {}
     for uid, pool in pools.items():
@@ -292,40 +299,19 @@ async def request_info(
     return info
 
 
-# Function to run the main loop
-async def run_main_loop() -> None:
-    try:
-        core_validator.run_in_background_thread()  # type: ignore[]
-    except KeyboardInterrupt:
-        bt.logging.info("Keyboard interrupt received, exiting...")
-
-
-# Function to run the Uvicorn server
-async def run_uvicorn_server() -> None:
-    config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port, loop="asyncio")  # noqa: S104 # type: ignore[]
-    server = uvicorn.Server(config)
-    await server.serve()
-
-
 async def main() -> None:
     global core_validator  # noqa: PLW0603
     core_validator = Validator()
-    if not (core_validator.config.synthetic or core_validator.config.organic):
-        bt.logging.error(
-            "You did not select a validator type to run! Ensure you select to run either a synthetic or organic validator. \
-             Shutting down...",
-        )
-        return
 
-    bt.logging.info(f"organic: {core_validator.config.organic}")
+    try:
+        config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port)  # noqa: S104
+        server = uvicorn.Server(config)
 
-    if core_validator.config.organic:
-        await asyncio.gather(run_uvicorn_server(), run_main_loop())
-    else:
-        with core_validator:
-            while True:
-                bt.logging.debug("Running synthetic vali...")
-                time.sleep(300)  # noqa: ASYNC251
+        async with core_validator:
+            await server.serve()
+
+    except KeyboardInterrupt:
+        bt.logging.info("Shutting down...")
 
 
 def start() -> None:

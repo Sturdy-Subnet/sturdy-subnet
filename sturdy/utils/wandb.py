@@ -1,12 +1,13 @@
-import wandb
-import bittensor as bt
 import copy
 
-from sturdy import __version__ as THIS_VERSION
-from sturdy import __spec_version__ as THIS_SPEC_VERSION
+import bittensor as bt
+import wandb
+
+from sturdy import __spec_version__ as THIS_SPEC_VERSION  # noqa: N812
+from sturdy import __version__ as THIS_VERSION  # noqa: N812
 
 
-def init_wandb_miner(self, reinit=False):
+def init_wandb_miner(self, reinit=False) -> None:
     """Starts a new wandb run for a miner."""
     tags = [
         self.wallet.hotkey.ss58_address,
@@ -74,15 +75,12 @@ def init_wandb_validator(self, reinit=False):
     )
 
 
-def reinit_wandb(self):
-    if hasattr(self, "wandb"):
-        if self.wandb is not None:
-            bt.logging.info("Reinitializing wandb")
-            init_wandb_validator(self, reinit=True)
-            bt.logging.info("Reinitialized wandb")
+def reinit_wandb(self) -> None:
+    if hasattr(self, "wandb") and self.wandb is not None:
+        bt.logging.info("Reinitializing wandb")
+        init_wandb_validator(self, reinit=True)
+        bt.logging.info("Reinitialized wandb")
 
 
-def should_reinit_wandb(self):
-    if self.wandb_run_log_count >= self.config.wandb.run_log_limit:
-        return True
-    return False
+def should_reinit_wandb(self) -> bool:
+    return self.wandb_run_log_count >= self.config.wandb.run_log_limit
