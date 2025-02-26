@@ -290,6 +290,7 @@ async def request_info(
         raise HTTPException(status_code=404, detail="No request info found")
     return info
 
+
 async def main() -> None:
     global core_validator  # noqa: PLW0603
     core_validator = Validator()

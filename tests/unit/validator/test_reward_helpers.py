@@ -2,6 +2,7 @@ import os
 import unittest
 
 import gmpy2
+from munch import DefaultMunch
 import numpy as np
 from dotenv import load_dotenv
 from web3 import Web3
@@ -166,16 +167,10 @@ class TestRewardFunctions(unittest.TestCase):
         cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
 
-        cls.vali = Validator(
-            config={
-                "mock": True,
-                "wandb": {"off": True},
-                "mock_n": 16,
-                "mock_max_uids": 16,
-                "neuron": {"dont_save_events": True},
-                "netuid": 420,
-            }
-        )
+        class EmptyVali:
+            pass
+
+        cls.vali = EmptyVali()
 
         cls.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]

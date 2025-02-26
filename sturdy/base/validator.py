@@ -188,7 +188,6 @@ class BaseValidatorNeuron(BaseNeuron):
         coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
         await asyncio.gather(*coroutines)
 
-
     def set_weights(self) -> None:
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights
