@@ -6,7 +6,7 @@
 # they want to run a miner or validator on their machine.
 
 # NOTE: Specification for miners may be different from validators
-# NOTE: Miners don't really use storage, neither do validators unless they're organic validators.
+# NOTE: Miners don't really use storage
 # Even then - storage isn't utilized very often - so disk performance won't really be a bottleneck vs, CPU, RAM, 
 # and network bandwidth.
 

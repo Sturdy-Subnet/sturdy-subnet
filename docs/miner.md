@@ -27,7 +27,7 @@ pip install -e .
 Before running a validator it is **highly** recommended that you run a local subtensor vs. just connecting to the `finney` endpoint. Instructions for setting up a local subtensor can be found [here](https://github.com/opentensor/subtensor/blob/main/docs/running-subtensor-locally.md).
 
 #### Connecting to Ethereum
-Miners are required to have a connection to an Ethereum RPC to handle organic requests. It is required to interact with relevant smart contracts in order to perform certain operations i.e. calculate miner allocation yields.
+Miners are required to have a connection to an Ethereum RPC to handle requests. It is required to interact with relevant smart contracts in order to perform certain operations i.e. calculate miner allocation yields.
 
 ##### Preparing Environment
 The next step involves interacting with an API. We've provided an [.env.example](../.env.example) file which should be copied as a `.env` file in the root of this repository before proceeding.
