@@ -149,6 +149,17 @@ class BaseMinerNeuron(BaseNeuron):
         except Exception as e:  # noqa
             bt.logging.error(traceback.format_exc())
 
+    # create "with" entry and exit functions to call run() in the background for syncing, etc.
+    def __enter__(self):
+        self.should_exit = False
+        self.thread = threading.Thread(target=self.run)
+        self.thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.should_exit = True
+        self.thread.join()
+
     def resync_metagraph(self) -> None:
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
 

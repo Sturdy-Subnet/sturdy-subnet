@@ -54,23 +54,26 @@ async def forward(self) -> Any:
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
 
     """
-    # delete stale active allocations after expiry time
-    bt.logging.debug("Purging stale active allocation requests")
-    with get_db_connection(self.config.db_dir) as conn:
-        rows_affected = delete_stale_active_allocs(conn)
-    bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
-    # initialize pools and assets
-    challenge_data = generate_challenge_data(self.w3)
-    request_uuid = str(uuid.uuid4()).replace("-", "")
-    user_address = challenge_data.get("user_address", None)
+    while True:
+        # delete stale active allocations after expiry time
+        bt.logging.debug("Purging stale active allocation requests")
+        with get_db_connection(self.config.db_dir) as conn:
+            rows_affected = delete_stale_active_allocs(conn)
+        bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
-    # check if there are enough assets to move around
-    total_assets = challenge_data["assets_and_pools"]["total_assets"]
+        # initialize pools and assets
+        challenge_data = generate_challenge_data(self.w3)
+        request_uuid = str(uuid.uuid4()).replace("-", "")
+        user_address = challenge_data.get("user_address", None)
 
-    if total_assets < MIN_TOTAL_ASSETS_AMOUNT:
-        bt.logging.error(f"Total assets are too low: {total_assets}")
-        return
+        # check if there are enough assets to move around
+        total_assets = challenge_data["assets_and_pools"]["total_assets"]
+
+        if total_assets < MIN_TOTAL_ASSETS_AMOUNT:
+            bt.logging.error(f"Total assets are too low: {total_assets}, retrying...")
+            continue
+        break
 
     bt.logging.info("Querying miners...")
     axon_times, allocations = await query_and_score_miners(
