@@ -2,13 +2,11 @@ import os
 import unittest
 
 import gmpy2
-from munch import DefaultMunch
 import numpy as np
 from dotenv import load_dotenv
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
-from neurons.validator import Validator
 from sturdy.algo import naive_algorithm
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.pools import *
@@ -702,15 +700,6 @@ class TestRewardFunctions(unittest.TestCase):
             },
             "miner_3": {"apy": 0, "allocations": None},
         }
-        assets_and_pools = {
-            "pools": {
-                "pool_1": {"reserve_size": 100},
-                "pool_2": {"reserve_size": 100},
-            },
-            "total_assets": 100,
-        }
-
-        total_assets = assets_and_pools["total_assets"]
 
         expected_similarity_matrix = {
             "miner_1": {

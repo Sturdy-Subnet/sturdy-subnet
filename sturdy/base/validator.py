@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import copy
 import os
-import threading
 import time
 
 import bittensor as bt
@@ -84,7 +83,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # Instantiate runners
         self.should_exit: bool = False
         self.is_running: bool = False
-        self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
         self._stop_event = asyncio.Event()
@@ -289,14 +287,12 @@ class BaseValidatorNeuron(BaseNeuron):
         # Check if `uids` is already a tensor and clone it to avoid the warning.
         uids_tensor = np.copy(uids)
 
-        # Compute forward pass rewards, assumes uids are mutually exclusive.
-        # shape: [ metagraph.n ]
+        # Compute forward pass rewards, assumes uids are mutually exclusive. shape: [ metagraph.n ]
         scattered_rewards: npt.NDArray = np.zeros_like(self.scores)
         np.put_along_axis(scattered_rewards, uids_tensor, rewards, axis=0)
         bt.logging.debug(f"Scattered rewards: {rewards}")
 
-        # Update scores with rewards produced by this step.
-        # shape: [ metagraph.n ]
+        # Update scores with rewards produced by this step. shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
         self.scores: npt.NDArray = np.clip(
             np.nan_to_num(alpha * scattered_rewards + (1 - alpha) * self.scores), a_min=0, a_max=1
