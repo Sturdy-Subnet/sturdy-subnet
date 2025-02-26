@@ -303,20 +303,12 @@ async def main() -> None:
     global core_validator  # noqa: PLW0603
     core_validator = Validator()
 
-    if not (core_validator.config.synthetic or core_validator.config.organic):
-        bt.logging.error("No validator type selected. Shutting down...")
-        return
-
     try:
-        if core_validator.config.organic:
-            config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port)  # noqa: S104
-            server = uvicorn.Server(config)
+        config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port)  # noqa: S104
+        server = uvicorn.Server(config)
 
-            async with core_validator:
-                await server.serve()
-        else:
-            async with core_validator:
-                await core_validator._stop_event.wait()
+        async with core_validator:
+            await server.serve()
 
     except KeyboardInterrupt:
         bt.logging.info("Shutting down...")
