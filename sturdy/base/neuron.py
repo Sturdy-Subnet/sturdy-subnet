@@ -113,7 +113,7 @@ class BaseNeuron(ABC):
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
-    def sync(self):
+    def sync(self) -> None:
         """
         Wrapper for synchronizing the state of the network for the given miner or validator.
         """
@@ -141,7 +141,7 @@ class BaseNeuron(ABC):
         # Always save state.
         self.save_state()
 
-    def check_registered(self):
+    def check_registered(self) -> None:
         # --- Check for registration.
         if not self.subtensor.is_hotkey_registered(
             netuid=self.config.netuid,
@@ -153,25 +153,17 @@ class BaseNeuron(ABC):
             )
             exit()
 
-    def should_sync_metagraph(self):
+    def should_sync_metagraph(self) -> bool:
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
         return (self.block - self.metagraph.last_update[self.uid]) > self.config.neuron.epoch_length
 
     def should_set_weights(self) -> bool:
-        # Don't set weights on initialization.
-        if self.step == 0:
-            return False
-
         # Check if enough epoch blocks have elapsed since the last epoch.
         if self.config.neuron.disable_set_weights:
             return False
-
-        # Define appropriate logic for when set weights.
-        return (
-            self.block - self.metagraph.last_update[self.uid]
-        ) > self.config.neuron.epoch_length and self.neuron_type != "MinerNeuron"  # don't set weights if you're a miner
+        return self.neuron_type != "MinerNeuron"  # don't set weights if you're a miner
 
     # TODO: is there a better way of going about this? ew.
     def save_state(self) -> None:  # noqa: B027
