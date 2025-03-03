@@ -128,14 +128,14 @@ class BaseValidatorNeuron(BaseNeuron):
                     self.last_query_time = current_time
                     self.sync()
                     self.step += 1
-                    await self.log_metrics()
+                    self.log_metrics()
 
                 await asyncio.sleep(1)
 
         except Exception as e:
             bt.logging.error(f"Error in main loop: {e}")
 
-    async def log_metrics(self) -> None:
+    def log_metrics(self) -> None:
         """Log metrics to wandb"""
         if self.config.wandb.off:
             return
@@ -155,7 +155,7 @@ class BaseValidatorNeuron(BaseNeuron):
             self.wandb_run_log_count += 1
 
             if should_reinit_wandb(self):
-                await reinit_wandb(self)
+                reinit_wandb(self)
 
         except Exception as e:
             bt.logging.error(f"Failed to log metrics: {e}")
