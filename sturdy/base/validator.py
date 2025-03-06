@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import copy
+import concurrent.futures
 import os
 import time
 
@@ -88,6 +89,10 @@ class BaseValidatorNeuron(BaseNeuron):
         self._stop_event = asyncio.Event()
         self._tasks = []
         self.last_query_time = 0
+        self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.validator.max_workers)
+
+    def __del__(self):
+        self.thread_pool.shutdown(wait=True)
 
     async def start(self) -> None:
         """Start validator tasks"""

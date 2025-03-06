@@ -42,6 +42,8 @@ from sturdy.validator.sql import (
     get_db_connection,
     log_allocations,
 )
+from sturdy.validator.utils.axon import query_single_axon
+from sturdy.validator.request import Request
 
 
 async def forward(self) -> Any:
@@ -131,29 +133,60 @@ def get_scoring_period(rng_gen: np.random.RandomState = None) -> int:
     )
 
 
-async def query_miner(
-    self,
-    synapse: bt.Synapse,
-    uid: str,
-    deserialize: bool = False,
-) -> bt.Synapse:
-    return await self.dendrite.forward(
-        axons=self.metagraph.axons[int(uid)],
-        synapse=synapse,
-        timeout=QUERY_TIMEOUT,
-        deserialize=deserialize,
-        streaming=False,
-    )
-
-
 async def query_multiple_miners(
     self,
     synapse: bt.Synapse,
     uids: list[str],
     deserialize: bool = False,
 ) -> list[bt.Synapse]:
-    uid_to_query_task = {uid: asyncio.create_task(query_miner(self, synapse, uid, deserialize)) for uid in uids}
-    return await asyncio.gather(*uid_to_query_task.values())
+    responses = []
+    for uid in uids:
+        request = prepare_single_request(self, int(uid), synapse.model_copy())
+        if request:
+            try:
+                task = asyncio.create_task(
+                    process_single_request(self, request)
+                )
+                await task
+                request.synapse.dendrite.process_time = request.response_time
+                responses.append(request.synapse)
+            except Exception as e:
+                bt.logging.error(f"query_multiple_miners::Error in task for UID {uid}: {e}")
+                responses.append(None)
+        else:
+            bt.logging.error(f"query_multiple_miners::Error preparing request for UID {uid}")
+            responses.append(None)
+    return responses
+
+
+async def process_single_request(self, request: Request) -> Request:
+        """
+        Process a single request and return the response.
+        """
+        try:
+            response = await asyncio.get_event_loop().run_in_executor(
+                self.thread_pool,
+                lambda: query_single_axon(self.dendrite, request),
+            )
+            response = await response
+        except Exception as e:
+            bt.logging.error(f"Error processing request for UID {request.uid}: {e}")
+        return request
+
+def prepare_single_request(self, uid: int, synapse: bt.Synapse) -> Request | None:
+        """
+        Prepare a single request to be sent to the miner.
+        """
+        try:
+            request = Request(
+                uid=uid,
+                axon=self.metagraph.axons[uid],
+                synapse=synapse,
+            )
+            return request
+        except Exception as e:
+            bt.logging.error(f"prepare_single_request::Error preparing request for UID {uid}: {e}")
+            return None
 
 
 async def query_and_score_miners(
