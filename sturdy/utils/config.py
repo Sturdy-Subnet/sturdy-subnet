@@ -245,6 +245,13 @@ def add_validator_args(_cls, parser) -> None:
         default=DB_DIR,
     )
 
+    parser.add_argument(
+        "--validator.max_workers",
+        type=int,
+        help="maximum number of workers of validator thread pool for requesting miners",
+        default=None,
+    )
+
 
 def config(cls) -> bt.config:
     """

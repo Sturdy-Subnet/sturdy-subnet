@@ -145,7 +145,7 @@ async def query_multiple_miners(
         if request:
             try:
                 task = asyncio.create_task(
-                    _process_single_request(self, request)
+                    process_single_request(self, request)
                 )
                 await task
                 request.synapse.dendrite.process_time = request.response_time
@@ -159,7 +159,7 @@ async def query_multiple_miners(
     return responses
 
 
-async def _process_single_request(self, request: Request) -> Request:
+async def process_single_request(self, request: Request) -> Request:
         """
         Process a single request and return the response.
         """
