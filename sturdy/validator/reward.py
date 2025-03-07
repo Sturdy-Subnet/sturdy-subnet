@@ -24,7 +24,7 @@ import gmpy2
 import numpy as np
 import numpy.typing as npt
 
-from sturdy.constants import ALLOCATION_SIMILARITY_THRESHOLD, APY_SIMILARITY_THRESHOLD, QUERY_TIMEOUT
+from sturdy.constants import ALLOCATION_SIMILARITY_THRESHOLD, APY_SIMILARITY_THRESHOLD, NORM_EXP_POW, QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div
@@ -91,7 +91,7 @@ def normalize_exp(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) 
     apys = np.array(list(raw_apys.values()), dtype=np.float32)
     normed = (apys - apys.min()) / (apys.max() - apys.min() + epsilon)
 
-    return np.pow(normed, 8)
+    return np.pow(normed, NORM_EXP_POW)
 
 
 def calculate_penalties(

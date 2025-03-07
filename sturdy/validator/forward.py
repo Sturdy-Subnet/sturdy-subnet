@@ -144,9 +144,7 @@ async def query_multiple_miners(
         request = prepare_single_request(self, int(uid), synapse.model_copy())
         if request:
             try:
-                task = asyncio.create_task(
-                    process_single_request(self, request)
-                )
+                task = asyncio.create_task(process_single_request(self, request))
                 await task
                 request.synapse.dendrite.process_time = request.response_time
                 responses.append(request.synapse)
@@ -160,33 +158,34 @@ async def query_multiple_miners(
 
 
 async def process_single_request(self, request: Request) -> Request:
-        """
-        Process a single request and return the response.
-        """
-        try:
-            response = await asyncio.get_event_loop().run_in_executor(
-                self.thread_pool,
-                lambda: query_single_axon(self.dendrite, request),
-            )
-            response = await response
-        except Exception as e:
-            bt.logging.error(f"Error processing request for UID {request.uid}: {e}")
-        return request
+    """
+    Process a single request and return the response.
+    """
+    try:
+        response = await asyncio.get_event_loop().run_in_executor(
+            self.thread_pool,
+            lambda: query_single_axon(self.dendrite, request),
+        )
+        response = await response
+    except Exception as e:
+        bt.logging.error(f"Error processing request for UID {request.uid}: {e}")
+    return request
+
 
 def prepare_single_request(self, uid: int, synapse: bt.Synapse) -> Request | None:
-        """
-        Prepare a single request to be sent to the miner.
-        """
-        try:
-            request = Request(
-                uid=uid,
-                axon=self.metagraph.axons[uid],
-                synapse=synapse,
-            )
-            return request
-        except Exception as e:
-            bt.logging.error(f"prepare_single_request::Error preparing request for UID {uid}: {e}")
-            return None
+    """
+    Prepare a single request to be sent to the miner.
+    """
+    try:
+        request = Request(
+            uid=uid,
+            axon=self.metagraph.axons[uid],
+            synapse=synapse,
+        )
+        return request
+    except Exception as e:
+        bt.logging.error(f"prepare_single_request::Error preparing request for UID {uid}: {e}")
+        return None
 
 
 async def query_and_score_miners(

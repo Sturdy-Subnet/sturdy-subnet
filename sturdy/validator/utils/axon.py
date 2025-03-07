@@ -31,19 +31,13 @@ async def query_single_axon(dendrite: bt.dendrite, request: Request) -> Request 
         if not result:
             return None
         request.synapse = result
-        request.response_time = (
-            result.dendrite.process_time
-            if result.dendrite.process_time is not None
-            else QUERY_TIMEOUT
-        )
+        request.response_time = result.dendrite.process_time if result.dendrite.process_time is not None else QUERY_TIMEOUT
 
         request.deserialized = result.deserialize()
         return request
 
     except InvalidUrlClientError:
-        bt.logging.error(
-            f"Ignoring UID as axon is not a valid URL: {request.uid}. {request.axon.ip}:{request.axon.port}"
-        )
+        bt.logging.error(f"Ignoring UID as axon is not a valid URL: {request.uid}. {request.axon.ip}:{request.axon.port}")
         return None
 
     except Exception as e:

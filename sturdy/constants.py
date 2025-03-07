@@ -1,35 +1,8 @@
 NUM_POOLS = 10  # number of pools to generate per query per epoch - for scoring miners
-MIN_BASE_RATE = 0
-MAX_BASE_RATE = int(0.02e18)
-BASE_RATE_STEP = int(0.01e18)
-MIN_SLOPE = int(0.01e18)
-MAX_SLOPE = int(0.05e18)
-MIN_KINK_SLOPE = int(0.01e18)
-MAX_KINK_SLOPE = int(0.05e18)
-SLOPE_STEP = int(0.001e18)
-MIN_OPTIMAL_RATE = int(0.80e18)
-MAX_OPTIMAL_RATE = int(0.95e18)
-OPTIMAL_UTIL_STEP = int(0.05e18)
-MIN_UTIL_RATE = int(0.25e18)
-MAX_UTIL_RATE = int(0.95e18)
-UTIL_RATE_STEP = int(0.05e18)
-MIN_TOTAL_ASSETS_OFFSET = 500e18  # 500 when converted from wei -> ether unit
-MAX_TOTAL_ASSETS_OFFSET = 1000e18  # 3000
-TOTAL_ASSETS_OFFSET_STEP = 100e18  # 100
 SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
-REVERSION_SPEED = 0.15  # reversion speed to median borrow rate of pools
-MIN_TIMESTEPS = 7
-MAX_TIMESTEPS = 14
-TIMESTEPS_STEP = 1
-# some randomness to sprinkle into the simulation
-MIN_STOCHASTICITY = 0.002  # min stochasticity
-MAX_STOCHASTICITY = 0.002  # max stochasticity
-STOCHASTICITY_STEP = 0.0001
-POOL_RESERVE_SIZE = int(100e18)  # 100
-
 QUERY_FREQUENCY = 600  # time in seconds between validator queries
-QUERY_TIMEOUT = 45  # timeout (seconds)
+QUERY_TIMEOUT = 3  # timeout (seconds)
 
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 
@@ -43,6 +16,8 @@ SCORING_WINDOW = 420  # scoring window
 TOTAL_ALLOC_THRESHOLD = 0.98
 ALLOCATION_SIMILARITY_THRESHOLD = 1e-4  # similarity threshold for plagiarism checking
 APY_SIMILARITY_THRESHOLD = 1e-4
+
+NORM_EXP_POW = 16
 
 DB_DIR = "validator_database.db"  # default validator database dir
 
