@@ -80,6 +80,7 @@ def reinit_wandb(self) -> None:
         bt.logging.info("Reinitializing wandb")
         init_wandb_validator(self, reinit=True)
         bt.logging.info("Reinitialized wandb")
+        self.wandb_run_log_count = 0
 
 
 def should_reinit_wandb(self) -> bool:
