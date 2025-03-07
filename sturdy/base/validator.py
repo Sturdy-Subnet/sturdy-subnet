@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import copy
+import concurrent.futures
 import os
 import time
 
@@ -68,6 +69,8 @@ class BaseValidatorNeuron(BaseNeuron):
         self.sorted_apys = {}
         self.sorted_axon_times = {}
 
+        # Load state
+        self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
@@ -88,6 +91,10 @@ class BaseValidatorNeuron(BaseNeuron):
         self._stop_event = asyncio.Event()
         self._tasks = []
         self.last_query_time = 0
+        self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.validator.max_workers)
+
+    def __del__(self):
+        self.thread_pool.shutdown(wait=True)
 
     async def start(self) -> None:
         """Start validator tasks"""
@@ -272,6 +279,12 @@ class BaseValidatorNeuron(BaseNeuron):
             new_moving_average[:min_len] = self.scores[:min_len]
             # zero out nans
             self.scores = np.clip(np.nan_to_num(new_moving_average), a_min=0, a_max=1)
+        elif len(self.hotkeys) > len(self.metagraph.hotkeys):
+            # Update the size of the moving average scores.
+            new_moving_average = np.zeros(self.metagraph.n)
+            new_moving_average = self.scores[: len(self.metagraph.hotkeys)]
+            # zero out nans
+            self.scores = np.clip(np.nan_to_num(new_moving_average), a_min=0, a_max=1)
 
         # Update the hotkeys.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
@@ -302,8 +315,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def save_state(self) -> None:
         """Saves the state of the validator to a file."""
-        bt.logging.info("Saving validator state.")
-
+        bt.logging.info("Saving validator state...")
         # Save the state of the validator to file.
         np.savez(
             self.config.neuron.full_path + "/state",
@@ -311,6 +323,7 @@ class BaseValidatorNeuron(BaseNeuron):
             scores=self.scores,
             hotkeys=self.hotkeys,
         )
+        bt.logging.info("Saved")
 
     def load_state(self) -> None:
         """Loads the state of the validator from a file."""

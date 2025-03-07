@@ -70,7 +70,6 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None) -> None:
         super().__init__(config=config)
         bt.logging.info("load_state()")
-        self.load_state()
         self.uid_to_response = {}
 
     async def forward(self) -> Any:
