@@ -50,6 +50,7 @@ class POOL_TYPES(IntEnum):
     MORPHO = 5
     YEARN_V3 = 6
     AAVE_TARGET = 7
+    BT_ALPHA = 8
 
 
 def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
@@ -214,6 +215,41 @@ class PoolFactory:
                 return AaveV3RateTargetBaseInterestRatePool(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
+
+
+class BittensorAlphaTokenPool(BaseModel):
+    """This class represents an alpha token pool for a subnet on the Bittensor network"""
+
+    pool_type: Literal[POOL_TYPES.BT_ALPHA] = POOL_TYPES.BT_ALPHA
+    subnet_uid: int
+
+    _price_rao: int = PrivateAttr()  # current price of alpha token in rao
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    # TODO: can we just return a "hash" repr of the subnet uid instead?
+    def __hash__(self) -> int:
+        return hash(self.subnet_uid)
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, BittensorAlphaTokenPool):
+            return NotImplemented
+        # Compare the attributes for equality
+        return self.subnet_uid == other.subnet_uid
+
+    def pool_init(self, subtensor: bt.Subtensor) -> None:
+        self.sync(subtensor)
+
+    # TODO: use async subtensor interface
+    def sync(self, subtensor: bt.Subtensor) -> None:
+        try:
+            subnets = subtensor.subnet(netuid=self.subnet_uid)
+            subnet = subnets[self.subnet_uid]
+            self._price_rao = subnet.price.rao
+        except Exception as err:
+            bt.logging.error("Failed to sync alpha token pool!")
+            bt.logging.error(err)
 
 
 class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
