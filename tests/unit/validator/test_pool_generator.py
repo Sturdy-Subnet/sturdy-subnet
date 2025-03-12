@@ -9,7 +9,7 @@ from web3 import Web3
 from sturdy.constants import *
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.pools import (
-    assets_pools_for_challenge_data,
+    gen_evm_pools_for_challenge,
 )
 
 load_dotenv()
@@ -85,7 +85,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             key = keys[idx]
             print(key)
             selected_entry = POOL_REGISTRY[key]
-            generated = assets_pools_for_challenge_data(selected_entry, self.w3)
+            generated = gen_evm_pools_for_challenge(selected_entry, self.w3)
             print(generated)
 
             pools = generated["assets_and_pools"]["pools"]

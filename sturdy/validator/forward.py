@@ -29,11 +29,11 @@ from sturdy.constants import (
     MAX_SCORING_PERIOD,
     MIN_SCORING_PERIOD,
     MIN_TOTAL_ASSETS_AMOUNT,
-    QUERY_TIMEOUT,
     SCORING_PERIOD_STEP,
 )
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
+from sturdy.validator.request import Request
 from sturdy.validator.reward import filter_allocations, get_rewards
 from sturdy.validator.sql import (
     delete_active_allocs,
@@ -43,7 +43,6 @@ from sturdy.validator.sql import (
     log_allocations,
 )
 from sturdy.validator.utils.axon import query_single_axon
-from sturdy.validator.request import Request
 
 
 async def forward(self) -> Any:
@@ -65,16 +64,23 @@ async def forward(self) -> Any:
         bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
         # initialize pools and assets
-        challenge_data = generate_challenge_data(self.w3)
+        chain_data_provider = np.random.choice([self.w3, self.subtensor])
+        challenge_data = generate_challenge_data(chain_data_provider)
         request_uuid = str(uuid.uuid4()).replace("-", "")
         user_address = challenge_data.get("user_address", None)
 
         # check if there are enough assets to move around
         total_assets = challenge_data["assets_and_pools"]["total_assets"]
 
-        if total_assets < MIN_TOTAL_ASSETS_AMOUNT:
-            bt.logging.error(f"Total assets are too low: {total_assets}, retrying...")
-            continue
+        if isinstance(chain_data_provider, bt.Subtensor):
+            if total_assets < 1:
+                bt.logging.error(f"Total assets are too low: {total_assets}, retrying...")
+                continue
+        else:
+            if total_assets < MIN_TOTAL_ASSETS_AMOUNT:
+                bt.logging.error(f"Total assets are too low: {total_assets}, retrying...")
+                continue
+
         break
 
     bt.logging.info("Querying miners...")
