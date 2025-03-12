@@ -16,7 +16,7 @@ from neurons.validator import Validator
 from sturdy.algo import naive_algorithm
 from sturdy.mock import MockDendrite
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
-from sturdy.pools import assets_pools_for_challenge_data
+from sturdy.pools import gen_evm_pools_for_challenge
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
 from sturdy.validator.forward import get_metadata, query_multiple_miners
 from sturdy.validator.reward import filter_allocations, get_rewards
@@ -61,7 +61,7 @@ class TestValidator(IsolatedAsyncioTestCase):
         # )
 
         selected_entry = POOL_REGISTRY["Sturdy Crvusd Aggregator"]
-        cls.generated_data = assets_pools_for_challenge_data(selected_entry, cls.w3)
+        cls.generated_data = gen_evm_pools_for_challenge(selected_entry, cls.w3)
         print(f"assets and pools: {cls.generated_data}")
         cls.assets_and_pools = cls.generated_data["assets_and_pools"]
 

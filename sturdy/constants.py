@@ -1,4 +1,3 @@
-NUM_POOLS = 10  # number of pools to generate per query per epoch - for scoring miners
 SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
 QUERY_FREQUENCY = 600  # time in seconds between validator queries
@@ -36,3 +35,9 @@ RESERVE_FACTOR_MASK = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFF
 APR_ORACLE = (
     "0x27aD2fFc74F74Ed27e1C0A19F1858dD0963277aE"  # https://docs.yearn.fi/developers/smart-contracts/V3/periphery/AprOracle
 )
+
+# bittensor alpha token pools
+MIN_BT_POOLS = 3  # minimum number of alpha token pools to generate per query per epoch - for scoring miners
+MAX_BT_POOLS = 10  # maximum number of alpha token pools to generate per query per epoch - for scoring miners
+
+MIN_TAO_IN_POOL = 500.0  # minimum amount of TAO a pool must have to consider it to be "valid"
