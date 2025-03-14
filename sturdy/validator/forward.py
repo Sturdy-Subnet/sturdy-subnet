@@ -31,7 +31,7 @@ from sturdy.constants import (
     MIN_TOTAL_ASSETS_AMOUNT,
     SCORING_PERIOD_STEP,
 )
-from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, generate_challenge_data
+from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.validator.request import Request
 from sturdy.validator.reward import filter_allocations, get_rewards
@@ -63,6 +63,7 @@ async def forward(self) -> Any:
             rows_affected = delete_stale_active_allocs(conn)
         bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
+        # TODO: uncomment
         # initialize pools and assets
         chain_data_provider = np.random.choice([self.w3, self.subtensor])
         challenge_data = generate_challenge_data(chain_data_provider)
@@ -72,8 +73,9 @@ async def forward(self) -> Any:
         # check if there are enough assets to move around
         total_assets = challenge_data["assets_and_pools"]["total_assets"]
 
+        # check if the challenge data involves bittensor alpha token pools
         if isinstance(chain_data_provider, bt.Subtensor):
-            if total_assets < 1:
+            if total_assets < 1e7:
                 bt.logging.error(f"Total assets are too low: {total_assets}, retrying...")
                 continue
         else:
@@ -87,13 +89,14 @@ async def forward(self) -> Any:
     axon_times, allocations = await query_and_score_miners(
         self,
         assets_and_pools=challenge_data["assets_and_pools"],
+        chain_data_provider=chain_data_provider,
         request_type=REQUEST_TYPES.SYNTHETIC,
         user_address=user_address if user_address is not None else ADDRESS_ZERO,
     )
 
     assets_and_pools = challenge_data["assets_and_pools"]
     pools = assets_and_pools["pools"]
-    metadata = get_metadata(pools, self.w3)
+    metadata = get_metadata(pools, chain_data_provider)
 
     scoring_period = get_scoring_period()
 
@@ -111,17 +114,22 @@ async def forward(self) -> Any:
         )
 
 
-def get_metadata(pools: dict[str, ChainBasedPoolModel], w3: Web3) -> dict:
+def get_metadata(
+    pools: dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool], chain_data_provider: Web3 | bt.Subtensor
+) -> dict:
     metadata = {}
-    for contract_addr, pool in pools.items():
-        pool.sync(w3)
-        match pool.pool_type:
-            case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
-                metadata[contract_addr] = pool._yield_index
-            case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                metadata[contract_addr] = pool._yield_index
-            case _:
-                pass
+    for idx, pool in pools.items():
+        pool.sync(chain_data_provider)
+        if isinstance(chain_data_provider, Web3):
+            match pool.pool_type:
+                case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
+                    metadata[idx] = pool._yield_index
+                case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
+                    metadata[idx] = pool._yield_index
+                case _:
+                    pass
+        else:
+            metadata[idx] = pool._price_rao
 
     return metadata
 
@@ -143,7 +151,6 @@ async def query_multiple_miners(
     self,
     synapse: bt.Synapse,
     uids: list[str],
-    deserialize: bool = False,
 ) -> list[bt.Synapse]:
     responses = []
     for uid in uids:
@@ -183,12 +190,11 @@ def prepare_single_request(self, uid: int, synapse: bt.Synapse) -> Request | Non
     Prepare a single request to be sent to the miner.
     """
     try:
-        request = Request(
+        return Request(
             uid=uid,
             axon=self.metagraph.axons[uid],
             synapse=synapse,
         )
-        return request
     except Exception as e:
         bt.logging.error(f"prepare_single_request::Error preparing request for UID {uid}: {e}")
         return None
@@ -197,6 +203,7 @@ def prepare_single_request(self, uid: int, synapse: bt.Synapse) -> Request | Non
 async def query_and_score_miners(
     self,
     assets_and_pools: Any,
+    chain_data_provider: Web3 | bt.Subtensor,
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
     user_address: str = ADDRESS_ZERO,
 ) -> tuple[list, dict[str, AllocInfo]]:
@@ -229,7 +236,7 @@ async def query_and_score_miners(
 
     curr_pools = assets_and_pools["pools"]
     for pool in curr_pools.values():
-        pool.sync(self.w3)
+        pool.sync(chain_data_provider)
 
     # score previously suggested miner allocations based on how well they are performing now
 
@@ -245,7 +252,7 @@ async def query_and_score_miners(
         request_uid = active_alloc["request_uid"]
         uids_to_delete.append(request_uid)
         # calculate rewards for previous active allocations
-        miner_uids, rewards = get_rewards(self, active_alloc)
+        miner_uids, rewards = get_rewards(self, active_alloc, chain_data_provider)
         bt.logging.debug(f"miner rewards: {rewards}")
         bt.logging.debug(f"sim penalities: {self.similarity_penalties}")
 

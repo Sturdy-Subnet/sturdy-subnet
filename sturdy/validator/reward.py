@@ -21,9 +21,10 @@ from typing import cast
 
 import bittensor as bt
 import numpy.typing as npt
+from web3 import Web3
 
 from sturdy.constants import QUERY_TIMEOUT
-from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
+from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
@@ -141,6 +142,18 @@ def annualized_yield_pct(
                     except Exception as e:
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
                         bt.logging.error(e)
+            case POOL_TYPES.BT_ALPHA:
+                if allocation > 0:
+                    last_price = extra_metadata[contract_addr]
+                    curr_price = pool._price_rao
+                    pct_delta = float(curr_price - last_price) / float(last_price)
+                    deposit_delta = allocation
+                    try:
+                        annualized_pct_return = pct_delta * (seconds_per_year / seconds_passed)
+                        total_yield += int(allocation * annualized_pct_return)
+                    except Exception as e:
+                        bt.logging.error("Error calculating annualized pct yield, skipping:")
+                        bt.logging.error(e)
             case _:
                 total_yield += 0
 
@@ -207,7 +220,7 @@ def filter_allocations(
     return axon_times, curr_filtered_allocs
 
 
-def get_rewards(self, active_allocation) -> tuple[list, dict]:
+def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.Subtensor) -> tuple[list, dict]:
     # a dictionary, miner uids -> apy and allocations
     apys_and_allocations = {}
     miner_uids = []
@@ -240,15 +253,21 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
     pools = assets_and_pools["pools"]
     new_pools = {}
     for uid, pool in pools.items():
-        new_pool = PoolFactory.create_pool(
-            pool_type=pool["pool_type"],
-            web3_provider=self.w3,  # type: ignore[]
-            user_address=(pool["user_address"]),  # TODO: is there a cleaner way to do this?
-            contract_address=pool["contract_address"],
-        )
+        if pool["pool_type"] == POOL_TYPES.BT_ALPHA:
+            new_pool = PoolFactory.create_pool(
+                pool_type=pool["pool_type"],
+                netuid=int(pool["netuid"]),
+            )
+        else:
+            new_pool = PoolFactory.create_pool(
+                pool_type=pool["pool_type"],
+                web3_provider=self.w3,  # type: ignore[]
+                user_address=(pool["user_address"]),  # TODO: is there a cleaner way to do this?
+                contract_address=pool["contract_address"],
+            )
 
         # sync pool
-        new_pool.sync(self.w3)
+        new_pool.sync(chain_data_provider)
         new_pools[uid] = new_pool
 
     assets_and_pools["pools"] = new_pools

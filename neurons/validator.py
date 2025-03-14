@@ -69,7 +69,6 @@ class Validator(BaseValidatorNeuron):
 
     def __init__(self, config=None) -> None:
         super().__init__(config=config)
-        bt.logging.info("load_state()")
         self.uid_to_response = {}
 
     async def forward(self) -> Any:
@@ -237,6 +236,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     axon_times, result = await query_and_score_miners(
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
+        chain_data_provider=core_validator.w3,  # TODO: change this
         request_type=synapse.request_type,
         user_address=synapse.user_address,
     )

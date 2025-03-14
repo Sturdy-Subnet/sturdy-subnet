@@ -24,7 +24,7 @@ from typing_extensions import TypedDict
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
-from sturdy.pools import ChainBasedPoolModel
+from sturdy.pools import BittensorAlphaTokenPool, ChainBasedPoolModel
 
 
 class REQUEST_TYPES(IntEnum):
@@ -45,7 +45,7 @@ class AllocateAssetsRequest(BaseModel):
         use_enum_values = True
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int] = Field(
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
@@ -102,7 +102,7 @@ class AllocateAssetsBase(BaseModel):
         use_enum_values = True
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int] = Field(
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
@@ -139,6 +139,8 @@ class AllocateAssetsBase(BaseModel):
         allocs = values.allocations
         if allocs is not None:
             for alloc_dict_key in allocs:
+                if isinstance(values.assets_and_pools["pools"][alloc_dict_key], BittensorAlphaTokenPool):
+                    continue
                 if not Web3.is_address(alloc_dict_key):
                     raise ValueError("contract address is invalid!")
 
