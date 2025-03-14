@@ -32,6 +32,9 @@ class BaseValidatorNeuron(BaseNeuron):
         add_validator_args(cls, parser)
 
     def __init__(self, config=None) -> None:
+        # Initialize thread_pool first before any potential early returns
+        self.thread_pool = None
+
         super().__init__(config=config)
         load_dotenv()
 
@@ -70,6 +73,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.sorted_axon_times = {}
 
         # Load state
+        bt.logging.info("load_state()")
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -329,8 +333,18 @@ class BaseValidatorNeuron(BaseNeuron):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
 
-        # Load the state of the validator from file.
-        state = np.load(self.config.neuron.full_path + "/state.npz")
-        self.step = state["step"]
-        self.scores = state["scores"]
-        self.hotkeys = state["hotkeys"]
+        state_path = f"{self.config.neuron.full_path}/state.npz"
+
+        try:
+            # Load the state of the validator from file
+            state = np.load(state_path)
+            self.step = state["step"]
+            self.scores = state["scores"]
+            self.hotkeys = state["hotkeys"]
+            bt.logging.info(f"Loaded state with {len(self.hotkeys)} hotkeys")
+        except FileNotFoundError:
+            bt.logging.info(f"No state file found at {state_path}. Starting with empty state.")
+            # Initialize with default values since no state file exists
+            self.step = 0
+            self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+            self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
