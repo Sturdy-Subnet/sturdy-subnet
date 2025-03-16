@@ -46,6 +46,8 @@ class BaseValidatorNeuron(BaseNeuron):
         if not self.config.wandb.off:
             bt.logging.debug("loading wandb")
             init_wandb_validator(self=self)
+        else:
+            self.wandb = None
 
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
