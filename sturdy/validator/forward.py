@@ -63,25 +63,24 @@ async def forward(self) -> Any:
             rows_affected = delete_stale_active_allocs(conn)
         bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
-        # TODO: uncomment
-        # initialize pools and assets
         chain_data_provider = np.random.choice([self.w3, self.subtensor])
-        challenge_data = generate_challenge_data(chain_data_provider)
+        try:
+            challenge_data = generate_challenge_data(chain_data_provider)
+        except Exception as e:
+            bt.logging.error(f"Failed to generate challenge data: {e}")
+            continue
+
         request_uuid = str(uuid.uuid4()).replace("-", "")
         user_address = challenge_data.get("user_address", None)
 
         # check if there are enough assets to move around
         total_assets = challenge_data["assets_and_pools"]["total_assets"]
-
-        # check if the challenge data involves bittensor alpha token pools
-        if isinstance(chain_data_provider, bt.Subtensor):
-            if total_assets < 1e7:
-                bt.logging.error(f"Total assets are too low: {total_assets}, retrying...")
-                continue
-        else:
+        if isinstance(chain_data_provider, ChainBasedPoolModel):
+            bt.logging.debug("Checking total assets amount of generated challenge...")
             if total_assets < MIN_TOTAL_ASSETS_AMOUNT:
                 bt.logging.error(f"Total assets are too low: {total_assets}, retrying...")
                 continue
+            bt.logging.debug("Check passed")
 
         break
 

@@ -230,6 +230,12 @@ class BittensorAlphaTokenPool(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
+    @field_validator("netuid", mode="before")
+    def check_params(cls, value) -> int:
+        if value == 0:
+            raise ValueError("Invalid subnet netuid - root (subnet 0) does not have an alpha token pool")
+        return value
+
     # TODO: can we just return a "hash" repr of the subnet uid instead?
     def __hash__(self) -> int:
         return hash(self.netuid)
@@ -1231,13 +1237,15 @@ def gen_bt_alpha_pools(
     subtensor: bt.Subtensor,
     rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
 ) -> dict[str, dict[str, BittensorAlphaTokenPool] | int]:  # generate pools
-    subnet_uids = subtensor.get_subnets()
-    # Filter subnets that have >= MIN_TAO_IN_POOL TAO in their pools
-    all_subnets = subtensor.all_subnets()
+    # Filter out root and subnets that have >= MIN_TAO_IN_POOL TAO in their pools
+    all_subnets = subtensor.all_subnets()[1:]
     subnets = [s for s in all_subnets if s.tao_in.tao > MIN_TAO_IN_POOL]
     num_subnets = len(subnets)
-    # TODO: check is num subnets is less than min
-    # if num_subnets <
+
+    # check is num subnets is less than min - if so, raise error
+    if num_subnets < MIN_BT_POOLS:
+        raise ValueError(f"Not enough eligible subnets (found {num_subnets}, need at least {MIN_BT_POOLS})")
+
     num_pools = rng_gen.randint(MIN_BT_POOLS, min(MAX_BT_POOLS + 1, num_subnets + 1))
     challenge_data = {}
     challenge_data["assets_and_pools"] = {}
@@ -1245,8 +1253,8 @@ def gen_bt_alpha_pools(
     challenge_data["assets_and_pools"]["total_assets"] = num_pools * int(1e9)  # num_pools * 1 rao
 
     for _ in range(num_pools):
-        netuid = rng_gen.choice(subnet_uids)
-        pool: BittensorAlphaTokenPool = PoolFactory.create_pool(pool_type=POOL_TYPES.BT_ALPHA, netuid=netuid)
+        subnet = rng_gen.choice(subnets)
+        pool: BittensorAlphaTokenPool = PoolFactory.create_pool(pool_type=POOL_TYPES.BT_ALPHA, netuid=subnet.netuid)
         challenge_data["assets_and_pools"]["pools"][str(pool.netuid)] = pool
 
     return challenge_data
