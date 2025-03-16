@@ -1236,24 +1236,29 @@ def generate_challenge_data(
 def gen_bt_alpha_pools(
     subtensor: bt.Subtensor,
     rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
-) -> dict[str, dict[str, BittensorAlphaTokenPool] | int]:  # generate pools
+) -> dict[str, dict[str, BittensorAlphaTokenPool] | int]:
     # Filter out root and subnets that have >= MIN_TAO_IN_POOL TAO in their pools
     all_subnets = subtensor.all_subnets()[1:]
     subnets = [s for s in all_subnets if s.tao_in.tao > MIN_TAO_IN_POOL]
     num_subnets = len(subnets)
 
-    # check is num subnets is less than min - if so, raise error
+    # check if num subnets is less than min - if so, raise error
     if num_subnets < MIN_BT_POOLS:
         raise ValueError(f"Not enough eligible subnets (found {num_subnets}, need at least {MIN_BT_POOLS})")
 
     num_pools = rng_gen.randint(MIN_BT_POOLS, min(MAX_BT_POOLS + 1, num_subnets + 1))
-    challenge_data = {}
-    challenge_data["assets_and_pools"] = {}
-    challenge_data["assets_and_pools"]["pools"] = {}
-    challenge_data["assets_and_pools"]["total_assets"] = num_pools * int(1e9)  # num_pools * 1 rao
 
-    for _ in range(num_pools):
-        subnet = rng_gen.choice(subnets)
+    # sample `num_pools` unique subnets without replacement
+    selected_subnets = rng_gen.choice(subnets, size=num_pools, replace=False)
+
+    challenge_data = {
+        "assets_and_pools": {
+            "pools": {},
+            "total_assets": num_pools * int(1e9),  # num_pools * 1 rao
+        }
+    }
+
+    for subnet in selected_subnets:
         pool: BittensorAlphaTokenPool = PoolFactory.create_pool(pool_type=POOL_TYPES.BT_ALPHA, netuid=subnet.netuid)
         challenge_data["assets_and_pools"]["pools"][str(pool.netuid)] = pool
 
