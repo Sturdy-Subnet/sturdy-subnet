@@ -976,7 +976,7 @@ class TestCalculateApy(unittest.TestCase):
         )
 
         selected_entry = POOL_REGISTRY["Sturdy Crvusd Aggregator"]
-        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+        selected = gen_evm_pools_for_challenge(selected_entry, self.w3)
 
         assets_and_pools = selected["assets_and_pools"]
         user_address = selected["user_address"]
@@ -1043,7 +1043,7 @@ class TestCalculateApy(unittest.TestCase):
             }
         }
 
-        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+        selected = gen_evm_pools_for_challenge(selected_entry, self.w3)
 
         assets_and_pools = selected["assets_and_pools"]
         synapse = AllocateAssets(
@@ -1091,7 +1091,7 @@ class TestCalculateApy(unittest.TestCase):
         )
 
         selected_entry = POOL_REGISTRY["Morpho USDC Vaults"]
-        selected = assets_pools_for_challenge_data(selected_entry, self.w3)
+        selected = gen_evm_pools_for_challenge(selected_entry, self.w3)
 
         assets_and_pools = selected["assets_and_pools"]
         user_address = selected["user_address"]

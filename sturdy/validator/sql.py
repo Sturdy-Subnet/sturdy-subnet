@@ -27,7 +27,6 @@ ACTIVE_ALLOCS = "active_allocs"
 REQUEST_UID = "request_uid"
 REQUEST_TYPE = "request_type"
 MINER_UID = "miner_uid"
-USER_ADDRESS = "user_address"
 ALLOCATION = "allocation"
 
 

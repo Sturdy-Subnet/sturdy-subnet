@@ -50,6 +50,7 @@ class POOL_TYPES(IntEnum):
     MORPHO = 5
     YEARN_V3 = 6
     AAVE_TARGET = 7
+    BT_ALPHA = 8
 
 
 def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
@@ -212,8 +213,50 @@ class PoolFactory:
                 return YearnV3Vault(**kwargs)
             case POOL_TYPES.AAVE_TARGET:
                 return AaveV3RateTargetBaseInterestRatePool(**kwargs)
+            case POOL_TYPES.BT_ALPHA:
+                return BittensorAlphaTokenPool(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
+
+
+class BittensorAlphaTokenPool(BaseModel):
+    """This class represents an alpha token pool for a subnet on the Bittensor network"""
+
+    pool_type: Literal[POOL_TYPES.BT_ALPHA] = POOL_TYPES.BT_ALPHA
+    netuid: int
+
+    _price_rao: int = PrivateAttr()  # current price of alpha token in rao
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    @field_validator("netuid", mode="before")
+    def check_params(cls, value) -> int:
+        if value == 0:
+            raise ValueError("Invalid subnet netuid - root (subnet 0) does not have an alpha token pool")
+        return value
+
+    # TODO: can we just return a "hash" repr of the subnet uid instead?
+    def __hash__(self) -> int:
+        return hash(self.netuid)
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, BittensorAlphaTokenPool):
+            return NotImplemented
+        # Compare the attributes for equality
+        return self.netuid == other.netuid
+
+    def pool_init(self, subtensor: bt.Subtensor) -> None:
+        self.sync(subtensor)
+
+    # TODO: use async subtensor interface
+    def sync(self, subtensor: bt.Subtensor) -> None:
+        try:
+            subnet = subtensor.subnet(netuid=self.netuid)
+            self._price_rao = subnet.price.rao
+        except Exception as err:
+            bt.logging.error("Failed to sync alpha token pool!")
+            bt.logging.error(err)
 
 
 class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
@@ -1178,17 +1221,53 @@ def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
 
 
 def generate_challenge_data(
-    web3_provider: Web3,
+    chain_data_provider: Web3 | bt.Subtensor,
     rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
-) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
+) -> dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int]:  # generate pools
+    if isinstance(chain_data_provider, bt.Subtensor):
+        return gen_bt_alpha_pools(chain_data_provider, rng_gen)
+
     selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
     bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
 
-    return assets_pools_for_challenge_data(selected_entry, web3_provider)
+    return gen_evm_pools_for_challenge(selected_entry, chain_data_provider)
 
 
-def assets_pools_for_challenge_data(
-    selected_entry, web3_provider: Web3
+def gen_bt_alpha_pools(
+    subtensor: bt.Subtensor,
+    rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
+) -> dict[str, dict[str, BittensorAlphaTokenPool] | int]:
+    # Filter out root and subnets that have >= MIN_TAO_IN_POOL TAO in their pools
+    all_subnets = subtensor.all_subnets()[1:]
+    subnets = [s for s in all_subnets if s.tao_in.tao > MIN_TAO_IN_POOL]
+    num_subnets = len(subnets)
+
+    # check if num subnets is less than min - if so, raise error
+    if num_subnets < MIN_BT_POOLS:
+        raise ValueError(f"Not enough eligible subnets (found {num_subnets}, need at least {MIN_BT_POOLS})")
+
+    num_pools = rng_gen.randint(MIN_BT_POOLS, min(MAX_BT_POOLS + 1, num_subnets + 1))
+
+    # sample `num_pools` unique subnets without replacement
+    selected_subnets = rng_gen.choice(subnets, size=num_pools, replace=False)
+
+    challenge_data = {
+        "assets_and_pools": {
+            "pools": {},
+            "total_assets": num_pools * int(1e9),  # num_pools * 1 rao
+        }
+    }
+
+    for subnet in selected_subnets:
+        pool: BittensorAlphaTokenPool = PoolFactory.create_pool(pool_type=POOL_TYPES.BT_ALPHA, netuid=subnet.netuid)
+        challenge_data["assets_and_pools"]["pools"][str(pool.netuid)] = pool
+
+    return challenge_data
+
+
+def gen_evm_pools_for_challenge(
+    selected_entry,
+    chain_data_provider: Web3 | bt.Subtensor,
 ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
     challenge_data = {}
 
@@ -1216,7 +1295,6 @@ def assets_pools_for_challenge_data(
     if total_assets is None:
         total_assets = 0
         first_pool = pool_list[0]
-        first_pool.sync(web3_provider)
         match first_pool.pool_type:
             case T if T in (
                 POOL_TYPES.STURDY_SILO,
@@ -1225,12 +1303,12 @@ def assets_pools_for_challenge_data(
                 POOL_TYPES.MORPHO,
                 POOL_TYPES.YEARN_V3,
             ):
+                first_pool.sync(chain_data_provider)
                 total_assets = first_pool._user_asset_balance
             case _:
                 pass
 
         for pool in pools.values():
-            pool.sync(web3_provider)
             total_asset = 0
             match pool.pool_type:
                 case T if T in (
@@ -1240,6 +1318,7 @@ def assets_pools_for_challenge_data(
                     POOL_TYPES.MORPHO,
                     POOL_TYPES.YEARN_V3,
                 ):
+                    pool.sync(chain_data_provider)
                     total_asset += pool._user_deposits
                 case _:
                     pass
