@@ -11,6 +11,7 @@ from sturdy.algo import naive_algorithm
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.pools import *
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
+from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins
 from sturdy.validator.reward import (
     adjust_rewards_for_plagiarism,
     annualized_yield_pct,
@@ -1126,6 +1127,106 @@ class TestCalculateApy(unittest.TestCase):
         apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
         print(f"annualized yield: {(float(apy) / 1e18) * 100}%")
         self.assertGreater(apy, 0)
+
+
+class TestApyBinning(unittest.TestCase):
+    def test_create_apy_bins_default_threshold(self) -> None:
+        apys = {
+            "miner1": int(1.05e18),  # 105%
+            "miner2": int(1.04e18),  # 104%
+            "miner3": int(0.95e18),  # 95%
+            "miner4": int(0.94e18),  # 94%
+        }
+
+        bins = create_apy_bins(apys)  # Uses default threshold of 5%
+
+        # With 5% threshold:
+        # Bin 0 should have miner1 and miner2 (105% and 104%)
+        # Bin 1 should have miner3 and miner4 (95% and 94%)
+        self.assertEqual(len(bins), 2)
+        self.assertEqual(len(bins[0]), 2)  # First bin should have 2 miners
+        self.assertEqual(len(bins[1]), 2)  # Second bin should have 2 miners
+
+        # Check specific miners are in correct bins
+        self.assertIn("miner1", bins[0])
+        self.assertIn("miner2", bins[0])
+        self.assertIn("miner3", bins[1])
+        self.assertIn("miner4", bins[1])
+
+    def test_create_apy_bins_custom_threshold(self) -> None:
+        apys = {
+            "miner1": int(1.05e18),  # 105%
+            "miner2": int(1.04e18),  # 104%
+            "miner3": int(0.95e18),  # 95%
+            "miner4": int(0.94e18),  # 94%
+        }
+
+        # Using a larger threshold of 20%
+        bins = create_apy_bins(apys, bin_threshold=0.20)
+
+        # With 20% threshold, all miners should be in one bin
+        self.assertEqual(len(bins), 1)
+        self.assertEqual(len(bins[0]), 4)
+        self.assertListEqual(sorted(bins[0]), sorted(["miner1", "miner2", "miner3", "miner4"]))
+
+    def test_create_apy_bins_empty(self) -> None:
+        apys = {}
+        bins = create_apy_bins(apys)
+        self.assertEqual(len(bins), 0)
+
+    def test_create_apy_bins_single_miner(self) -> None:
+        apys = {"miner1": int(1.05e18)}
+        bins = create_apy_bins(apys)
+        self.assertEqual(len(bins), 1)
+        self.assertEqual(len(bins[0]), 1)
+        self.assertEqual(bins[0][0], "miner1")
+
+
+class TestBinRewards(unittest.TestCase):
+    def test_calculate_bin_rewards(self) -> None:
+        bins = {
+            0: ["miner1", "miner2"],  # higher APY bin
+            1: ["miner3", "miner4"],  # lower APY bin
+        }
+        allocations = {
+            "miner1": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+            "miner2": {"allocations": {"pool1": 0, "pool2": int(100e18)}},
+            "miner3": {"allocations": {"pool1": int(50e18), "pool2": int(50e18)}},
+            "miner4": {"allocations": {"pool1": int(50e18), "pool2": int(50e18)}},
+        }
+        total_assets = int(100e18)
+
+        rewards = calculate_bin_rewards(bins, allocations, total_assets)
+
+        # Check that rewards are normalized between 0 and 1
+        self.assertLessEqual(max(rewards.values()), 1.0)
+        self.assertGreaterEqual(min(rewards.values()), 0.0)
+
+        # Check that miners in higher APY bin get better base rewards
+        avg_reward_bin0 = sum(rewards[m] for m in bins[0]) / len(bins[0])
+        avg_reward_bin1 = sum(rewards[m] for m in bins[1]) / len(bins[1])
+        self.assertGreater(avg_reward_bin0, avg_reward_bin1)
+
+        # Check that dissimilar allocations within same bin get better rewards
+        # miner1 and miner2 have different allocations
+        self.assertGreater(rewards["miner1"], rewards["miner3"])
+        self.assertGreater(rewards["miner2"], rewards["miner4"])
+
+        # Check that top performer bonus is applied
+        top_performer = max(rewards.items(), key=lambda x: x[1])[0]
+        self.assertGreaterEqual(rewards[top_performer], max(rewards[m] for m in rewards if m != top_performer))
+
+    def test_calculate_bin_rewards_single_miner(self) -> None:
+        bins = {0: ["miner1"]}
+        allocations = {
+            "miner1": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+        }
+        total_assets = int(100e18)
+
+        rewards = calculate_bin_rewards(bins, allocations, total_assets)
+
+        # Single miner should get maximum reward
+        self.assertEqual(rewards["miner1"], 1.0)
 
 
 if __name__ == "__main__":

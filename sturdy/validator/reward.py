@@ -30,6 +30,7 @@ from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
+from sturdy.validator.apy_binning import create_apy_bins, calculate_bin_rewards
 
 
 def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, float]:
@@ -302,16 +303,21 @@ def _get_rewards(
     axon_times: dict[str, float],
 ) -> npt.NDArray:
     """
-    Rewards miner responses to request. This method returns a reward
-    value for the miner, which is used to update the miner's score.
-
-    Returns:
-    - adjusted_rewards: The reward values for the miners.
+    Rewards miner responses using APY-based binning and within-bin allocation similarity.
     """
+    # Extract APY values
+    apys = {uid: info["apy"] for uid, info in apys_and_allocations.items()}
 
-    rewards_apy = normalize_exp(apys_and_allocations)
+    # Create APY-based bins
+    apy_bins = create_apy_bins(apys)
 
-    return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
+    # Calculate rewards based on bins and allocation similarity
+    rewards = calculate_bin_rewards(apy_bins, apys_and_allocations, cast(int, assets_and_pools["total_assets"]))
+
+    # Convert rewards to numpy array in correct order
+    rewards_array = np.array([rewards.get(uid, 0.0) for uid in uids])
+
+    return rewards_array
 
 
 def annualized_yield_pct(

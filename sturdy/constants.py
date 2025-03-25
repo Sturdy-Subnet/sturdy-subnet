@@ -17,6 +17,13 @@ TOTAL_ALLOC_THRESHOLD = 0.98
 ALLOCATION_SIMILARITY_THRESHOLD = 1e-4  # similarity threshold for plagiarism checking
 APY_SIMILARITY_THRESHOLD = 1e-4
 
+
+# Constants for APY-based binning and rewards
+APY_BIN_THRESHOLD = 0.05  # 5% difference in APY to create new bin
+TOP_PERFORMERS_BONUS = 2.0  # Multiplier for top performing miners
+TOP_PERFORMERS_COUNT = 1  # Number of top performers to receive bonus
+
+
 NORM_EXP_POW = 16
 
 DB_DIR = "validator_database.db"  # default validator database dir
