@@ -59,6 +59,10 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
                 supply_rates[pool.contract_address] = apy
                 supply_rate_sum += apy
 
+    if supply_rate_sum == 0:
+        # If all rates are zero, distribute remaining balance equally
+        equal_share = balance // len(pools)
+        return {pool_uid: minimums[pool_uid] + equal_share for pool_uid in pools}
     return {
         pool_uid: minimums[pool_uid] + math.floor((supply_rates[pool_uid] / supply_rate_sum) * balance) for pool_uid in pools
     }
