@@ -81,7 +81,8 @@ def calculate_base_rewards(bins: dict[int, list[str]], miner_uids: list[str]) ->
             idx = miner_uids.index(uid)  # Get index directly from list
             base_rewards[idx] = base_reward
 
-    return base_rewards
+    # Normalize base rewards - otherwise we'll have negative values
+    return normalize_rewards(base_rewards)
 
 
 def format_allocations(
