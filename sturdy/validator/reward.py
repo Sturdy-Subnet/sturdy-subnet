@@ -17,18 +17,17 @@
 # DEALINGS IN THE SOFTWARE.
 
 import json
-from typing import Any, cast
+from typing import cast
 
 import bittensor as bt
-import gmpy2
-import numpy as np
 import numpy.typing as npt
 
-from sturdy.constants import ALLOCATION_SIMILARITY_THRESHOLD, APY_SIMILARITY_THRESHOLD, NORM_EXP_POW, QUERY_TIMEOUT
+from sturdy.constants import QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
+from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
 
@@ -63,237 +62,6 @@ def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, 
     }
 
 
-def format_allocations(
-    allocations: AllocationsDict,
-    assets_and_pools: dict,
-) -> AllocationsDict:
-    # TODO: better way to do this?
-    if allocations is None:
-        allocations = {}
-    allocs = allocations.copy()
-    pools: Any = assets_and_pools["pools"]
-
-    # pad the allocations
-    for contract_addr in pools:
-        if contract_addr not in allocs:
-            allocs[contract_addr] = 0
-
-    # sort the allocations by contract address
-    return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
-
-
-def normalize_exp(apys_and_allocations: AllocationsDict, epsilon: float = 1e-8) -> npt.NDArray:
-    raw_apys = {uid: apys_and_allocations[uid]["apy"] for uid in apys_and_allocations}
-
-    if len(raw_apys) <= 1:
-        return np.zeros(len(raw_apys))
-
-    apys = np.array(list(raw_apys.values()), dtype=np.float32)
-    normed = (apys - apys.min()) / (apys.max() - apys.min() + epsilon)
-
-    return np.pow(normed, NORM_EXP_POW)
-
-
-def calculate_penalties(
-    allocation_similarity_matrix: dict[str, dict[str, float]],
-    apy_similarity_matrix: dict[str, dict[str, float]],
-    axon_times: dict[str, float],
-    allocation_similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
-    apy_similarity_threshold: float = APY_SIMILARITY_THRESHOLD,
-) -> dict[str, int]:
-    penalties = {miner: 0 for miner in allocation_similarity_matrix}
-
-    for miner_a in allocation_similarity_matrix:
-        allocation_similarities = allocation_similarity_matrix[miner_a]
-        apy_similarities = apy_similarity_matrix[miner_a]
-        for miner_b in allocation_similarities:
-            allocation_similarity = allocation_similarities[miner_b]
-            apy_similarity = apy_similarities[miner_b]
-            if (
-                allocation_similarity <= allocation_similarity_threshold
-                and apy_similarity <= apy_similarity_threshold
-                and axon_times[miner_a] <= axon_times[miner_b]
-            ):
-                penalties[miner_b] += 1
-
-    return penalties
-
-
-def calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties) -> npt.NDArray:
-    rewards = np.zeros(len(miners))
-    max_penalty = max(penalties.values())
-    if max_penalty == 0:
-        return rewards_apy
-
-    for idx, miner_id in enumerate(miners):
-        # Calculate penalty adjustment
-        penalty_factor = (max_penalty - penalties[miner_id]) / max_penalty
-
-        # Calculate the final reward
-        reward = rewards_apy[idx] * penalty_factor
-        rewards[idx] = reward
-
-    return rewards
-
-
-def get_distance(alloc_a: npt.NDArray, alloc_b: npt.NDArray, total_assets: int) -> float:
-    try:
-        diff = alloc_a - alloc_b
-        norm = gmpy2.sqrt(sum(x**2 for x in diff))
-        return norm / gmpy2.sqrt(2 * total_assets**2)
-    except Exception as e:
-        bt.logging.error("Could not obtain distance - default to 69.0")
-        bt.logging.error(e)
-        return 69.0
-
-
-def get_allocation_similarity_matrix(
-    apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
-) -> dict[str, dict[str, float]]:
-    """
-    Calculates the similarity matrix for the allocation strategies of miners using normalized Euclidean distance.
-
-    This function computes a similarity matrix based on the Euclidean distance between the allocation vectors of miners,
-    normalized by the maximum possible distance in the given asset space. Each miner's allocation is compared with every
-    other miner's allocation, resulting in a matrix where each element (i, j) represents the normalized Euclidean distance
-    between the allocations of miner_i and miner_j.
-
-    The similarity metric is scaled between 0 and 1, where 0 indicates identical allocations and 1 indicates the maximum
-    possible distance between the allocation 'vectors'.
-
-    Args:
-        apys_and_allocations (dict[str, dict[str, Union[AllocationsDict, int]]]):
-            A dictionary containing the APY and allocation strategies for each miner. The keys are miner identifiers,
-            and the values are dictionaries with their respective allocations and APYs.
-        assets_and_pools (dict[str, Union[AllocationsDict, int]]):
-            A dictionary representing the assets available to the miner as well as the pools they can allocate to
-
-    Returns:
-        dict[str, dict[str, float]]:
-            A nested dictionary where each key is a miner identifier, and the value is another dictionary containing the
-            normalized Euclidean distances to every other miner. The distances are scaled between 0 and 1.
-    """
-
-    similarity_matrix = {}
-    total_assets = cast(int, assets_and_pools["total_assets"])
-    for miner_a, info_a in apys_and_allocations.items():
-        _alloc_a = cast(AllocationsDict, info_a["allocations"])
-        alloc_a = np.array(
-            [gmpy2.mpz(x) for x in list(format_allocations(_alloc_a, assets_and_pools).values())],
-        )
-        similarity_matrix[miner_a] = {}
-        for miner_b, info_b in apys_and_allocations.items():
-            if miner_a != miner_b:
-                _alloc_b = cast(AllocationsDict, info_b["allocations"])
-                if _alloc_a is None or _alloc_b is None:
-                    similarity_matrix[miner_a][miner_b] = float("inf")
-                    continue
-                alloc_b = np.array(
-                    [gmpy2.mpz(x) for x in list(format_allocations(_alloc_b, assets_and_pools).values())],
-                )
-                similarity_matrix[miner_a][miner_b] = get_distance(alloc_a, alloc_b, total_assets)
-
-    return similarity_matrix
-
-
-def get_apy_similarity_matrix(
-    apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
-) -> dict[str, dict[str, float]]:
-    """
-    Calculates the similarity matrix for the allocation strategies of miners' APY using normalized Euclidean distance.
-
-    This function computes a similarity matrix based on the Euclidean distance between the allocation vectors of miners,
-    normalized by the maximum possible distance in the given asset space. Each miner's allocation is compared with every
-    other miner's allocation, resulting in a matrix where each element (i, j) represents the normalized Euclidean distance
-    between the allocations of miner_i and miner_j.
-
-    The similarity metric is scaled between 0 and 1, where 0 indicates identical allocations and 1 indicates the maximum
-    possible distance between the allocation 'vectors'.
-
-    Args:
-        apys_and_allocations (dict[str, dict[str, Union[AllocationsDict, int]]]):
-            A dictionary containing the APY and allocation strategies for each miner. The keys are miner identifiers,
-            and the values are dictionaries with their respective allocations and APYs.
-
-    Returns:
-        dict[str, dict[str, float]]:
-            A nested dictionary where each key is a miner identifier, and the value is another dictionary containing the
-            normalized Euclidean distances to every other miner. The distances are scaled between 0 and 1.
-    """
-
-    similarity_matrix = {}
-
-    for miner_a, info_a in apys_and_allocations.items():
-        apy_a = cast(int, info_a["apy"])
-        apy_a = np.array([gmpy2.mpz(apy_a)], dtype=object)
-        similarity_matrix[miner_a] = {}
-        for miner_b, info_b in apys_and_allocations.items():
-            if miner_a != miner_b:
-                apy_b = cast(int, info_b["apy"])
-                apy_b = np.array([gmpy2.mpz(apy_b)], dtype=object)
-                similarity_matrix[miner_a][miner_b] = get_distance(apy_a, apy_b, max(apy_a, apy_b)[0])  # Max scaling
-
-    return similarity_matrix
-
-
-def adjust_rewards_for_plagiarism(
-    self,
-    rewards_apy: npt.NDArray,
-    apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
-    uids: list,
-    axon_times: dict[str, float],
-    allocation_similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
-    apy_similarity_threshold: float = APY_SIMILARITY_THRESHOLD,
-) -> npt.NDArray:
-    """
-    Adjusts the annual percentage yield (APY) rewards for miners based on the similarity of their allocations
-    to others and their arrival times, penalizing plagiarized or overly similar strategies.
-
-    This function calculates the similarity between each pair of miners' allocation strategies and applies a penalty
-    to those whose allocations are too similar to others, considering the order in which they arrived. Miners who
-    arrived earlier with unique strategies are given preference, and those with similar strategies arriving later
-    are penalized. The final APY rewards are adjusted accordingly.
-
-    Args:
-        rewards_apy (torch.Tensor): The initial APY rewards for the miners, before adjustments.
-        apys_and_allocations (dict[str, dict[str, Union[AllocationsDict, int]]]):
-            A dictionary containing APY values and allocation strategies for each miner. The keys are miner identifiers,
-            and the values are dictionaries that include their allocations and APYs.
-        assets_and_pools (dict[str, Union[dict[str, int], int]]):
-            A dictionary representing the available assets and their corresponding pools.
-        uids (List): A list of unique identifiers for the miners.
-        axon_times (dict[str, float]): A dictionary that tracks the arrival times of each miner, with the keys being
-            miner identifiers and the values being their arrival times. Earlier times are lower values.
-
-    Returns:
-        torch.Tensor: The adjusted APY rewards for the miners, accounting for penalties due to similarity with
-        other miners' strategies and their arrival times.
-    Notes:
-        - This function relies on the helper functions `calculate_penalties` and `calculate_rewards_with_adjusted_penalties`
-          which are defined separately.
-        - The `format_allocations` function used in the similarity calculation converts the allocation dictionaries
-          to a consistent format suitable for comparison.
-    """
-    # Step 1: Calculate pairwise similarity (e.g., using Euclidean distance)
-    allocation_similarity_matrix = get_allocation_similarity_matrix(apys_and_allocations, assets_and_pools)
-    apy_similarity_matrix = get_apy_similarity_matrix(apys_and_allocations)
-
-    # Step 2: Apply penalties considering axon times
-    penalties = calculate_penalties(
-        allocation_similarity_matrix,
-        apy_similarity_matrix,
-        axon_times,
-        allocation_similarity_threshold,
-        apy_similarity_threshold,
-    )
-    self.similarity_penalties = penalties
-
-    # Step 3: Calculate final rewards with adjusted penalties
-    return calculate_rewards_with_adjusted_penalties(uids, rewards_apy, penalties)
-
-
 def _get_rewards(
     self,
     apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
@@ -302,16 +70,21 @@ def _get_rewards(
     axon_times: dict[str, float],
 ) -> npt.NDArray:
     """
-    Rewards miner responses to request. This method returns a reward
-    value for the miner, which is used to update the miner's score.
-
-    Returns:
-    - adjusted_rewards: The reward values for the miners.
+    Rewards miner responses using APY-based binning and within-bin allocation similarity.
     """
+    # Extract APY values
+    apys = {uid: info["apy"] for uid, info in apys_and_allocations.items()}
 
-    rewards_apy = normalize_exp(apys_and_allocations)
+    # Create APY-based bins
+    apy_bins = create_apy_bins(apys)
 
-    return adjust_rewards_for_plagiarism(self, rewards_apy, apys_and_allocations, assets_and_pools, uids, axon_times)
+    # Calculate rewards based on bins and allocation similarity
+    rewards, penalties = calculate_bin_rewards(apy_bins, apys_and_allocations, assets_and_pools, axon_times)
+
+    # Store penalties for logging/debugging
+    self.similarity_penalties = {uid: penalties[i] for i, uid in enumerate(uids)}
+
+    return rewards
 
 
 def annualized_yield_pct(

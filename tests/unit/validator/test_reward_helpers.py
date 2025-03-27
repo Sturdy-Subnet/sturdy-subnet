@@ -11,154 +11,26 @@ from sturdy.algo import naive_algorithm
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.pools import *
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets
-from sturdy.validator.reward import (
-    adjust_rewards_for_plagiarism,
-    annualized_yield_pct,
-    calculate_penalties,
-    calculate_rewards_with_adjusted_penalties,
+from sturdy.validator.apy_binning import (
+    apply_similarity_penalties,
+    apply_top_performer_bonus,
+    calculate_allocation_distance,
+    calculate_base_rewards,
+    calculate_bin_rewards,
+    create_apy_bins,
     format_allocations,
-    get_allocation_similarity_matrix,
-    get_apy_similarity_matrix,
-    get_distance,
-    normalize_exp,
+    normalize_bin_rewards,
+    normalize_rewards,
+)
+from sturdy.validator.reward import (
+    annualized_yield_pct,
 )
 
 load_dotenv()
 WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
 
-BEEF = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
 
-
-class TestGetDistance(unittest.TestCase):
-    def test_identical_allocations(self) -> None:
-        # Test case where allocations are identical, expecting 0 distance
-        alloc_a = np.array([100, 200, 300], dtype=object)
-        alloc_b = np.array([100, 200, 300], dtype=object)
-        total_assets = 600
-        self.assertEqual(get_distance(alloc_a, alloc_b, total_assets), 0.0)
-
-    def test_positive_allocations(self) -> None:
-        # Test case with positive values, expecting a non-zero distance
-        alloc_a = np.array([100, 200, 300], dtype=object)
-        alloc_b = np.array([50, 150, 250], dtype=object)
-        total_assets = 600
-        expected_distance = gmpy2.sqrt(sum((x - y) ** 2 for x, y in zip(alloc_a, alloc_b, strict=False))) / gmpy2.sqrt(
-            float(2 * total_assets**2)
-        )
-        self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
-
-    def test_zero_allocations(self) -> None:
-        # Test case where one allocation is all zeros
-        alloc_a = np.array([100, 200, 300], dtype=object)
-        alloc_b = np.array([0, 0, 0], dtype=object)
-        total_assets = 600
-        expected_distance = gmpy2.sqrt(sum(x**2 for x in alloc_a)) / gmpy2.sqrt(float(2 * total_assets**2))
-        self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
-
-    def test_large_numbers(self) -> None:
-        # Test case with very large numbers to ensure precision
-        alloc_a = np.array([2**100, 2**100, 2**100], dtype=object)
-        alloc_b = np.array([2**99, 2**99, 2**99], dtype=object)
-        total_assets = 2**100
-        expected_distance = gmpy2.sqrt(sum((x - y) ** 2 for x, y in zip(alloc_a, alloc_b, strict=False))) / gmpy2.sqrt(
-            float(2 * total_assets**2)
-        )
-        self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
-
-    def test_large_numbers_gap(self) -> None:
-        # Test case with very large numbers to ensure precision
-        alloc_a = np.array([1e100, 1e100, 1e100], dtype=object)
-        alloc_b = np.array([1e21, 1e21, 1e21], dtype=object)
-        total_assets = 1e101
-        expected_distance = gmpy2.sqrt(sum((x - y) ** 2 for x, y in zip(alloc_a, alloc_b, strict=False))) / gmpy2.sqrt(
-            float(2 * total_assets**2)
-        )
-        self.assertAlmostEqual(float(get_distance(alloc_a, alloc_b, total_assets)), float(expected_distance), places=6)
-
-    def test_different_lengths(self) -> None:
-        # Test case with differing lengths should raise an error, and return 69.0
-        alloc_a = np.array([100, 200], dtype=object)
-        alloc_b = np.array([100, 200, 300], dtype=object)
-        total_assets = 600
-        self.assertEqual(69.0, get_distance(alloc_a, alloc_b, total_assets))
-
-
-class TestDynamicNormalizeZScore(unittest.TestCase):
-    def test_basic_normalization(self) -> None:
-        # Test a simple AllocationsDict with large values
-        apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 2e16}, "3": {"apy": 3e16}, "4": {"apy": 4e16}}
-        normalized = normalize_exp(apys_and_allocations)
-
-        # Check if output is normalized between 0 and 1
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_with_low_outliers(self) -> None:
-        # Test with low outliers in AllocationsDict
-        apys_and_allocations = {
-            "1": {"apy": 1e16},
-            "2": {"apy": 1e16},
-            "3": {"apy": 1e16},
-            "4": {"apy": 5e16},
-            "5": {"apy": 1e17},
-        }
-        normalized = normalize_exp(apys_and_allocations)
-
-        # Check that outliers don't affect the overall normalization
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_with_high_outliers(self) -> None:
-        # Test with high outliers in AllocationsDict
-        apys_and_allocations = {
-            "1": {"apy": 5e16},
-            "2": {"apy": 6e16},
-            "3": {"apy": 7e16},
-            "4": {"apy": 1e17},
-            "5": {"apy": 2e17},
-        }
-        normalized = normalize_exp(apys_and_allocations)
-
-        # Check that the function correctly handles high outliers
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_uniform_values(self) -> None:
-        # Test where all values are the same
-        apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e16}, "3": {"apy": 1e16}, "4": {"apy": 1e16}}
-        normalized = normalize_exp(apys_and_allocations)
-
-        # If all values are the same, the output should also be uniform (or handle gracefully)
-        self.assertTrue(
-            np.allclose(normalized, np.zeros_like(np.array([v["apy"] for v in apys_and_allocations.values()])), atol=1e-8)
-        )
-
-    def test_low_variance(self) -> None:
-        # Test with low variance data (values are close to each other)
-        apys_and_allocations = {
-            "1": {"apy": 1e16},
-            "2": {"apy": 1.01e16},
-            "3": {"apy": 1.02e16},
-            "4": {"apy": 1.03e16},
-            "5": {"apy": 1.04e16},
-        }
-        normalized = normalize_exp(apys_and_allocations)
-
-        # Check if normalization happens correctly
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-    def test_high_variance(self) -> None:
-        # Test with high variance data
-        apys_and_allocations = {"1": {"apy": 1e16}, "2": {"apy": 1e17}, "3": {"apy": 5e17}, "4": {"apy": 1e18}}
-        normalized = normalize_exp(apys_and_allocations)
-
-        # Ensure that the normalization works even with high variance
-        self.assertAlmostEqual(normalized.min().item(), 0.0, places=5)
-        self.assertAlmostEqual(normalized.max().item(), 1.0, places=5)
-
-
-class TestRewardFunctions(unittest.TestCase):
+class TestCheckAllocations(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         # runs tests on local mainnet fork at block: 20233401
@@ -459,483 +331,6 @@ class TestRewardFunctions(unittest.TestCase):
         result = check_allocations(assets_and_pools, allocations, alloc_threshold=0)
         self.assertTrue(result)
 
-    def test_format_allocations(self) -> None:
-        allocations = {"1": int(5e18), "2": int(3e18)}
-        assets_and_pools = {
-            "pools": {
-                "1": {"reserve_size": 1000},
-                "2": {"reserve_size": 1000},
-                "3": {"reserve_size": 1000},
-            }
-        }
-
-        expected_output = {"1": 5e18, "2": 3e18, "3": 0}
-        result = format_allocations(allocations, assets_and_pools)
-
-        self.assertEqual(result, expected_output)
-
-    def test_format_allocations_no_pools(self) -> None:
-        allocations = {"1": int(5e18), "2": int(3e18)}
-        assets_and_pools = {"pools": {}}
-
-        expected_output = {"1": 5e18, "2": 3e18}
-        result = format_allocations(allocations, assets_and_pools)
-
-        self.assertEqual(result, expected_output)
-
-    def test_format_allocations_empty(self) -> None:
-        allocations = {}
-        assets_and_pools = {
-            "pools": {
-                "1": {"reserve_size": 1000},
-                "2": {"reserve_size": 1000},
-            }
-        }
-
-        expected_output = {"1": 0, "2": 0}
-        result = format_allocations(allocations, assets_and_pools)
-
-        self.assertEqual(result, expected_output)
-
-    def test_get_allocation_similarity_matrix(self) -> None:
-        apys_and_allocations = {
-            "miner_1": {
-                "apy": int(0.05e18),
-                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
-            },
-            "miner_2": {
-                "apy": int(0.04e18),
-                "allocations": {"pool_1": 40e18, "pool_2": 10e18},
-            },
-            "miner_3": {
-                "apy": int(0.06e18),
-                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
-            },
-        }
-        assets_and_pools = {
-            "pools": {
-                "pool_1": {"reserve_size": 100e18},
-                "pool_2": {"reserve_size": 100e18},
-            },
-            "total_assets": 10e18,
-        }
-
-        total_assets = assets_and_pools["total_assets"]
-
-        expected_similarity_matrix = {
-            "miner_2": {
-                "miner_1": get_distance(
-                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
-                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
-                    total_assets,
-                ),
-                "miner_3": get_distance(
-                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
-                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
-                    total_assets,
-                ),
-            },
-            "miner_1": {
-                "miner_2": get_distance(
-                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
-                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
-                    total_assets,
-                ),
-                "miner_3": get_distance(
-                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
-                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
-                    total_assets,
-                ),
-            },
-            "miner_3": {
-                "miner_1": get_distance(
-                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
-                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
-                    total_assets,
-                ),
-                "miner_2": get_distance(
-                    np.array([gmpy2.mpz(30e18), gmpy2.mpz(20e18)], dtype=object),
-                    np.array([gmpy2.mpz(40e18), gmpy2.mpz(10e18)], dtype=object),
-                    total_assets,
-                ),
-            },
-        }
-
-        result = get_allocation_similarity_matrix(apys_and_allocations, assets_and_pools)
-
-        for miner_a in expected_similarity_matrix:
-            for miner_b in expected_similarity_matrix[miner_a]:
-                self.assertAlmostEqual(
-                    result[miner_a][miner_b],
-                    expected_similarity_matrix[miner_a][miner_b],
-                    places=5,
-                )
-
-    def test_get_apy_similarity_matrix(self) -> None:
-        apys_and_allocations = {
-            "miner_1": {
-                "apy": int(0.05e18),
-                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
-            },
-            "miner_2": {
-                "apy": int(0.04e18),
-                "allocations": {"pool_1": 40e18, "pool_2": 10e18},
-            },
-            "miner_3": {
-                "apy": int(0.06e18),
-                "allocations": {"pool_1": 30e18, "pool_2": 20e18},
-            },
-        }
-
-        expected_similarity_matrix = {
-            "miner_1": {
-                "miner_2": get_distance(
-                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
-                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
-                    gmpy2.mpz(0.05e18),
-                ),
-                "miner_3": get_distance(
-                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
-                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
-                    gmpy2.mpz(0.06e18),
-                ),
-            },
-            "miner_2": {
-                "miner_1": get_distance(
-                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
-                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
-                    gmpy2.mpz(0.05e18),
-                ),
-                "miner_3": get_distance(
-                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
-                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
-                    gmpy2.mpz(0.06e18),
-                ),
-            },
-            "miner_3": {
-                "miner_1": get_distance(
-                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
-                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
-                    gmpy2.mpz(0.06e18),
-                ),
-                "miner_2": get_distance(
-                    np.array([gmpy2.mpz(0.06e18)], dtype=object),
-                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
-                    gmpy2.mpz(0.06e18),
-                ),
-            },
-        }
-
-        result = get_apy_similarity_matrix(apys_and_allocations)
-
-        for miner_a in expected_similarity_matrix:
-            for miner_b in expected_similarity_matrix[miner_a]:
-                self.assertAlmostEqual(
-                    result[miner_a][miner_b],
-                    expected_similarity_matrix[miner_a][miner_b],
-                    places=5,
-                )
-
-    def test_get_allocation_similarity_matrix_empty(self) -> None:
-        apys_and_allocations = {
-            "miner_1": {
-                "apy": int(0.05e18),
-                "allocations": {"pool_1": 30, "pool_2": 20},
-            },
-            "miner_2": {
-                "apy": int(0.04e18),
-                "allocations": {"pool_1": 40, "pool_2": 10},
-            },
-            "miner_3": {"apy": 0, "allocations": None},
-        }
-        assets_and_pools = {
-            "pools": {
-                "pool_1": {"reserve_size": 100},
-                "pool_2": {"reserve_size": 100},
-            },
-            "total_assets": 100,
-        }
-
-        total_assets = assets_and_pools["total_assets"]
-
-        expected_similarity_matrix = {
-            "miner_1": {
-                "miner_2": get_distance(
-                    np.array([gmpy2.mpz(30), gmpy2.mpz(20)], dtype=object),
-                    np.array([gmpy2.mpz(40), gmpy2.mpz(10)], dtype=object),
-                    total_assets,
-                ),
-                "miner_3": float("inf"),
-            },
-            "miner_2": {
-                "miner_1": get_distance(
-                    np.array([gmpy2.mpz(40), gmpy2.mpz(10)], dtype=object),
-                    np.array([gmpy2.mpz(30), gmpy2.mpz(20)], dtype=object),
-                    total_assets,
-                ),
-                "miner_3": float("inf"),
-            },
-            "miner_3": {"miner_1": float("inf"), "miner_2": float("inf")},
-        }
-
-        result = get_allocation_similarity_matrix(apys_and_allocations, assets_and_pools)
-
-        for miner_a in expected_similarity_matrix:
-            for miner_b in expected_similarity_matrix[miner_a]:
-                self.assertAlmostEqual(
-                    result[miner_a][miner_b],
-                    expected_similarity_matrix[miner_a][miner_b],
-                    places=5,
-                )
-
-    def test_get_apy_similarity_matrix_empty(self) -> None:
-        apys_and_allocations = {
-            "miner_1": {
-                "apy": int(0.05e18),
-                "allocations": {"pool_1": 30, "pool_2": 20},
-            },
-            "miner_2": {
-                "apy": int(0.04e18),
-                "allocations": {"pool_1": 40, "pool_2": 10},
-            },
-            "miner_3": {"apy": 0, "allocations": None},
-        }
-
-        expected_similarity_matrix = {
-            "miner_1": {
-                "miner_2": get_distance(
-                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
-                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
-                    gmpy2.mpz(0.05e18),
-                ),
-                "miner_3": get_distance(
-                    np.array([gmpy2.mpz(0.05e18)], dtype=object), np.array([gmpy2.mpz(0)], dtype=object), gmpy2.mpz(0.05e18)
-                ),
-            },
-            "miner_2": {
-                "miner_1": get_distance(
-                    np.array([gmpy2.mpz(0.04e18)], dtype=object),
-                    np.array([gmpy2.mpz(0.05e18)], dtype=object),
-                    gmpy2.mpz(0.05e18),
-                ),
-                "miner_3": get_distance(
-                    np.array([gmpy2.mpz(0.04e18)], dtype=object), np.array([gmpy2.mpz(0)], dtype=object), gmpy2.mpz(0.04e18)
-                ),
-            },
-            "miner_3": {
-                "miner_1": get_distance(
-                    np.array([gmpy2.mpz(0)], dtype=object), np.array([gmpy2.mpz(0.05e18)], dtype=object), gmpy2.mpz(0.05e18)
-                ),
-                "miner_2": get_distance(
-                    np.array([gmpy2.mpz(0)], dtype=object), np.array([gmpy2.mpz(0.04e18)], dtype=object), gmpy2.mpz(0.04e18)
-                ),
-            },
-        }
-
-        result = get_apy_similarity_matrix(apys_and_allocations)
-
-        for miner_a in expected_similarity_matrix:
-            for miner_b in expected_similarity_matrix[miner_a]:
-                self.assertAlmostEqual(
-                    result[miner_a][miner_b],
-                    expected_similarity_matrix[miner_a][miner_b],
-                    places=5,
-                )
-
-    def test_calculate_penalties(self) -> None:
-        allocation_similarity_matrix = {
-            "1": {"2": 0.05, "3": 0.2},
-            "2": {"1": 0.05, "3": 0.1},
-            "3": {"1": 0.2, "2": 0.1},
-        }
-        apy_similarity_matrix = {
-            "1": {"2": 0.05, "3": 0.2},
-            "2": {"1": 0.05, "3": 0.1},
-            "3": {"1": 0.2, "2": 0.1},
-        }
-        axon_times = {"1": 1.0, "2": 2.0, "3": 3.0}
-
-        allocation_similarity_threshold = 0.2
-        apy_similarity_threshold = 0.1
-
-        expected_penalties = {"1": 0, "2": 1, "3": 1}
-        result = calculate_penalties(
-            allocation_similarity_matrix,
-            apy_similarity_matrix,
-            axon_times,
-            allocation_similarity_threshold,
-            apy_similarity_threshold,
-        )
-
-        self.assertEqual(result, expected_penalties)
-
-    def test_calculate_penalties_no_apy_similarities(self) -> None:
-        allocation_similarity_matrix = {
-            "1": {"2": 0.05, "3": 0.2},
-            "2": {"1": 0.05, "3": 0.1},
-            "3": {"1": 0.2, "2": 0.1},
-        }
-        apy_similarity_matrix = {
-            "1": {"2": 0.05, "3": 0.2},
-            "2": {"1": 0.05, "3": 0.1},
-            "3": {"1": 0.2, "2": 0.1},
-        }
-        axon_times = {"1": 1.0, "2": 2.0, "3": 3.0}
-        allocation_similarity_threshold = 0.2
-        apy_similarity_threshold = 0.05
-
-        expected_penalties = {"1": 0, "2": 1, "3": 0}
-        result = calculate_penalties(
-            allocation_similarity_matrix,
-            apy_similarity_matrix,
-            axon_times,
-            allocation_similarity_threshold,
-            apy_similarity_threshold,
-        )
-
-        self.assertEqual(result, expected_penalties)
-
-    def test_calculate_penalties_no_similarities(self) -> None:
-        allocation_similarity_matrix = {
-            "1": {"2": 0.5, "3": 0.6},
-            "2": {"1": 0.5, "3": 0.7},
-            "3": {"1": 0.6, "2": 0.7},
-        }
-        apy_similarity_matrix = {
-            "1": {"2": 0.5, "3": 0.6},
-            "2": {"1": 0.5, "3": 0.7},
-            "3": {"1": 0.6, "2": 0.7},
-        }
-        axon_times = {"1": 1.0, "2": 2.0, "3": 3.0}
-
-        allocation_similarity_threshold = 0.3
-        apy_similarity_threshold = 0.1
-
-        expected_penalties = {"1": 0, "2": 0, "3": 0}
-        result = calculate_penalties(
-            allocation_similarity_matrix,
-            apy_similarity_matrix,
-            axon_times,
-            allocation_similarity_threshold,
-            apy_similarity_threshold,
-        )
-
-        self.assertEqual(result, expected_penalties)
-
-    def test_calculate_penalties_equal_times(self) -> None:
-        allocation_similarity_matrix = {
-            "1": {"2": 0.05, "3": 0.05},
-            "2": {"1": 0.05, "3": 0.05},
-            "3": {"1": 0.05, "2": 0.05},
-        }
-        apy_similarity_matrix = {
-            "1": {"2": 0.05, "3": 0.05},
-            "2": {"1": 0.05, "3": 0.05},
-            "3": {"1": 0.05, "2": 0.05},
-        }
-
-        axon_times = {"1": 1.0, "2": 1.0, "3": 1.0}
-
-        allocation_similarity_threshold = 0.1
-
-        apy_similarity_threshold = 0.2
-
-        expected_penalties = {"1": 2, "2": 2, "3": 2}
-
-        result = calculate_penalties(
-            allocation_similarity_matrix,
-            apy_similarity_matrix,
-            axon_times,
-            allocation_similarity_threshold,
-            apy_similarity_threshold,
-        )
-
-        self.assertEqual(result, expected_penalties)
-
-    def test_calculate_rewards_with_adjusted_penalties(self) -> None:
-        miners = ["1", "2", "3"]
-        rewards_apy = np.array([1.0, 1.0, 1.0])
-        penalties = {"1": 0, "2": 1, "3": 2}
-
-        expected_rewards = np.array([1.0, 0.5, 0.0])
-        result = calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties)
-
-        np.testing.assert_allclose(result, expected_rewards, rtol=0, atol=1e-5)
-
-    def test_calculate_rewards_with_no_penalties(self) -> None:
-        miners = ["1", "2", "3"]
-        rewards_apy = np.array([0.05, 0.04, 0.03])
-        penalties = {"1": 0, "2": 0, "3": 0}
-
-        expected_rewards = np.array([0.05, 0.04, 0.03])
-        result = calculate_rewards_with_adjusted_penalties(miners, rewards_apy, penalties)
-
-        np.testing.assert_allclose(result, expected_rewards, rtol=0, atol=1e-5)
-
-    def test_adjust_rewards_for_plagiarism(self) -> None:
-        rewards_apy = np.array([0.05 / 0.05, 0.04 / 0.05, 0.03 / 0.05])
-        apys_and_allocations = {
-            "0": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},  # APY: int
-            "1": {"apy": 40, "allocations": {"asset_1": 202, "asset_2": 303}},
-            "2": {"apy": 30, "allocations": {"asset_1": 200, "asset_2": 400}},
-        }
-        assets_and_pools = {
-            "total_assets": 500,
-            "pools": {"asset_1": 1000, "asset_2": 1000},
-        }
-        uids = ["0", "1", "2"]
-        axon_times = {"0": 1.0, "1": 2.0, "2": 3.0}
-
-        allocation_similarity_threshold = 0.1
-
-        apy_similarity_threshold = 0.2
-
-        expected_rewards = np.array([1.0, 0.0, 0.03 / 0.05])
-
-        result = adjust_rewards_for_plagiarism(
-            self.vali,
-            rewards_apy,
-            apys_and_allocations,
-            assets_and_pools,
-            uids,
-            axon_times,
-            allocation_similarity_threshold,
-            apy_similarity_threshold,
-        )
-
-        np.testing.assert_array_almost_equal(result, expected_rewards, decimal=5)
-
-    def test_adjust_rewards_for_one_plagiarism(self) -> None:
-        rewards_apy = np.array([1.0, 1.0])
-        apys_and_allocations = {
-            "0": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},
-            "1": {"apy": 50, "allocations": {"asset_1": 200, "asset_2": 300}},
-        }
-        assets_and_pools = {
-            "total_assets": 500,
-            "pools": {"asset_1": 1000, "asset_2": 1000},
-        }
-        uids = ["0", "1"]
-        axon_times = {"0": 1.0, "1": 2.0}
-
-        expected_rewards = np.array([1.0, 0.0])
-
-        allocation_similarity_threshold = 0.1
-        apy_similarity_threshold = 0.2
-
-        result = adjust_rewards_for_plagiarism(
-            self.vali,
-            rewards_apy,
-            apys_and_allocations,
-            assets_and_pools,
-            uids,
-            axon_times,
-            allocation_similarity_threshold,
-            apy_similarity_threshold,
-        )
-
-        np.testing.assert_array_almost_equal(result, expected_rewards, decimal=5)
-
 
 class TestCalculateApy(unittest.TestCase):
     @classmethod
@@ -1126,6 +521,370 @@ class TestCalculateApy(unittest.TestCase):
         apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
         print(f"annualized yield: {(float(apy) / 1e18) * 100}%")
         self.assertGreater(apy, 0)
+
+
+class TestApyBinning(unittest.TestCase):
+    def test_create_apy_bins_default_threshold(self) -> None:
+        apys = {
+            "0": int(1.05e18),  # 105%
+            "1": int(1.04e18),  # 104%
+            "2": int(0.95e18),  # 95%
+            "3": int(0.94e18),  # 94%
+        }
+
+        bins = create_apy_bins(apys)  # Uses default threshold of 5%
+
+        # With 5% threshold:
+        # Bin 0 should have UIDs 0 and 1 (105% and 104%)
+        # Bin 1 should have UIDs 2 and 3 (95% and 94%)
+        self.assertEqual(len(bins), 2)
+        self.assertEqual(len(bins[0]), 2)  # First bin should have 2 miners
+        self.assertEqual(len(bins[1]), 2)  # Second bin should have 2 miners
+
+        # Check specific miners are in correct bins
+        self.assertIn("0", bins[0])
+        self.assertIn("1", bins[0])
+        self.assertIn("2", bins[1])
+        self.assertIn("3", bins[1])
+
+    def test_create_apy_bins_custom_threshold(self) -> None:
+        apys = {
+            "0": int(1.05e18),  # 105%
+            "1": int(1.04e18),  # 104%
+            "2": int(0.95e18),  # 95%
+            "3": int(0.94e18),  # 94%
+        }
+
+        # Using a larger threshold of 20%
+        bins = create_apy_bins(apys, bin_threshold=0.20)
+
+        # With 20% threshold, all miners should be in one bin
+        self.assertEqual(len(bins), 1)
+        self.assertEqual(len(bins[0]), 4)
+        self.assertListEqual(sorted(bins[0]), ["0", "1", "2", "3"])
+
+    def test_create_apy_bins_empty(self) -> None:
+        apys = {}
+        bins = create_apy_bins(apys)
+        self.assertEqual(len(bins), 0)
+
+    def test_create_apy_bins_single_miner(self) -> None:
+        apys = {"0": int(1.05e18)}
+        bins = create_apy_bins(apys)
+        self.assertEqual(len(bins), 1)
+        self.assertEqual(len(bins[0]), 1)
+        self.assertEqual(bins[0][0], "0")
+
+
+class TestBinRewards(unittest.TestCase):
+    def setUp(self) -> None:
+        # Setup common test data
+        self.assets_and_pools = {
+            "total_assets": int(100e18),
+            "pools": {"pool1": {"some": "metadata"}, "pool2": {"some": "metadata"}},
+        }
+
+    def test_calculate_bin_rewards_with_timing(self) -> None:
+        bins = {
+            0: ["0", "1"],  # higher APY bin
+            1: ["2", "3"],  # lower APY bin
+        }
+        allocations = {
+            "0": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+            "1": {"allocations": {"pool1": int(100e18), "pool2": 0}},  # Similar to UID 0 but later
+            "2": {"allocations": {"pool1": int(50e18), "pool2": int(50e18)}},
+            "3": {"allocations": {"pool1": int(50e18), "pool2": int(50e18)}},  # Similar to UID 2 but later
+        }
+        axon_times = {
+            "0": 1.0,  # First response
+            "1": 2.0,  # Second response (similar to UID 0)
+            "2": 1.5,  # First response in lower bin
+            "3": 2.5,  # Second response (similar to UID 2)
+        }
+
+        rewards, penalties = calculate_bin_rewards(bins, allocations, self.assets_and_pools, axon_times)
+
+        # Check that rewards and penalties are numpy arrays
+        self.assertIsInstance(rewards, np.ndarray)
+        self.assertIsInstance(penalties, np.ndarray)
+
+        # Check array lengths
+        self.assertEqual(len(rewards), 4)
+        self.assertEqual(len(penalties), 4)
+
+        # Check that earlier responses get better rewards when allocations are similar
+        self.assertGreater(rewards[0], rewards[1])  # UID 0 should have better reward than UID 1
+        self.assertGreater(rewards[2], rewards[3])  # UID 2 should have better reward than UID 3
+
+        # Check that first responses aren't penalized
+        self.assertEqual(penalties[0], 0)  # First response shouldn't be penalized
+        self.assertGreater(penalties[1], 0)  # Similar to UID 0 but later
+        self.assertEqual(penalties[2], 0)  # First response in its bin
+        self.assertGreater(penalties[3], 0)  # Similar to UID 2 but later
+
+    def test_calculate_bin_rewards_single_miner(self) -> None:
+        bins = {0: ["0"]}
+        allocations = {
+            "0": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+        }
+        axon_times = {"0": 1.0}
+
+        rewards, penalties = calculate_bin_rewards(bins, allocations, self.assets_and_pools, axon_times)
+
+        # Single miner should get maximum reward and no penalty
+        self.assertEqual(rewards[0], 1.0)
+        self.assertEqual(penalties[0], 0.0)
+
+    def test_top_performer_bonus(self) -> None:
+        bins = {
+            0: ["0", "1", "2"],
+        }
+        allocations = {
+            "0": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+            "1": {"allocations": {"pool1": 0, "pool2": int(100e18)}},
+            "2": {"allocations": {"pool1": int(50e18), "pool2": int(50e18)}},
+        }
+        axon_times = {
+            "0": 1.0,
+            "1": 1.5,
+            "2": 2.0,
+        }
+
+        rewards, _ = calculate_bin_rewards(bins, allocations, self.assets_and_pools, axon_times)
+
+        # Verify top performer gets significantly better reward
+        top_performer_idx = np.argmax(rewards)
+        other_rewards = rewards[rewards != rewards[top_performer_idx]]
+        self.assertGreater(rewards[top_performer_idx], np.max(other_rewards) * 1.5)
+
+
+class TestBinRewardHelpers(unittest.TestCase):
+    def setUp(self) -> None:
+        # Setup common test data
+        self.assets_and_pools = {
+            "total_assets": int(100e18),
+            "pools": {"pool1": {"some": "metadata"}, "pool2": {"some": "metadata"}},
+        }
+
+    def test_calculate_allocation_distance(self) -> None:
+        alloc_a = np.array([gmpy2.mpz(int(100e18)), gmpy2.mpz(0)], dtype=object)
+        alloc_b = np.array([gmpy2.mpz(int(100e18)), gmpy2.mpz(0)], dtype=object)
+        total_assets = int(100e18)
+
+        # Test identical allocations
+        distance = calculate_allocation_distance(alloc_a, alloc_b, total_assets)
+        self.assertEqual(distance, 0.0)
+
+        # Test completely different allocations
+        alloc_c = np.array([gmpy2.mpz(0), gmpy2.mpz(int(100e18))], dtype=object)
+        distance = calculate_allocation_distance(alloc_a, alloc_c, total_assets)
+        self.assertAlmostEqual(distance, 1.0, places=6)
+
+        # Test partial difference
+        alloc_d = np.array([gmpy2.mpz(int(50e18)), gmpy2.mpz(int(50e18))], dtype=object)
+        distance = calculate_allocation_distance(alloc_a, alloc_d, total_assets)
+        self.assertAlmostEqual(distance, 0.5, places=6)
+
+    def test_calculate_base_rewards(self) -> None:
+        bins = {
+            0: ["0", "1"],  # highest APY bin
+            1: ["2"],  # middle APY bin
+            2: ["3"],  # lowest APY bin
+        }
+        miner_uids = ["0", "1", "2", "3"]
+
+        rewards = calculate_base_rewards(bins, miner_uids)
+
+        # Check array type and length
+        self.assertIsInstance(rewards, np.ndarray)
+        self.assertEqual(len(rewards), 4)
+
+        # Check reward values
+        self.assertEqual(rewards[0], 1.0)  # First bin gets full reward
+        self.assertEqual(rewards[1], 1.0)  # First bin gets full reward
+        self.assertEqual(rewards[2], 0.9)  # Second bin gets 0.9
+        self.assertEqual(rewards[3], 0.8)  # Third bin gets 0.8
+
+    def test_apply_similarity_penalties(self) -> None:
+        bins = {0: ["0", "1", "2"]}
+        allocations = {
+            "0": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+            "1": {"allocations": {"pool1": int(100e18), "pool2": 0}},  # Similar to 0
+            "2": {"allocations": {"pool1": 0, "pool2": int(100e18)}},  # Different
+        }
+        axon_times = {
+            "0": 1.0,  # First response
+            "1": 2.0,  # Second response
+            "2": 3.0,  # Third response
+        }
+        miner_uids = ["0", "1", "2"]
+
+        # Test with default threshold
+        penalties = apply_similarity_penalties(
+            bins, allocations, axon_times, self.assets_and_pools, miner_uids, similarity_threshold=1e-4
+        )
+
+        # Check array type and length
+        self.assertIsInstance(penalties, np.ndarray)
+        self.assertEqual(len(penalties), 3)
+
+        # First response should have no penalty
+        self.assertEqual(penalties[0], 0.0)
+        # Second response similar to first should be penalized
+        self.assertGreater(penalties[1], 0.0)
+        # Third response different from others should not be penalized
+        self.assertEqual(penalties[2], 0.0)
+
+    def test_apply_similarity_penalties_with_missing_pools(self) -> None:
+        bins = {0: ["0", "1"]}
+        # Missing pool2 in allocations
+        allocations = {
+            "0": {"allocations": {"pool1": int(100e18)}},
+            "1": {"allocations": {"pool1": int(100e18)}},
+        }
+        axon_times = {
+            "0": 1.0,
+            "1": 2.0,
+        }
+        miner_uids = ["0", "1"]
+
+        penalties = apply_similarity_penalties(bins, allocations, axon_times, self.assets_and_pools, miner_uids)
+
+        # Should still work with missing pools (treated as 0)
+        self.assertEqual(len(penalties), 2)
+        self.assertEqual(penalties[0], 0.0)
+        self.assertGreater(penalties[1], 0.0)
+
+    def test_apply_similarity_penalties_with_none_allocations(self) -> None:
+        bins = {0: ["0", "1", "2"]}
+        allocations = {
+            "0": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+            "1": None,  # Missing allocation
+            "2": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+        }
+        axon_times = {
+            "0": 1.0,
+            "1": 2.0,
+            "2": 3.0,
+        }
+        miner_uids = ["0", "1", "2"]
+
+        penalties = apply_similarity_penalties(bins, allocations, axon_times, self.assets_and_pools, miner_uids)
+
+        self.assertEqual(len(penalties), 3)
+        self.assertEqual(penalties[0], 0.0)  # First response
+        self.assertEqual(penalties[1], 0.0)  # None allocation should have no penalty
+        self.assertGreater(penalties[2], 0.0)  # Similar to first response
+
+    def test_format_allocations(self) -> None:
+        # Test with missing pools
+        allocations = {"pool1": int(100e18)}
+        formatted = format_allocations(allocations, self.assets_and_pools)
+
+        # Should have all pools
+        self.assertIn("pool1", formatted)
+        self.assertIn("pool2", formatted)
+        # Missing pool should be 0
+        self.assertEqual(formatted["pool2"], 0)
+
+        # Test with None allocations
+        formatted = format_allocations(None, self.assets_and_pools)
+        self.assertEqual(formatted["pool1"], 0)
+        self.assertEqual(formatted["pool2"], 0)
+
+        # Test with empty allocations
+        formatted = format_allocations({}, self.assets_and_pools)
+        self.assertEqual(formatted["pool1"], 0)
+        self.assertEqual(formatted["pool2"], 0)
+
+    def test_apply_top_performer_bonus(self) -> None:
+        rewards = np.array([0.5, 0.8, 0.3, 1.0])
+
+        boosted_rewards = apply_top_performer_bonus(rewards)
+
+        # Check array type and length
+        self.assertIsInstance(boosted_rewards, np.ndarray)
+        self.assertEqual(len(boosted_rewards), 4)
+
+        # Check that only top performer got bonus
+        self.assertEqual(boosted_rewards[3], rewards[3] * TOP_PERFORMERS_BONUS)
+        self.assertEqual(boosted_rewards[0], rewards[0])
+        self.assertEqual(boosted_rewards[2], rewards[2])
+
+        # Original array should not be modified
+        self.assertFalse(np.array_equal(rewards, boosted_rewards))
+
+
+class TestNormalizationFunctions(unittest.TestCase):
+    def test_normalize_rewards_basic(self) -> None:
+        # Test basic normalization
+        rewards = np.array([1.0, 2.0, 3.0, 4.0])
+        normalized = normalize_rewards(rewards)
+        self.assertAlmostEqual(min(normalized), 0.0)  # Min should be 0
+        self.assertAlmostEqual(normalized[0], min(normalized))
+        self.assertAlmostEqual(max(normalized), 1.0)  # Max should be 1
+        self.assertAlmostEqual(normalized[-1], max(normalized))
+
+        # Test custom range
+        normalized = normalize_rewards(rewards, min_val=0.5, max_val=0.8)
+        self.assertAlmostEqual(normalized[0], 0.5)  # Min should be 0.5
+        self.assertAlmostEqual(normalized[-1], 0.8)  # Max should be 0.8
+
+    def test_normalize_rewards_edge_cases(self) -> None:
+        # Test empty array
+        empty = np.array([])
+        self.assertEqual(len(normalize_rewards(empty)), 0)
+
+        # Test array with NaN values
+        with_nan = np.array([1.0, np.nan, 3.0])
+        normalized = normalize_rewards(with_nan)
+        self.assertTrue(np.all(normalized == 0.0))
+
+        # Test array with all same values
+        same_values = np.array([2.0, 2.0, 2.0])
+        normalized = normalize_rewards(same_values)
+        self.assertTrue(np.all(normalized == 1.0))
+
+    def test_normalize_bin_rewards(self) -> None:
+        bins = {
+            0: ["0", "1"],  # highest APY bin
+            1: ["2", "3"],  # lower APY bin
+        }
+        miner_uids = ["0", "1", "2", "3"]
+
+        # Before penalties
+        rewards_before = np.array([1.0, 0.9, 0.8, 0.7])
+        # After penalties (some miners penalized)
+        rewards_after = np.array([1.0, 0.5, 0.8, 0.4])
+
+        normalized = normalize_bin_rewards(bins, rewards_before, rewards_after, miner_uids)
+
+        # Check that normalization maintains bin hierarchy
+        self.assertTrue(all(normalized[0:2] > normalized[2:4]))  # Higher bin should have better rewards
+        self.assertTrue(np.min(normalized[0:2]) >= np.max(normalized[2:4]))  # No overlap between bins
+
+    def test_normalize_bin_rewards_single_bin(self) -> None:
+        bins = {0: ["0", "1", "2"]}
+        miner_uids = ["0", "1", "2"]
+
+        rewards_before = np.array([1.0, 0.9, 0.8])
+        rewards_after = np.array([1.0, 0.5, 0.3])
+
+        normalized = normalize_bin_rewards(bins, rewards_before, rewards_after, miner_uids)
+
+        # Check normalization within single bin
+        self.assertAlmostEqual(np.min(normalized), 0.0)
+        self.assertAlmostEqual(np.max(normalized), 1.0)
+
+    def test_normalize_bin_rewards_empty_bins(self) -> None:
+        bins = {}
+        miner_uids = []
+        rewards_before = np.array([])
+        rewards_after = np.array([])
+
+        normalized = normalize_bin_rewards(bins, rewards_before, rewards_after, miner_uids)
+
+        self.assertEqual(len(normalized), 0)
 
 
 if __name__ == "__main__":
