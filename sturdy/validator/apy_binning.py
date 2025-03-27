@@ -169,13 +169,56 @@ def exponentiate_rewards(rewards: np.ndarray) -> np.ndarray:
     return np.pow(rewards, NORM_EXP_POW)
 
 
-def normalize_rewards(rewards: np.ndarray, epsilon: float = 1e-8) -> np.ndarray:
-    """Normalize rewards to [0, 1] range."""
+def normalize_rewards(rewards: np.ndarray, epsilon: float = 1e-8, min_val: float = 0.0, max_val: float = 1.0) -> np.ndarray:
+    """Normalize rewards to [min_val, max_val] range."""
+    if not len(rewards):
+        return rewards
+    if np.any(np.isnan(rewards)):
+        return np.zeros_like(rewards)
     min_reward = np.min(rewards)
     max_reward = np.max(rewards)
     if max_reward == min_reward:
-        return np.ones_like(rewards)  # All rewards equal, return uniform distribution
-    return (rewards - min_reward) / (max_reward - min_reward + epsilon)
+        return np.ones_like(rewards) * max_val
+    return (rewards - min_reward + epsilon) / (max_reward - min_reward + epsilon) * (max_val - min_val) + min_val
+
+
+def normalize_bin_rewards(
+    bins: dict[int, list[str]],
+    rewards_before_penalties: np.ndarray,
+    rewards_after_penalties: np.ndarray,
+    miner_uids: list[str],
+) -> np.ndarray:
+    """
+    Normalizes rewards within each bin to prevent lower-apy miners from scoring less than higher-apy miners.
+    This normalization ensures that having similar apy to miners in a bin does not cause the miner to end up
+    being scored less than miners in previous bins.
+    """
+    rewards_before = rewards_before_penalties.copy()
+    rewards = rewards_after_penalties.copy()
+
+    bin_idxs = sorted(bins.keys(), reverse=True)
+
+    # set prev_max_score to the min score in the last bin
+    prev_max_score = 0.0
+
+    # Iterate through bins in reverse order (from lowest APY to highest)
+    for bin_idx in bin_idxs:
+        bin_miners = bins[bin_idx]
+        # Get indices of miners in current bin
+        bin_indices = [miner_uids.index(uid) for uid in bin_miners]
+
+        # Get min score in current bin before penalties
+        max_score_bin = np.max(rewards_before[bin_indices])
+
+        # Normalize the rewards_after_penalties in the current bin
+        rewards[bin_indices] = normalize_rewards(
+            rewards_after_penalties[bin_indices], min_val=prev_max_score, max_val=max_score_bin
+        )
+
+        # Update min score for next bin
+        prev_max_score = max_score_bin
+
+    return rewards
 
 
 def calculate_bin_rewards(
@@ -198,12 +241,15 @@ def calculate_bin_rewards(
     penalties = apply_similarity_penalties(bins, allocations, axon_times, assets_and_pools, miner_uids)
 
     # Apply penalties to rewards
-    rewards *= 1 - penalties
+    post_penalty_rewards = rewards * (1 - penalties)
+
+    # Normalize rewards within each bin
+    rewards = normalize_bin_rewards(bins, rewards, post_penalty_rewards, miner_uids)
 
     # TODO: Apply exponential transformation? (disabled for now)
     # rewards = exponentiate_rewards(rewards)  # noqa: ERA001
 
-    # Apply bonus to top performers after exponential transformation
+    # Apply bonus to top performers
     rewards = apply_top_performer_bonus(rewards)
 
     # Normalize final rewards

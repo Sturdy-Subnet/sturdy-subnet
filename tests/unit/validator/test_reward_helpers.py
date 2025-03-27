@@ -19,6 +19,8 @@ from sturdy.validator.apy_binning import (
     calculate_bin_rewards,
     create_apy_bins,
     format_allocations,
+    normalize_bin_rewards,
+    normalize_rewards,
 )
 from sturdy.validator.reward import (
     annualized_yield_pct,
@@ -811,6 +813,76 @@ class TestBinRewardHelpers(unittest.TestCase):
 
         # Original array should not be modified
         self.assertFalse(np.array_equal(rewards, boosted_rewards))
+
+
+class TestNormalizationFunctions(unittest.TestCase):
+    def test_normalize_rewards_basic(self) -> None:
+        # Test basic normalization
+        rewards = np.array([1.0, 2.0, 3.0, 4.0])
+        normalized = normalize_rewards(rewards)
+        self.assertAlmostEqual(normalized[0], 0.0)  # Min should be 0
+        self.assertAlmostEqual(normalized[-1], 1.0)  # Max should be 1
+
+        # Test custom range
+        normalized = normalize_rewards(rewards, min_val=0.5, max_val=0.8)
+        self.assertAlmostEqual(normalized[0], 0.5)  # Min should be 0.5
+        self.assertAlmostEqual(normalized[-1], 0.8)  # Max should be 0.8
+
+    def test_normalize_rewards_edge_cases(self) -> None:
+        # Test empty array
+        empty = np.array([])
+        self.assertEqual(len(normalize_rewards(empty)), 0)
+
+        # Test array with NaN values
+        with_nan = np.array([1.0, np.nan, 3.0])
+        normalized = normalize_rewards(with_nan)
+        self.assertTrue(np.all(normalized == 0.0))
+
+        # Test array with all same values
+        same_values = np.array([2.0, 2.0, 2.0])
+        normalized = normalize_rewards(same_values)
+        self.assertTrue(np.all(normalized == 1.0))
+
+    def test_normalize_bin_rewards(self) -> None:
+        bins = {
+            0: ["0", "1"],  # highest APY bin
+            1: ["2", "3"],  # lower APY bin
+        }
+        miner_uids = ["0", "1", "2", "3"]
+
+        # Before penalties
+        rewards_before = np.array([1.0, 0.9, 0.8, 0.7])
+        # After penalties (some miners penalized)
+        rewards_after = np.array([1.0, 0.5, 0.8, 0.4])
+
+        normalized = normalize_bin_rewards(bins, rewards_before, rewards_after, miner_uids)
+
+        # Check that normalization maintains bin hierarchy
+        self.assertTrue(all(normalized[0:2] > normalized[2:4]))  # Higher bin should have better rewards
+        self.assertTrue(np.min(normalized[0:2]) >= np.max(normalized[2:4]))  # No overlap between bins
+
+    def test_normalize_bin_rewards_single_bin(self) -> None:
+        bins = {0: ["0", "1", "2"]}
+        miner_uids = ["0", "1", "2"]
+
+        rewards_before = np.array([1.0, 0.9, 0.8])
+        rewards_after = np.array([1.0, 0.5, 0.3])
+
+        normalized = normalize_bin_rewards(bins, rewards_before, rewards_after, miner_uids)
+
+        # Check normalization within single bin
+        self.assertAlmostEqual(np.min(normalized), 0.0)
+        self.assertAlmostEqual(np.max(normalized), 1.0)
+
+    def test_normalize_bin_rewards_empty_bins(self) -> None:
+        bins = {}
+        miner_uids = []
+        rewards_before = np.array([])
+        rewards_after = np.array([])
+
+        normalized = normalize_bin_rewards(bins, rewards_before, rewards_after, miner_uids)
+
+        self.assertEqual(len(normalized), 0)
 
 
 if __name__ == "__main__":
