@@ -113,7 +113,7 @@ def apply_similarity_penalties(
 ) -> np.ndarray:
     """
     Calculate similarity penalties within each bin, considering response times.
-    Only penalize miners who submitted similar allocations after another miner.
+    Penalty increases with each similar allocation found from earlier miners.
     """
     penalties = np.zeros(len(miner_uids))
     uid_to_idx = {uid: idx for idx, uid in enumerate(miner_uids)}
@@ -126,32 +126,50 @@ def apply_similarity_penalties(
         sorted_miners = sorted(bin_miners, key=lambda uid: axon_times[uid])
 
         for i, uid_a in enumerate(sorted_miners):
-            # Skip if allocation is None
             if not allocs[uid_a] or allocs[uid_a].get("allocations") is None:
                 continue
 
             alloc_a = np.array([gmpy2.mpz(val) for val in allocs[uid_a]["allocations"].values()], dtype=object)
-            earliest_similar = i  # Default to current position
+            similar_count = 0
+            max_possible_similarities = i  # Maximum number of possible similar earlier miners
 
-            # Only compare with miners that responded earlier
-            for j, uid_b in enumerate(sorted_miners[:i]):
-                # Skip if allocation is None
+            # Compare with miners that responded earlier
+            for uid_b in sorted_miners[:i]:
                 if not allocs[uid_b] or allocs[uid_b].get("allocations") is None:
                     continue
 
                 alloc_b = np.array([gmpy2.mpz(val) for val in allocs[uid_b]["allocations"].values()], dtype=object)
                 distance = calculate_allocation_distance(alloc_a, alloc_b, total_assets)
 
-                # If allocations are too similar, track the earliest miner with similar allocation
                 if distance < similarity_threshold:
-                    earliest_similar = min(earliest_similar, j)
-                    break
+                    similar_count += 1
 
-            # If we found an earlier miner with similar allocation, apply penalty proportional to position difference
-            if earliest_similar < i:
-                penalties[uid_to_idx[uid_a]] = (i - earliest_similar) / i
+            # Calculate penalty based on proportion of similar allocations found
+            if max_possible_similarities > 0:
+                penalties[uid_to_idx[uid_a]] = similar_count / max_possible_similarities
 
     return penalties
+
+
+def apply_penalties_to_rewards(rewards: np.ndarray, penalties: np.ndarray) -> np.ndarray:
+    """
+    Apply similarity penalties to rewards.
+
+    Args:
+        rewards: Original rewards array
+        penalties: Penalties array from apply_similarity_penalties
+
+    Returns:
+        Updated rewards with penalties applied
+    """
+    # Ensure arrays are same length
+    assert len(rewards) == len(penalties), "Rewards and penalties arrays must be same length"
+
+    # Calculate penalty multiplier (1 - penalty)
+    penalty_multiplier = 1 - penalties
+
+    # Apply penalties to rewards
+    return rewards * penalty_multiplier
 
 
 def apply_top_performer_bonus(rewards: np.ndarray) -> np.ndarray:
@@ -244,7 +262,7 @@ def calculate_bin_rewards(
     penalties = apply_similarity_penalties(bins, allocations, axon_times, assets_and_pools, miner_uids)
 
     # Apply penalties to rewards
-    post_penalty_rewards = rewards * (1 - penalties)
+    post_penalty_rewards = apply_penalties_to_rewards(rewards, penalties)
 
     # Normalize rewards within each bin
     rewards = normalize_bin_rewards(bins, rewards, post_penalty_rewards, miner_uids)
