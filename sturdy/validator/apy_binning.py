@@ -13,7 +13,7 @@ from sturdy.pools import ChainBasedPoolModel
 from sturdy.protocol import AllocationsDict
 
 
-def create_apy_bins(apys: dict[str, int], bin_threshold: int = APY_BIN_THRESHOLD) -> dict[int, list[str]]:
+def create_apy_bins(apys: dict[str, int], bin_threshold: float = APY_BIN_THRESHOLD) -> dict[int, list[str]]:
     """
     Creates bins of miners based on their APY values using relative differences.
 
@@ -43,7 +43,7 @@ def create_apy_bins(apys: dict[str, int], bin_threshold: int = APY_BIN_THRESHOLD
         # Using relative difference: (a - b) / max(|a|, |b|)
         relative_diff = abs(apy - current_base_apy) / max(abs(current_base_apy), abs(apy), 1)
 
-        if relative_diff > (bin_threshold):  # Convert threshold to decimal
+        if relative_diff > bin_threshold:
             # Create new bin
             current_bin += 1
             current_base_apy = apy
@@ -76,13 +76,12 @@ def calculate_base_rewards(bins: dict[int, list[str]], miner_uids: list[str]) ->
 
     for bin_idx, bin_miners in bins.items():
         # Higher bins get better base rewards
-        base_reward = 1.0 - (bin_idx * 0.1)
+        base_reward = max(0.0, 1.0 - (bin_idx * 0.1))
         for uid in bin_miners:
             idx = miner_uids.index(uid)  # Get index directly from list
             base_rewards[idx] = base_reward
 
-    # Normalize base rewards - otherwise we'll have negative values
-    return normalize_rewards(base_rewards)
+    return base_rewards
 
 
 def format_allocations(
@@ -106,9 +105,9 @@ def format_allocations(
 
 def apply_similarity_penalties(
     bins: dict[int, list[str]],
-    allocations: dict[str, dict],
+    allocations: AllocationsDict,
     axon_times: dict[str, float],
-    assets_and_pools: int,
+    assets_and_pools: dict,
     miner_uids: list[str],
     similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
 ) -> np.ndarray:
@@ -170,17 +169,18 @@ def exponentiate_rewards(rewards: np.ndarray) -> np.ndarray:
     return np.pow(rewards, NORM_EXP_POW)
 
 
-def normalize_rewards(rewards: np.ndarray) -> np.ndarray:
+def normalize_rewards(rewards: np.ndarray, epsilon: float = 1e-8) -> np.ndarray:
     """Normalize rewards to [0, 1] range."""
+    min_reward = np.min(rewards)
     max_reward = np.max(rewards)
-    if max_reward > 0:
-        return rewards / max_reward
-    return rewards
+    if max_reward == min_reward:
+        return np.ones_like(rewards)  # All rewards equal, return uniform distribution
+    return (rewards - min_reward) / (max_reward - min_reward + epsilon)
 
 
 def calculate_bin_rewards(
     bins: dict[int, list[str]],
-    allocations: dict[str, dict],
+    allocations: AllocationsDict,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     axon_times: dict[str, float],
 ) -> tuple[np.ndarray, np.ndarray]:
