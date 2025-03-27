@@ -131,10 +131,10 @@ def apply_similarity_penalties(
                 continue
 
             alloc_a = np.array([gmpy2.mpz(val) for val in allocs[uid_a]["allocations"].values()], dtype=object)
-            similar_count = 0
+            earliest_similar = i  # Default to current position
 
-            # Only compare with miners that responde earlier
-            for uid_b in sorted_miners[:i]:
+            # Only compare with miners that responded earlier
+            for j, uid_b in enumerate(sorted_miners[:i]):
                 # Skip if allocation is None
                 if not allocs[uid_b] or allocs[uid_b].get("allocations") is None:
                     continue
@@ -142,11 +142,14 @@ def apply_similarity_penalties(
                 alloc_b = np.array([gmpy2.mpz(val) for val in allocs[uid_b]["allocations"].values()], dtype=object)
                 distance = calculate_allocation_distance(alloc_a, alloc_b, total_assets)
 
+                # If allocations are too similar, track the earliest miner with similar allocation
                 if distance < similarity_threshold:
-                    similar_count += 1
+                    earliest_similar = min(earliest_similar, j)
+                    break
 
-            if similar_count > 0 and i > 0:
-                penalties[uid_to_idx[uid_a]] = similar_count / i
+            # If we found an earlier miner with similar allocation, apply penalty proportional to position difference
+            if earliest_similar < i:
+                penalties[uid_to_idx[uid_a]] = (i - earliest_similar) / i
 
     return penalties
 
@@ -179,7 +182,7 @@ def normalize_rewards(rewards: np.ndarray, epsilon: float = 1e-8, min_val: float
     max_reward = np.max(rewards)
     if max_reward == min_reward:
         return np.ones_like(rewards) * max_val
-    return (rewards - min_reward + epsilon) / (max_reward - min_reward + epsilon) * (max_val - min_val) + min_val
+    return (rewards - min_reward) / (max_reward - min_reward + epsilon) * (max_val - min_val) + min_val
 
 
 def normalize_bin_rewards(
@@ -189,7 +192,7 @@ def normalize_bin_rewards(
     miner_uids: list[str],
 ) -> np.ndarray:
     """
-    Normalizes rewards within each bin to prevent lower-apy miners from scoring less than higher-apy miners.
+    Normalizes rewards within each bin to prevent higher-apy miners from scoring less than lesser-apy miners.
     This normalization ensures that having similar apy to miners in a bin does not cause the miner to end up
     being scored less than miners in previous bins.
     """
@@ -207,7 +210,7 @@ def normalize_bin_rewards(
         # Get indices of miners in current bin
         bin_indices = [miner_uids.index(uid) for uid in bin_miners]
 
-        # Get min score in current bin before penalties
+        # Get max score in current bin before penalties
         max_score_bin = np.max(rewards_before[bin_indices])
 
         # Normalize the rewards_after_penalties in the current bin

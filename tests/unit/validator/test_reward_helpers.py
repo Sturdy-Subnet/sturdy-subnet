@@ -820,8 +820,10 @@ class TestNormalizationFunctions(unittest.TestCase):
         # Test basic normalization
         rewards = np.array([1.0, 2.0, 3.0, 4.0])
         normalized = normalize_rewards(rewards)
-        self.assertAlmostEqual(normalized[0], 0.0)  # Min should be 0
-        self.assertAlmostEqual(normalized[-1], 1.0)  # Max should be 1
+        self.assertAlmostEqual(min(normalized), 0.0)  # Min should be 0
+        self.assertAlmostEqual(normalized[0], min(normalized))
+        self.assertAlmostEqual(max(normalized), 1.0)  # Max should be 1
+        self.assertAlmostEqual(normalized[-1], max(normalized))
 
         # Test custom range
         normalized = normalize_rewards(rewards, min_val=0.5, max_val=0.8)
