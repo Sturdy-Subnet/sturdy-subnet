@@ -82,7 +82,7 @@ def _get_rewards(
     rewards, penalties = calculate_bin_rewards(apy_bins, apys_and_allocations, assets_and_pools, axon_times)
 
     # Store penalties for logging/debugging
-    self.similarity_penalties = {uid: penalties[i] for i, uid in enumerate(uids)}
+    self.similarity_penalties = {uid: float(penalties[i]) for i, uid in enumerate(uids)}
 
     return rewards
 
