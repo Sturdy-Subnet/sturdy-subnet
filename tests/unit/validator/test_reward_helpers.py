@@ -806,13 +806,21 @@ class TestBinRewardHelpers(unittest.TestCase):
         self.assertIsInstance(boosted_rewards, np.ndarray)
         self.assertEqual(len(boosted_rewards), 4)
 
-        # Check that only top performer got bonus
-        self.assertEqual(boosted_rewards[3], rewards[3] * TOP_PERFORMERS_BONUS)
-        self.assertEqual(boosted_rewards[0], rewards[0])
-        self.assertEqual(boosted_rewards[2], rewards[2])
-
         # Original array should not be modified
         self.assertFalse(np.array_equal(rewards, boosted_rewards))
+
+        # Get top performers in ascending order
+        top_indices = np.argsort(rewards)[-TOP_PERFORMERS_COUNT:]
+
+        # Check that top performers got incrementally larger bonuses
+        for i, idx in enumerate(top_indices):
+            expected_bonus = TOP_PERFORMERS_BONUS * (i + 1)
+            self.assertEqual(boosted_rewards[idx], rewards[idx] * expected_bonus)
+
+        # Check that non-top performers were not modified
+        non_top_indices = np.setdiff1d(np.arange(len(rewards)), top_indices)
+        for idx in non_top_indices:
+            self.assertEqual(boosted_rewards[idx], rewards[idx])
 
 
 class TestNormalizationFunctions(unittest.TestCase):

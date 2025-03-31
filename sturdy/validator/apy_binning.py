@@ -176,11 +176,13 @@ def apply_top_performer_bonus(rewards: np.ndarray) -> np.ndarray:
     """Apply bonus multiplier to top performing miners."""
     final_rewards = rewards.copy()
 
-    # Get indices of top performers
+    # Get indices of top performers in ascending order
     top_indices = np.argsort(rewards)[-TOP_PERFORMERS_COUNT:]
 
-    # Apply bonus to top performers
-    final_rewards[top_indices] *= TOP_PERFORMERS_BONUS
+    # Apply incrementally larger bonuses to each top performer
+    for i, idx in enumerate(top_indices):
+        # Multiply bonus relative to position (higher position = higher bonus)
+        final_rewards[idx] *= TOP_PERFORMERS_BONUS * (i + 1)
 
     return final_rewards
 
