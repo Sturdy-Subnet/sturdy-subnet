@@ -12,7 +12,28 @@ from sturdy.pools import ChainBasedPoolModel
 from sturdy.protocol import AllocationsDict
 
 
-def create_apy_bins(apys: dict[str, int]) -> dict[int, list[str]]:
+def calculate_cv_threshold(apys: list[int]) -> float:
+    # Convert APY values to a NumPy array and clean up bad data
+    apy_values = np.nan_to_num(
+        apys,
+        nan=0.0,  # Replace NaNs with 0
+        posinf=0.0,  # Replace +inf with 0
+        neginf=0.0,  # Replace -inf with 0
+    )
+    apy_values = np.abs(apy_values)
+
+    # Clip very low APYs (bottom 10%) up to the 10th percentile to reduce noise
+    # use 'higher' to use actual higher value from apys, no interpolation
+    q10 = np.percentile(apy_values, 10, method="higher")
+    apy_values = np.where(apy_values < q10, q10, apy_values)
+
+    # Calculate coefficient of variation as a dynamic threshold
+    std_dev = np.std(apy_values)
+    mean = np.mean(apy_values)
+    return float(std_dev / mean) if mean != 0 and std_dev != 0 else 1e-5  # Fallback value
+
+
+def create_apy_bins(apys: dict[str, int], threshold_func=calculate_cv_threshold) -> dict[int, list[str]]:
     """
     Creates bins of miners based on their APY values using relative differences.
 
@@ -31,25 +52,7 @@ def create_apy_bins(apys: dict[str, int]) -> dict[int, list[str]]:
 
     if not sorted_items:
         return bins
-
-    # Convert APY values to a NumPy array and clean up bad data
-    apy_values = np.nan_to_num(
-        list(apys.values()),
-        nan=0.0,  # Replace NaNs with 0
-        posinf=0.0,  # Replace +inf with 0
-        neginf=0.0,  # Replace -inf with 0
-    )
-    apy_values = np.abs(apy_values)
-
-    # Clip very low APYs (bottom 10%) up to the 10th percentile to reduce noise
-    # use 'higher' to use actual higher value from apys, no interpolation
-    q10 = np.percentile(apy_values, 10, method="higher")
-    apy_values = np.where(apy_values < q10, q10, apy_values)
-
-    # Calculate coefficient of variation as a dynamic threshold
-    std_dev = np.std(apy_values)
-    mean = np.mean(apy_values)
-    bin_threshold = (std_dev / mean) if mean != 0 and std_dev != 0 else 1e-5  # Fallback value
+    bin_threshold = threshold_func(list(apys.values()))
 
     # Initialize first bin with highest APY miner
     bins[current_bin] = [sorted_items[0][0]]
