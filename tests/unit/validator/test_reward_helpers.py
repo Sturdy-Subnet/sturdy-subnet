@@ -524,44 +524,89 @@ class TestCalculateApy(unittest.TestCase):
 
 
 class TestApyBinning(unittest.TestCase):
-    def test_create_apy_bins_default_threshold(self) -> None:
+    # Actual apys from sturdy_tbtc_aggregator
+    def test_real_world_apys_case1(self) -> None:
+        apys = {
+            "0": 2430768276972491,
+            "1": 2430768276942237,
+            "2": 2430768276939231,
+            "3": 2430768276829685,
+            "4": 2430768276827723,
+            "5": 2430768276823904,
+            "6": 2430768276810737,
+            "7": 2430768276765696,
+            "8": 2430768276762190,
+            "9": 2430768276705227,
+            "10": 2430768276705227,
+            "11": 2430768276668354,
+            "12": 2430768276569505,
+            "13": 2430767490721887,
+            "14": 2430766893869556,
+            "15": 2430766561865656,
+        }
+        bins = create_apy_bins(apys)
+
+        self.assertEqual(len(bins), 3)
+        self.assertEqual(len(bins[0]), 13)  # First bin has 13 miners
+        self.assertEqual(len(bins[1]), 1)  # Second  bin has 1 miners
+        self.assertEqual(len(bins[2]), 1)  # Third bin has 2 miners
+        self.assertEqual(len(bins[3]), 1)  # Fourth bin has 3 miners
+
+        # Check specific miners are in correct bins
+        for uid in range(13):
+            self.assertIn(str(uid), bins[0])
+
+    # Similar to test_real_world_apys_case1 just with low apy miners removed
+    # This shows a case when all miners improve their alogs
+    def test_real_world_apys_case2(self) -> None:
+        apys = {
+            "0": 2430768276972491,
+            "1": 2430768276942237,
+            "2": 2430768276939231,
+            "3": 2430768276829685,
+            "4": 2430768276827723,
+            "5": 2430768276823904,
+            "6": 2430768276810737,
+            "7": 2430768276765696,
+            "8": 2430768276762190,
+            "9": 2430768276705227,
+            "10": 2430768276705227,
+            "11": 2430768276668354,
+            "12": 2430768276569505,
+        }
+        bins = create_apy_bins(apys)
+
+        self.assertEqual(len(bins), 4)
+        self.assertEqual(len(bins[0]), 3)  # First bin has 3 miners
+        self.assertEqual(len(bins[1]), 6)  # Second  bin has 6 miners
+        self.assertEqual(len(bins[2]), 3)  # Third bin has 2 miners
+        self.assertEqual(len(bins[3]), 1)  # Fourth bin has 3 miners
+
+    def test_create_apy_bins(self) -> None:
         apys = {
             "0": int(1.05e18),  # 105%
             "1": int(1.04e18),  # 104%
             "2": int(0.95e18),  # 95%
             "3": int(0.94e18),  # 94%
+            "4": 1,  # noisy apy
         }
 
-        bins = create_apy_bins(apys)  # Uses default threshold of 5%
+        bins = create_apy_bins(apys)
 
-        # With 5% threshold:
         # Bin 0 should have UIDs 0 and 1 (105% and 104%)
         # Bin 1 should have UIDs 2 and 3 (95% and 94%)
-        self.assertEqual(len(bins), 2)
+        # Bin 2 has the noisy value
+        self.assertEqual(len(bins), 3)
         self.assertEqual(len(bins[0]), 2)  # First bin should have 2 miners
         self.assertEqual(len(bins[1]), 2)  # Second bin should have 2 miners
+        self.assertEqual(len(bins[2]), 1)  # Third bin should have 1 miner
 
         # Check specific miners are in correct bins
         self.assertIn("0", bins[0])
         self.assertIn("1", bins[0])
         self.assertIn("2", bins[1])
         self.assertIn("3", bins[1])
-
-    def test_create_apy_bins_custom_threshold(self) -> None:
-        apys = {
-            "0": int(1.05e18),  # 105%
-            "1": int(1.04e18),  # 104%
-            "2": int(0.95e18),  # 95%
-            "3": int(0.94e18),  # 94%
-        }
-
-        # Using a larger threshold of 20%
-        bins = create_apy_bins(apys, bin_threshold=0.20)
-
-        # With 20% threshold, all miners should be in one bin
-        self.assertEqual(len(bins), 1)
-        self.assertEqual(len(bins[0]), 4)
-        self.assertListEqual(sorted(bins[0]), ["0", "1", "2", "3"])
+        self.assertIn("4", bins[2])
 
     def test_create_apy_bins_empty(self) -> None:
         apys = {}
