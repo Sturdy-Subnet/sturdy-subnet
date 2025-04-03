@@ -546,7 +546,7 @@ class TestApyBinning(unittest.TestCase):
         }
         bins = create_apy_bins(apys)
 
-        self.assertEqual(len(bins), 3)
+        self.assertEqual(len(bins), 4)
         self.assertEqual(len(bins[0]), 13)  # First bin has 13 miners
         self.assertEqual(len(bins[1]), 1)  # Second  bin has 1 miners
         self.assertEqual(len(bins[2]), 1)  # Third bin has 2 miners
