@@ -4,6 +4,7 @@ import numpy as np
 
 from sturdy.constants import (
     ALLOCATION_SIMILARITY_THRESHOLD,
+    APY_BIN_THRESHOLD_FALLBACK,
     NORM_EXP_POW,
     TOP_PERFORMERS_BONUS,
     TOP_PERFORMERS_COUNT,
@@ -29,7 +30,7 @@ def calculate_cv_threshold(apys: list[int]) -> float:
     # Calculate coefficient of variation as a dynamic threshold
     std_dev = np.std(apy_values)
     mean = np.mean(apy_values)
-    return float(std_dev / mean) if mean != 0 and std_dev != 0 else 1e-5  # Fallback value
+    return float(std_dev / mean) if mean != 0 and std_dev != 0 else APY_BIN_THRESHOLD_FALLBACK
 
 
 def create_apy_bins(apys: dict[str, int], threshold_func=calculate_cv_threshold) -> dict[int, list[str]]:
