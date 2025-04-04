@@ -22,10 +22,10 @@ def calculate_cv_threshold(apys: list[int]) -> float:
         neginf=0.0,  # Replace -inf with 0
     )
 
-    # Clip very low APYs (bottom 10%) up to the 10th percentile to reduce noise
-    # use 'higher' to use actual higher value from apys, no interpolation
-    q10 = np.percentile(apy_values, 10, method="higher")
-    apy_values = np.where(apy_values < q10, q10, apy_values)
+    # Remove lower than 90% quantile from threshold estimation to reduce the noise
+    apy_values = apy_values[apy_values > np.percentile(apy_values, 90)]
+    if apy_values.size == 0:
+        return APY_BIN_THRESHOLD_FALLBACK
 
     # Calculate coefficient of variation as a dynamic threshold
     std_dev = np.std(apy_values)
