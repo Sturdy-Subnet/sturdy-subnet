@@ -20,7 +20,6 @@ def calculate_cv_threshold(apys: list[int]) -> float:
         posinf=0.0,  # Replace +inf with 0
         neginf=0.0,  # Replace -inf with 0
     )
-    apy_values = np.abs(apy_values)
 
     # Clip very low APYs (bottom 10%) up to the 10th percentile to reduce noise
     # use 'higher' to use actual higher value from apys, no interpolation
