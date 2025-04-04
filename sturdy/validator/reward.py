@@ -77,12 +77,14 @@ def _get_rewards(
 
     # Create APY-based bins
     apy_bins = create_apy_bins(apys)
+    bt.logging.debug(f"apy bins: {apy_bins}")
 
     # Calculate rewards based on bins and allocation similarity
     rewards, penalties = calculate_bin_rewards(apy_bins, apys_and_allocations, assets_and_pools, axon_times)
 
     # Store penalties for logging/debugging
-    self.similarity_penalties = {uid: float(penalties[i]) for i, uid in enumerate(uids)}
+    # round value to 4 decimal places so that it doesn't flood logs
+    self.similarity_penalties = {uid: round(float(penalties[i]), 4) for i, uid in enumerate(uids)}
 
     return rewards
 
@@ -284,6 +286,9 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
         apys_and_allocations[miner_uid] = {"apy": miner_apy, "allocations": allocations}
 
     bt.logging.debug(f"yields and allocs: {apys_and_allocations}")
+    # log miner uids -> apys
+    apys = {uid: value["apy"] for uid, value in apys_and_allocations.items()}
+    bt.logging.debug(f"apys: {apys}")
 
     # TODO: there may be a better way to go about this
     if len(miner_uids) < 1:
