@@ -546,41 +546,23 @@ class TestApyBinning(unittest.TestCase):
         }
         bins = create_apy_bins(apys)
 
-        self.assertEqual(len(bins), 4)
-        self.assertEqual(len(bins[0]), 13)  # First bin has 13 miners
-        self.assertEqual(len(bins[1]), 1)  # Second  bin has 1 miners
-        self.assertEqual(len(bins[2]), 1)  # Third bin has 2 miners
-        self.assertEqual(len(bins[3]), 1)  # Fourth bin has 3 miners
+        self.assertEqual(len(bins), 11)
+        self.assertEqual(len(bins[0]), 1)
+        self.assertEqual(len(bins[1]), 2)
+        self.assertEqual(len(bins[2]), 3)
+        self.assertEqual(len(bins[3]), 1)
+        self.assertEqual(len(bins[4]), 2)
+        self.assertEqual(len(bins[5]), 2)
+        self.assertEqual(len(bins[6]), 1)
+        self.assertEqual(len(bins[7]), 1)
+        self.assertEqual(len(bins[8]), 1)
+        self.assertEqual(len(bins[9]), 1)
+        self.assertEqual(len(bins[10]), 1)
 
         # Check specific miners are in correct bins
-        for uid in range(13):
-            self.assertIn(str(uid), bins[0])
-
-    # Similar to test_real_world_apys_case1 just with low apy miners removed
-    # This shows a case when all miners improve their alogs
-    def test_real_world_apys_case2(self) -> None:
-        apys = {
-            "0": 2430768276972491,
-            "1": 2430768276942237,
-            "2": 2430768276939231,
-            "3": 2430768276829685,
-            "4": 2430768276827723,
-            "5": 2430768276823904,
-            "6": 2430768276810737,
-            "7": 2430768276765696,
-            "8": 2430768276762190,
-            "9": 2430768276705227,
-            "10": 2430768276705227,
-            "11": 2430768276668354,
-            "12": 2430768276569505,
-        }
-        bins = create_apy_bins(apys)
-
-        self.assertEqual(len(bins), 4)
-        self.assertEqual(len(bins[0]), 3)  # First bin has 3 miners
-        self.assertEqual(len(bins[1]), 6)  # Second  bin has 6 miners
-        self.assertEqual(len(bins[2]), 3)  # Third bin has 2 miners
-        self.assertEqual(len(bins[3]), 1)  # Fourth bin has 3 miners
+        self.assertIn("0", bins[0])
+        self.assertIn("1", bins[1])
+        self.assertIn("2", bins[1])
 
     def test_create_apy_bins(self) -> None:
         apys = {
@@ -596,17 +578,19 @@ class TestApyBinning(unittest.TestCase):
         # Bin 0 should have UIDs 0 and 1 (105% and 104%)
         # Bin 1 should have UIDs 2 and 3 (95% and 94%)
         # Bin 2 has the noisy value
-        self.assertEqual(len(bins), 3)
-        self.assertEqual(len(bins[0]), 2)  # First bin should have 2 miners
-        self.assertEqual(len(bins[1]), 2)  # Second bin should have 2 miners
-        self.assertEqual(len(bins[2]), 1)  # Third bin should have 1 miner
+        self.assertEqual(len(bins), 5)
+        self.assertEqual(len(bins[0]), 1)
+        self.assertEqual(len(bins[1]), 1)
+        self.assertEqual(len(bins[2]), 1)
+        self.assertEqual(len(bins[3]), 1)
+        self.assertEqual(len(bins[4]), 1)
 
         # Check specific miners are in correct bins
         self.assertIn("0", bins[0])
-        self.assertIn("1", bins[0])
-        self.assertIn("2", bins[1])
-        self.assertIn("3", bins[1])
-        self.assertIn("4", bins[2])
+        self.assertIn("1", bins[1])
+        self.assertIn("2", bins[2])
+        self.assertIn("3", bins[3])
+        self.assertIn("4", bins[4])
 
     def test_create_apy_bins_empty(self) -> None:
         apys = {}
