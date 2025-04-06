@@ -19,6 +19,7 @@ import copy
 from abc import ABC, abstractmethod
 
 import bittensor as bt
+from bittensor.core.metagraph import AsyncMetagraph
 from bittensor_wallet.mock import get_mock_wallet
 
 from sturdy import __spec_version__ as spec_version
@@ -52,16 +53,18 @@ class BaseNeuron(ABC):
     def config(cls):
         return config(cls)
 
-    subtensor: "bt.subtensor"
-    wallet: "bt.wallet"
-    metagraph: "bt.metagraph"
+    # subtensor: bt.AsyncSubtensor
+    subtensor: bt.subtensor
+    wallet: bt.wallet
+    # metagraph: AsyncMetagraph
+    metagraph: bt.metagraph
     spec_version: int = spec_version
 
     @property
     def block(self):
         return ttl_get_block(self)
 
-    def __init__(self, config=None):
+    def __init__(self, config=None) -> None:
         base_config = copy.deepcopy(config or BaseNeuron.config())
         self.config = self.config()
         self.config.merge(base_config)
@@ -80,20 +83,9 @@ class BaseNeuron(ABC):
         # These are core Bittensor classes to interact with the network.
         bt.logging.info("Setting up bittensor objects.")
 
-        # The wallet holds the cryptographic key pairs for the miner.
-        if self.config.mock:
-            self.wallet = get_mock_wallet()
-            self.subtensor = MockSubtensor(
-                self.config.netuid,
-                n=self.config.mock_n,
-                max_allowed_uids=self.config.mock_max_uids,
-                wallet=self.wallet,
-            )
-            self.metagraph = MockMetagraph(self.config.netuid, subtensor=self.subtensor)
-        else:
-            self.wallet = bt.wallet(config=self.config)
-            self.subtensor = bt.subtensor(config=self.config)
-            self.metagraph = self.subtensor.metagraph(self.config.netuid)
+        self.wallet = bt.wallet(config=self.config)
+        self.subtensor = bt.subtensor(config=self.config)
+        self.metagraph = self.subtensor.metagraph(self.config.netuid)
 
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")

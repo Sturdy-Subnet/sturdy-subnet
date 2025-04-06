@@ -24,10 +24,11 @@ import traceback
 
 import bittensor as bt
 from dotenv import load_dotenv
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import MINER_SYNC_FREQUENCY
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_miner_args
 from sturdy.utils.wandb import init_wandb_miner
 
@@ -53,11 +54,25 @@ class BaseMinerNeuron(BaseNeuron):
             bt.logging.debug("loading wandb")
             init_wandb_miner(self=self)
 
-        w3_provider_url = os.environ.get("ETHEREUM_MAINNET_PROVIDER_URL")
-        if w3_provider_url is None:
-            raise ValueError("You must provide a valid web3 provider url!")
+        # TODO: move setup to a separate function?
+        # setup ethereum mainnet provider
+        eth_provider_url = os.environ.get("ETHEREUM_MAINNET_PROVIDER_URL")
+        if eth_provider_url is None:
+            raise ValueError("You must provide a valid web3 provider url")
 
-        self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
+        # setup bittensor mainnet provider
+        bittensor_mainnet_url = os.environ.get("BITTENSOR_MAINNET_PROVIDER_URL")
+        if bittensor_mainnet_url is None:
+            raise ValueError("You must provide a valid subtensor provider url")
+
+        self.pool_data_providers = {
+            POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: PoolProviderFactory.create_pool_provider(
+                POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, url=eth_provider_url
+            ),
+            POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: PoolProviderFactory.create_pool_provider(
+                POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, url=bittensor_mainnet_url
+            ),
+        }
 
         # Warn if allowing incoming requests from anyone.
         if not self.config.blacklist.force_validator_permit:

@@ -67,7 +67,7 @@ class Miner(BaseMinerNeuron):
         try:
             synapse.allocations = await naive_algorithm(self, synapse)
         except Exception as e:
-            bt.logging.error(f"Error: {e}")
+            bt.logging.exception(f"Error: {e}")
             # just return the auto vali generated allocations
             synapse.allocations = synapse.allocations
 

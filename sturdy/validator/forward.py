@@ -22,7 +22,7 @@ from typing import Any
 
 import bittensor as bt
 import numpy as np
-from web3 import Web3
+from web3 import AsyncWeb3, Web3
 from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import (
@@ -67,7 +67,7 @@ async def forward(self) -> Any:
         # chain_data_provider = np.random.choice(self.pool_data_providers.values())
         # only do web3 pools for now
         # TODO: change this before committing
-        chain_data_provider = np.random.choice(self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET])
+        chain_data_provider = np.random.choice([self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET]])
         try:
             challenge_data = await generate_challenge_data(chain_data_provider)
         except Exception as e:
@@ -99,7 +99,7 @@ async def forward(self) -> Any:
 
     assets_and_pools = challenge_data["assets_and_pools"]
     pools = assets_and_pools["pools"]
-    metadata = get_metadata(pools, chain_data_provider)
+    metadata = await get_metadata(pools, chain_data_provider)
 
     scoring_period = get_scoring_period()
 
@@ -117,13 +117,15 @@ async def forward(self) -> Any:
         )
 
 
-def get_metadata(
-    pools: dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool], chain_data_provider: Web3 | bt.AsyncSubtensor
+# TODO: have a better way to determine how to obtain metadata from the inputted pools
+# for more info see TODO(provider)
+async def get_metadata(
+    pools: dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool], chain_data_provider: AsyncWeb3 | bt.AsyncSubtensor
 ) -> dict:
     metadata = {}
     for idx, pool in pools.items():
-        pool.sync(chain_data_provider)
-        if isinstance(chain_data_provider, Web3):
+        await pool.sync(chain_data_provider)
+        if isinstance(chain_data_provider, AsyncWeb3):
             match pool.pool_type:
                 case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
                     metadata[idx] = pool._yield_index
@@ -180,7 +182,7 @@ async def process_single_request(self, request: Request) -> Request:
     try:
         response = await asyncio.get_event_loop().run_in_executor(
             self.thread_pool,
-            lambda: query_single_axon(self.dendrite, request),
+            lambda: query_single_axon(self.dendrite, request, query_timeout=self.config.neuron.timeout),
         )
         response = await response
     except Exception as e:
@@ -203,6 +205,11 @@ def prepare_single_request(self, uid: int, synapse: bt.Synapse) -> Request | Non
         return None
 
 
+# TODO(provider): Don't rely on chain provider parameter
+# we should be depedendant on the information directly from each pool model vs. having
+# to rely on a chain_data_provider input parameter - which is actually very limiting -
+# particularly in a situation where you want to handle pools from multiple chains at once for
+# i.e. cross chain asset allocation optimisation!
 async def query_and_score_miners(
     self,
     assets_and_pools: Any,
@@ -231,11 +238,13 @@ async def query_and_score_miners(
         active_uids,
     )
 
+    bt.logging.trace(f"Received responses: {responses}")
+
     allocations = {uid: responses[idx].allocations for idx, uid in enumerate(active_uids)}  # type: ignore[]
 
     # Log the results for monitoring purposes.
-    bt.logging.debug(f"Assets and pools: {synapse.assets_and_pools}")
-    bt.logging.debug(f"Received allocations (uid -> allocations): {allocations}")
+    bt.logging.info(f"Assets and pools: {synapse.assets_and_pools}")
+    bt.logging.info(f"Received allocations (uid -> allocations): {allocations}")
 
     curr_pools = assets_and_pools["pools"]
     for pool in curr_pools.values():
@@ -255,7 +264,7 @@ async def query_and_score_miners(
         request_uid = active_alloc["request_uid"]
         uids_to_delete.append(request_uid)
         # calculate rewards for previous active allocations
-        miner_uids, rewards = get_rewards(self, active_alloc, chain_data_provider)
+        miner_uids, rewards = await get_rewards(self, active_alloc, chain_data_provider)
         bt.logging.debug(f"miner rewards: {rewards}")
         bt.logging.debug(f"sim penalities: {self.similarity_penalties}")
 
@@ -281,6 +290,7 @@ async def query_and_score_miners(
         uids=active_uids,
         responses=responses,
         assets_and_pools=assets_and_pools,
+        query_timeout=self.config.neuron.timeout,
     )
 
     sorted_indices = [idx for idx, val in sorted(enumerate(self.scores), key=lambda k: k[1], reverse=True)]

@@ -24,13 +24,12 @@ async def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dic
     for uid, pool in pools.items():
         if isinstance(pool, BittensorAlphaTokenPool):
             pools[uid] = PoolFactory.create_pool(
-                pool_type=pool.pool_type,
-                netuid=pool.netuid,
+                pool_type=pool.pool_type, netuid=pool.netuid, pool_data_provider_type=pool.pool_data_provider_type
             )
         else:
             pools[uid] = PoolFactory.create_pool(
                 pool_type=pool.pool_type,
-                web3_provider=self.w3,  # type: ignore[]
+                web3_provider=self.pool_data_providers[pool.pool_data_provider_type],  # type: ignore[]
                 user_address=(
                     pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
                 ),  # TODO: is there a cleaner way to do this?
@@ -46,10 +45,7 @@ async def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dic
 
     # sync pool parameters by calling smart contracts on chain
     for pool in pools.values():
-        if isinstance(pool, BittensorAlphaTokenPool):
-            await pool.sync(self.subtensor)
-        else:
-            await pool.sync(self.w3)
+        await pool.sync(self.pool_data_providers[pool.pool_data_provider_type])
     bt.logging.debug("synced pools")
 
     # check the amounts that have been borrowed from the pools - and account for them

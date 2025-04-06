@@ -65,8 +65,12 @@ class BaseValidatorNeuron(BaseNeuron):
             raise ValueError("You must provide a valid subtensor provider url")
 
         self.pool_data_providers = {
-            POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: PoolProviderFactory.create_pool_provider(url=eth_provider_url),
-            POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: PoolProviderFactory.create_pool_provider(url=bittensor_mainnet_url),
+            POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: PoolProviderFactory.create_pool_provider(
+                POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, url=eth_provider_url
+            ),
+            POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: PoolProviderFactory.create_pool_provider(
+                POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, url=bittensor_mainnet_url
+            ),
         }
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
@@ -149,7 +153,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     try:
                         await self.concurrent_forward()
                     except Exception as e:
-                        bt.logging.error(f"Error in concurrent forward: {e}")
+                        bt.logging.exception(f"Error in concurrent forward: {e}")
 
                     self.last_query_time = current_time
                     self.sync()
@@ -159,7 +163,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 await asyncio.sleep(1)
 
         except Exception as e:
-            bt.logging.error(f"Error in main loop: {e}")
+            bt.logging.exception(f"Error in main loop: {e}")
 
     def log_metrics(self) -> None:
         """Log metrics to wandb"""
@@ -269,7 +273,7 @@ class BaseValidatorNeuron(BaseNeuron):
         else:
             bt.logging.error("set_weights failed", msg)
 
-    def resync_metagraph(self) -> None:
+    async def resync_metagraph(self) -> None:
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
         bt.logging.info("resync_metagraph()")
 

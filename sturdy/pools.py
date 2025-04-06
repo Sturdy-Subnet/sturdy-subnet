@@ -216,6 +216,7 @@ class BittensorAlphaTokenPool(BaseModel):
     )
 
     _price_rao: int = PrivateAttr()  # current price of alpha token in rao
+    _current_block: int = 0  #
 
     class Config:
         arbitrary_types_allowed = True
@@ -238,6 +239,22 @@ class BittensorAlphaTokenPool(BaseModel):
 
     async def pool_init(self, subtensor: bt.AsyncSubtensor) -> None:
         await self.sync(subtensor)
+
+    # def rao_to_alpha(self, amount: int) -> int:
+    #     """returns amount of alpha one can get (in rao)"""
+    #     return self._subnet_info.tao_to_alpha_with_slippage(amount / 1e9)[0].rao
+
+    # def alpha_to_rao(self, amount: int) -> int:
+    #     """returns amount of TAO one can get (in rao)"""
+    #     return self._subnet_info.alpha_to_tao_with_slippage(amount / 1e9)[0].rao
+
+    # def should_update_alpha(self, subtensor: bt.Subtensor) -> bool:
+    #     current_block = subtensor.block
+    #     subnet = subtensor.subnet(netuid=self.netuid) # TODO: should we just not call this here to avoid duplicate chain calls?
+
+    #     last_epoch = current_block - 1 - (self.current_block + self.netuid + 1) % subnet.tempo
+    #     next_tempo_block_start = last_epoch + interval
+    #     if self.current_block > next_tempo_block_start: # TODO - > or >=?
 
     # TODO: use async subtensor interface
     async def sync(self, subtensor: bt.AsyncSubtensor) -> None:

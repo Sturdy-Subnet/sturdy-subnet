@@ -1,7 +1,7 @@
 from enum import IntEnum
 
 import bittensor as bt
-from web3 import Web3
+from web3 import AsyncWeb3
 
 
 class POOL_DATA_PROVIDER_TYPE(IntEnum):
@@ -11,7 +11,7 @@ class POOL_DATA_PROVIDER_TYPE(IntEnum):
 
 class PoolProviderFactory:
     @staticmethod
-    def create_pool_provider(provider: POOL_DATA_PROVIDER_TYPE, url: str, **kwargs: any) -> Web3 | bt.AsyncSubtensor:
+    def create_pool_provider(provider: POOL_DATA_PROVIDER_TYPE, url: str, **kwargs: any) -> AsyncWeb3 | bt.AsyncSubtensor:
         """
         Create a pool provider based on the given provider type.
         :param provider: The provider type to create.
@@ -19,7 +19,7 @@ class PoolProviderFactory:
         :return: An instance of the specified pool provider.
         """
         if provider == POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET:
-            return Web3(Web3.AsyncHTTPProvider(url, **kwargs))
+            return AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url, **kwargs))
         if provider == POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET:
             # a dict of keyword arguments to pass to the constructor
             config = {
@@ -30,6 +30,6 @@ class PoolProviderFactory:
             args_config = kwargs.get("config", {})
             # Merge the default config with the provided config
             config.update(args_config)
-            kwargs["config"] = config
+            kwargs["config"] = bt.config.fromDict(config)
             return bt.AsyncSubtensor(**kwargs)
         raise ValueError(f"Unsupported provider type: {provider}")

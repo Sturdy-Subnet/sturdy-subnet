@@ -166,6 +166,7 @@ def filter_allocations(
     uids: list[str],
     responses: list,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
+    query_timeout: int = QUERY_TIMEOUT,
 ) -> dict[str, AllocInfo]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -180,7 +181,7 @@ def filter_allocations(
     """
 
     filtered_allocs = {}
-    axon_times = get_response_times(uids=uids, responses=responses, timeout=QUERY_TIMEOUT)
+    axon_times = get_response_times(uids=uids, responses=responses, timeout=query_timeout)
 
     cheaters = []
     for response_idx, response in enumerate(responses):
@@ -202,7 +203,7 @@ def filter_allocations(
         # used to filter out miners who timed out
         # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
-        if response.allocations is not None and axon_times[uids[response_idx]] < QUERY_TIMEOUT:
+        if response.allocations is not None and axon_times[uids[response_idx]] < query_timeout:
             filtered_allocs[uids[response_idx]] = {
                 "allocations": response.allocations,
             }
@@ -210,7 +211,9 @@ def filter_allocations(
     bt.logging.warning(f"CHEATERS DETECTED: {cheaters}")
 
     curr_filtered_allocs = dict(sorted(filtered_allocs.items(), key=lambda item: int(item[0])))
-    sorted_axon_times = dict(sorted(axon_times.items(), key=lambda item: item[1]))
+
+    # round to 4 decimal places for nicer looking logs
+    sorted_axon_times = {uid: round(t, 4) for (uid, t) in sorted(axon_times.items(), key=lambda item: item[1])}
 
     bt.logging.debug(f"sorted axon times:\n{sorted_axon_times}")
 
@@ -258,17 +261,18 @@ async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.As
             new_pool = PoolFactory.create_pool(
                 pool_type=pool["pool_type"],
                 netuid=int(pool["netuid"]),
+                pool_data_provider_type=pool["pool_data_provider_type"],
             )
         else:
             new_pool = PoolFactory.create_pool(
                 pool_type=pool["pool_type"],
-                web3_provider=self.pool_data_providers[pool["pool_data_provider"]],  # type: ignore[]
+                web3_provider=self.pool_data_providers[pool["pool_data_provider_type"]],  # type: ignore[]
                 user_address=(pool["user_address"]),  # TODO: is there a cleaner way to do this?
                 contract_address=pool["contract_address"],
             )
 
         # sync pool
-        new_pool.sync(chain_data_provider)
+        await new_pool.sync(chain_data_provider)
         new_pools[uid] = new_pool
 
     assets_and_pools["pools"] = new_pools
