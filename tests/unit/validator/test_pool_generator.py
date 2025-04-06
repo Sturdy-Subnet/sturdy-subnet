@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 from dotenv import load_dotenv
 from eth_account import Account
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from sturdy.constants import *
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
@@ -16,14 +16,13 @@ load_dotenv()
 ETHEREUM_MAINNET_PROVIDER_URL = os.getenv("ETHEREUM_MAINNET_PROVIDER_URL")
 
 
-class TestPoolAndAllocGeneration(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
+class TestPoolAndAllocGeneration(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
         # runs tests on local mainnet fork at block: 21080765
-        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
-        assert cls.w3.is_connected()
+        self.w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider("http://127.0.0.1:8545"))
+        assert await self.w3.is_connected()
 
-        cls.w3.provider.make_request(
+        await self.w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
             [
                 {
@@ -35,24 +34,23 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             ],
         )
 
-        cls.contract_address = "0x0669091F451142b3228171aE6aD794cF98288124"
+        self.contract_address = "0x0669091F451142b3228171aE6aD794cF98288124"
         # Create a funded account for testing
-        cls.account = Account.create()
-        cls.w3.eth.send_transaction(
+        self.account = Account.create()
+        await self.w3.eth.send_transaction(
             {
-                "to": cls.account.address,
-                "from": cls.w3.eth.accounts[0],
-                "value": cls.w3.to_wei(200000, "ether"),
+                "to": self.account.address,
+                "from": (await self.w3.eth.accounts)[0],
+                "value": self.w3.to_wei(200000, "ether"),
             }
         )
 
-        cls.snapshot_id = cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
-        print(f"snapshot id: {cls.snapshot_id}")
+        self.snapshot_id = await self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
+        print(f"snapshot id: {self.snapshot_id}")
 
-    @classmethod
-    def tearDownClass(cls) -> None:
+    async def asyncTearDown(self) -> None:
         # run this after tests to restore original forked state
-        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        w3 = AsyncWeb3(AsyncWeb3.HTTPProvider("http://127.0.0.1:8545"))
 
         w3.provider.make_request(
             "hardhat_reset",  # type: ignore[]
@@ -66,16 +64,11 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             ],
         )
 
-    def setUp(self) -> None:
-        self.snapshot_id = self.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
-        print(f"snapshot id: {self.snapshot_id}")
-
-    def tearDown(self) -> None:
         # Optional: Revert to the original snapshot after each test
         print("reverting to original evm snapshot")
-        self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
+        await self.w3.provider.make_request("evm_revert", self.snapshot_id)  # type: ignore[]
 
-    def test_generate_assets_and_pools(self) -> None:
+    async def test_generate_assets_and_pools(self) -> None:
         # same seed on every test run
         np.random.seed(69)
         # run test multiple times to to ensure the number generated are
@@ -85,7 +78,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             key = keys[idx]
             print(key)
             selected_entry = POOL_REGISTRY[key]
-            generated = gen_evm_pools_for_challenge(selected_entry, self.w3)
+            generated = await gen_evm_pools_for_challenge(selected_entry, self.w3)
             print(generated)
 
             pools = generated["assets_and_pools"]["pools"]
