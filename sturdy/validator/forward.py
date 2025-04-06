@@ -33,6 +33,7 @@ from sturdy.constants import (
 )
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.validator.request import Request
 from sturdy.validator.reward import filter_allocations, get_rewards
 from sturdy.validator.sql import (
@@ -63,9 +64,12 @@ async def forward(self) -> Any:
             rows_affected = delete_stale_active_allocs(conn)
         bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
-        chain_data_provider = np.random.choice([self.w3, self.subtensor])
+        # chain_data_provider = np.random.choice(self.pool_data_providers.values())
+        # only do web3 pools for now
+        # TODO: change this before committing
+        chain_data_provider = np.random.choice(self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET])
         try:
-            challenge_data = generate_challenge_data(chain_data_provider)
+            challenge_data = await generate_challenge_data(chain_data_provider)
         except Exception as e:
             bt.logging.error(f"Failed to generate challenge data: {e}")
             continue
@@ -114,7 +118,7 @@ async def forward(self) -> Any:
 
 
 def get_metadata(
-    pools: dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool], chain_data_provider: Web3 | bt.Subtensor
+    pools: dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool], chain_data_provider: Web3 | bt.AsyncSubtensor
 ) -> dict:
     metadata = {}
     for idx, pool in pools.items():
@@ -202,7 +206,7 @@ def prepare_single_request(self, uid: int, synapse: bt.Synapse) -> Request | Non
 async def query_and_score_miners(
     self,
     assets_and_pools: Any,
-    chain_data_provider: Web3 | bt.Subtensor,
+    chain_data_provider: Web3 | bt.AsyncSubtensor,  # TODO: we shouldn't need this here - use self.pool_data_providers
     request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
     user_address: str = ADDRESS_ZERO,
 ) -> tuple[list, dict[str, AllocInfo]]:
@@ -235,7 +239,7 @@ async def query_and_score_miners(
 
     curr_pools = assets_and_pools["pools"]
     for pool in curr_pools.values():
-        pool.sync(chain_data_provider)
+        await pool.sync(chain_data_provider)
 
     # score previously suggested miner allocations based on how well they are performing now
 

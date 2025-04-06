@@ -4,7 +4,7 @@ import unittest
 import gmpy2
 import numpy as np
 from dotenv import load_dotenv
-from web3 import Web3
+from web3 import AsyncWeb3
 from web3.constants import ADDRESS_ZERO
 
 from sturdy.algo import naive_algorithm
@@ -27,14 +27,14 @@ from sturdy.validator.reward import (
 )
 
 load_dotenv()
-WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
+ETHEREUM_MAINNET_PROVIDER_URL = os.getenv("ETHEREUM_MAINNET_PROVIDER_URL")
 
 
 class TestCheckAllocations(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         # runs tests on local mainnet fork at block: 20233401
-        cls.w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+        cls.w3 = Web3(Web3.AsyncHTTPProvider("http://127.0.0.1:8545"))
         assert cls.w3.is_connected()
 
         class EmptyVali:
@@ -47,7 +47,7 @@ class TestCheckAllocations(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 20976304,
                     },
                 },
@@ -117,7 +117,7 @@ class TestCheckAllocations(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 20233401,
                     },
                 },
@@ -234,7 +234,7 @@ class TestCheckAllocations(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 20874859,
                     },
                 },
@@ -344,7 +344,7 @@ class TestCalculateApy(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21080765,
                     },
                 },
@@ -363,7 +363,7 @@ class TestCalculateApy(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21075005,
                     },
                 },
@@ -393,7 +393,7 @@ class TestCalculateApy(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21080765,
                     },
                 },
@@ -413,7 +413,7 @@ class TestCalculateApy(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21075005,
                     },
                 },
@@ -458,7 +458,7 @@ class TestCalculateApy(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21080765,
                     },
                 },
@@ -478,7 +478,7 @@ class TestCalculateApy(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21075005,
                     },
                 },
@@ -508,7 +508,7 @@ class TestCalculateApy(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21080765,
                     },
                 },

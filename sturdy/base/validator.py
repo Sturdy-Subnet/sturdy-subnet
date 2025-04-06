@@ -14,6 +14,7 @@ from web3 import Web3
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
 from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
@@ -52,12 +53,21 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        # set web3 provider url
-        w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
-        if w3_provider_url is None:
+        # TODO: move setup to a separate function?
+        # setup ethereum mainnet provider
+        eth_provider_url = os.environ.get("ETHEREUM_MAINNET_PROVIDER_URL")
+        if eth_provider_url is None:
             raise ValueError("You must provide a valid web3 provider url")
 
-        self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
+        # setup bittensor mainnet provider
+        bittensor_mainnet_url = os.environ.get("BITTENSOR_MAINNET_PROVIDER_URL")
+        if bittensor_mainnet_url is None:
+            raise ValueError("You must provide a valid subtensor provider url")
+
+        self.pool_data_providers = {
+            POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: PoolProviderFactory.create_pool_provider(url=eth_provider_url),
+            POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: PoolProviderFactory.create_pool_provider(url=bittensor_mainnet_url),
+        }
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         if self.config.mock:
@@ -100,7 +110,10 @@ class BaseValidatorNeuron(BaseNeuron):
         self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.validator.max_workers)
 
     def __del__(self) -> None:
-        self.thread_pool.shutdown(wait=True)
+        if self.thread_pool:
+            # Shutdown the thread pool when the object is deleted
+            bt.logging.info("Shutting down thread pool...")
+            self.thread_pool.shutdown(wait=True)
 
     async def start(self) -> None:
         """Start validator tasks"""

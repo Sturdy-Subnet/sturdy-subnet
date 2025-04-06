@@ -53,7 +53,7 @@ class BaseMinerNeuron(BaseNeuron):
             bt.logging.debug("loading wandb")
             init_wandb_miner(self=self)
 
-        w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
+        w3_provider_url = os.environ.get("ETHEREUM_MAINNET_PROVIDER_URL")
         if w3_provider_url is None:
             raise ValueError("You must provide a valid web3 provider url!")
 

@@ -13,7 +13,7 @@ from sturdy.pools import (
 )
 
 load_dotenv()
-WEB3_PROVIDER_URL = os.getenv("WEB3_PROVIDER_URL")
+ETHEREUM_MAINNET_PROVIDER_URL = os.getenv("ETHEREUM_MAINNET_PROVIDER_URL")
 
 
 class TestPoolAndAllocGeneration(unittest.TestCase):
@@ -28,7 +28,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21150770,
                     },
                 },
@@ -59,7 +59,7 @@ class TestPoolAndAllocGeneration(unittest.TestCase):
             [
                 {
                     "forking": {
-                        "jsonRpcUrl": WEB3_PROVIDER_URL,
+                        "jsonRpcUrl": ETHEREUM_MAINNET_PROVIDER_URL,
                         "blockNumber": 21150770,
                     },
                 },

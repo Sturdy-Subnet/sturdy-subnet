@@ -25,6 +25,7 @@ from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
 from sturdy.pools import BittensorAlphaTokenPool, ChainBasedPoolModel
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 
 
 class REQUEST_TYPES(IntEnum):
@@ -52,6 +53,10 @@ class AllocateAssetsRequest(BaseModel):
     user_address: str = Field(
         default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls for organic requests",
+    )
+    pool_data_provider: str = Field(
+        default=POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET,
+        description="data provider for the pool - defaults to ETHEREUM_MAINNET",
     )
     num_allocs: int = Field(default=1, description="number of miner allocations to receive")
 

@@ -220,7 +220,8 @@ def filter_allocations(
     return axon_times, curr_filtered_allocs
 
 
-def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.Subtensor) -> tuple[list, dict]:
+# TODO: we shouldn't need chain_data provider here, use self.pool_data_providers instead
+async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.AsyncSubtensor) -> tuple[list, dict]:
     # a dictionary, miner uids -> apy and allocations
     apys_and_allocations = {}
     miner_uids = []
@@ -261,7 +262,7 @@ def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.Subtenso
         else:
             new_pool = PoolFactory.create_pool(
                 pool_type=pool["pool_type"],
-                web3_provider=self.w3,  # type: ignore[]
+                web3_provider=self.pool_data_providers[pool["pool_data_provider"]],  # type: ignore[]
                 user_address=(pool["user_address"]),  # TODO: is there a cleaner way to do this?
                 contract_address=pool["contract_address"],
             )

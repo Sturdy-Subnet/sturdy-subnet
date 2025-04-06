@@ -47,6 +47,7 @@ from sturdy.protocol import (
     GetAllocationResponse,
     RequestInfoResponse,
 )
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
@@ -222,7 +223,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     for uid, pool in pools.items():
         new_pool = PoolFactory.create_pool(
             pool_type=pool.pool_type,
-            web3_provider=core_validator.w3,  # type: ignore[]
+            web3_provider=core_validator.pool_data_providers[synapse.pool_data_provider],  # type: ignore[]
             user_address=(
                 pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
             ),  # TODO: is there a cleaner way to do this?

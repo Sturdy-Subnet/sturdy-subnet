@@ -17,7 +17,7 @@ THRESHOLD = 0.99  # used to avoid over-allocations
 
 
 # NOTE: THIS IS JUST AN EXAMPLE - THIS IS NOT VERY OPTIMIZED
-def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
+async def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     bt.logging.debug(f"received request type: {synapse.request_type}")
     pools = cast(dict, synapse.assets_and_pools["pools"])
 
@@ -47,9 +47,9 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     # sync pool parameters by calling smart contracts on chain
     for pool in pools.values():
         if isinstance(pool, BittensorAlphaTokenPool):
-            pool.sync(self.subtensor)
+            await pool.sync(self.subtensor)
         else:
-            pool.sync(self.w3)
+            await pool.sync(self.w3)
     bt.logging.debug("synced pools")
 
     # check the amounts that have been borrowed from the pools - and account for them
@@ -67,7 +67,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     for pool in pools.values():
         match pool.pool_type:
             case POOL_TYPES.DAI_SAVINGS:
-                apy = pool.supply_rate()
+                apy = await pool.supply_rate()
                 rates[pool.contract_address] = apy
                 rates_sum += apy
             case POOL_TYPES.BT_ALPHA:
@@ -75,7 +75,7 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
                 rates[str(pool.netuid)] = price
                 rates_sum += price
             case _:
-                apy = pool.supply_rate(balance // len(pools))
+                apy = await pool.supply_rate(balance // len(pools))
                 rates[pool.contract_address] = apy
                 rates_sum += apy
 
