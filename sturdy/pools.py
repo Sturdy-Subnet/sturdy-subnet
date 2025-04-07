@@ -24,7 +24,7 @@ from typing import Any, ClassVar, Literal
 
 import bittensor as bt
 import numpy as np
-from async_lru import alru_cache
+from async_lru import _LRUCacheWrapper, alru_cache
 from eth_account import Account
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from web3 import AsyncWeb3
@@ -42,8 +42,6 @@ from sturdy.utils.misc import (
     rayMul,
     retry_with_backoff,
 )
-
-from async_lru import _LRUCacheWrapper
 
 
 class POOL_TYPES(IntEnum):

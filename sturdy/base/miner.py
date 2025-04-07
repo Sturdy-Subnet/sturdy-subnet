@@ -18,13 +18,10 @@
 import argparse
 import asyncio
 import os
-import threading
-import time
 import traceback
 
 import bittensor as bt
 from dotenv import load_dotenv
-from web3 import AsyncWeb3
 
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import MINER_SYNC_FREQUENCY
@@ -45,8 +42,8 @@ class BaseMinerNeuron(BaseNeuron):
         super().add_args(parser)
         add_miner_args(cls, parser)
 
-    def __init__(self, config=None):
-        super().__init__(config=config)
+    async def _init_async(self, config=None) -> None:
+        await super()._init_async(config=config)
         load_dotenv()
 
         # init wandb
@@ -96,87 +93,84 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Instantiate runners
         self.should_exit: bool = False
-        self.is_running: bool = False
-        self.thread: threading.Thread = None
+        # Keep the lock if needed for other purposes
         self.lock = asyncio.Lock()
 
-    def run(self):
+    async def run(self) -> None:
         """
-        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on
-        keyboard interrupts and logs unforeseen errors.
-
-        This function performs the following primary tasks:
-        1. Check for registration on the Bittensor network.
-        2. Starts the miner's axon, making it active on the network.
-        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network
-        state and setting weights.
-
-        The miner continues its operations until `should_exit` is set to True or an external interruption occurs.
-        During each epoch of its operation, the miner waits for new blocks on the Bittensor network, updates its
-        knowledge of the network (metagraph), and sets its weights. This process ensures the miner remains active
-        and up-to-date with the network's latest state.
-
-        Note:
-            - The function leverages the global configurations set during the initialization of the miner.
-            - The miner's axon serves as its interface to the Bittensor network, handling incoming and outgoing requests.
-
-        Raises:
-            KeyboardInterrupt: If the miner is stopped by a manual interruption.
-            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
+        Initiates and manages the main loop for the miner on the Bittensor network.
         """
-
-        # Check that miner is registered on the network.
-        self.sync()
-
-        # Serve passes the axon information to the network + netuid we are hosting on.
-        # This will auto-update if the axon port of external ip have changed.
-        bt.logging.info(
-            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid:\
-            {self.config.netuid}"
-        )
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
-
-        # Start  starts the miner's axon, making it active on the network.
-        self.axon.start()
-
-        bt.logging.info("Miner starting...")
-
-        # This loop maintains the miner's operations until intentionally stopped.
         try:
-            while not self.should_exit:
-                # Wait before checking again.
-                time.sleep(MINER_SYNC_FREQUENCY)  # 12 seconds per block
+            # Check that miner is registered on the network.
+            await self.sync()
 
-                # Check if we should exit.
+            # Serve passes the axon information to the network + netuid we are hosting on.
+            bt.logging.info(
+                f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid:\
+                {self.config.netuid}"
+            )
+
+            # TODO: do I *have* to pass the netuid? can't it be inferred from the bt axon above?
+            # TODO: should we wait for inclusion?
+            await self.subtensor.serve_axon(netuid=self.config.netuid, axon=self.axon)
+
+            # Start starts the miner's axon, making it active on the network.
+            self.axon.start()
+
+            bt.logging.info("Miner starting...")
+
+            # This loop maintains the miner's operations until intentionally stopped.
+            while not self.should_exit:
+                # Wait before checking again using proper async sleep
+                await asyncio.sleep(MINER_SYNC_FREQUENCY)  # 12 seconds per block
+
                 if self.should_exit:
                     break
 
                 # Sync metagraph and potentially set weights.
-                self.sync()
+                await self.sync()
                 self.step += 1
 
-        # If someone intentionally stops the miner, it'll safely terminate operations.
-        except KeyboardInterrupt:
+        except asyncio.CancelledError:
+            # Handle graceful shutdown
+            bt.logging.info("Miner task cancelled, shutting down...")
             self.axon.stop()
-            exit()
 
-        # In case of unforeseen errors, the miner will log the error and continue operations.
-        except Exception as e:  # noqa
-            bt.logging.error(traceback.format_exc())
+        except KeyboardInterrupt:
+            bt.logging.info("Keyboard interrupt received, shutting down...")
+            self.axon.stop()
+
+        except Exception as e:
+            bt.logging.error(f"Unexpected error in miner: {traceback.format_exc()}")
+
+        finally:
+            # Ensure axon is stopped
+            if hasattr(self, "axon"):
+                self.axon.stop()
 
     # create "with" entry and exit functions to call run() in the background for syncing, etc.
-    def __enter__(self):
+    async def __aenter__(self):
+        """Async context manager entry"""
         self.should_exit = False
-        self.thread = threading.Thread(target=self.run)
-        self.thread.start()
-        return self
+        # Create task instead of thread
+        self.task = asyncio.create_task(self.run())
+        return await asyncio.sleep(0)  # Make it awaitable by returning an awaitable :|
+        # TODO: is there a better way to go about this?
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
         self.should_exit = True
-        self.thread.join()
+        # Cancel the task if it's still running
+        if hasattr(self, "task") and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task  # Wait for task to be cancelled
+            except asyncio.CancelledError as e:
+                bt.logging.error("Error exiting:")
+                bt.logging.exception(e)
 
-    def resync_metagraph(self) -> None:
+    async def resync_metagraph(self) -> None:
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
 
         # Sync the metagraph.
-        self.metagraph.sync(subtensor=self.subtensor)
+        await self.metagraph.sync(subtensor=self.subtensor)

@@ -54,7 +54,7 @@ class AllocateAssetsRequest(BaseModel):
         default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls for organic requests",
     )
-    pool_data_provider: str = Field(
+    pool_data_provider: POOL_DATA_PROVIDER_TYPE | int = Field(
         default=POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET,
         description="data provider for the pool - defaults to ETHEREUM_MAINNET",
     )
@@ -114,6 +114,10 @@ class AllocateAssetsBase(BaseModel):
     user_address: str = Field(
         default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls",
+    )
+    pool_data_provider: POOL_DATA_PROVIDER_TYPE | int = Field(
+        default=POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET,
+        description="data provider for the pool - defaults to ETHEREUM_MAINNET",
     )
 
     # Optional request output, filled by recieving axon.

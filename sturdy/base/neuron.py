@@ -53,18 +53,29 @@ class BaseNeuron(ABC):
     def config(cls):
         return config(cls)
 
-    # subtensor: bt.AsyncSubtensor
-    subtensor: bt.subtensor
+    subtensor: bt.AsyncSubtensor
+    # subtensor: bt.subtensor
     wallet: bt.wallet
-    # metagraph: AsyncMetagraph
-    metagraph: bt.metagraph
+    metagraph: AsyncMetagraph
+    # metagraph: bt.metagraph
     spec_version: int = spec_version
 
     @property
-    def block(self):
-        return ttl_get_block(self)
+    async def block(self):
+        return await ttl_get_block(self)
 
-    def __init__(self, config=None) -> None:
+    @classmethod
+    async def create(cls, config=None) -> "BaseNeuron":
+        """
+        Factory method to create an instance of the neuron class.
+        """
+        # Create a new instance of the class
+        instance = cls()
+        # Initialize the instance asynchronously
+        await instance._init_async(config=config)
+        return instance
+
+    async def _init_async(self, config=None) -> None:
         base_config = copy.deepcopy(config or BaseNeuron.config())
         self.config = self.config()
         self.config.merge(base_config)
@@ -84,15 +95,16 @@ class BaseNeuron(ABC):
         bt.logging.info("Setting up bittensor objects.")
 
         self.wallet = bt.wallet(config=self.config)
-        self.subtensor = bt.subtensor(config=self.config)
-        self.metagraph = self.subtensor.metagraph(self.config.netuid)
+        self.subtensor = bt.AsyncSubtensor(config=self.config)
+        await self.subtensor.initialize()
+        self.metagraph = await self.subtensor.metagraph(self.config.netuid)
 
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
         bt.logging.info(f"Metagraph: {self.metagraph}")
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
-        self.check_registered()
+        await self.check_registered()
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
@@ -105,37 +117,37 @@ class BaseNeuron(ABC):
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
-    def sync(self) -> None:
+    async def sync(self) -> None:
         """
         Wrapper for synchronizing the state of the network for the given miner or validator.
         """
         # Ensure miner or validator hotkey is still registered on the network.
 
         try:
-            self.check_registered()
+            await self.check_registered()
         except Exception:
             bt.logging.error("Could not check registration status! Skipping...")
 
         try:
-            if self.should_sync_metagraph():
-                self.resync_metagraph()
+            if await self.should_sync_metagraph():
+                await self.resync_metagraph()
         except Exception as e:
             bt.logging.error("There was an issue with trying to sync with the metagraph! See Error:")
-            bt.logging.error(e)
+            bt.logging.exception(e)
 
         try:
             if self.should_set_weights():
-                self.set_weights()
+                await self.set_weights()
         except Exception as e:
             bt.logging.error("Failed to set weights! See Error:")
-            bt.logging.error(e)
+            bt.logging.exception(e)
 
         # Always save state.
         self.save_state()
 
-    def check_registered(self) -> None:
+    async def check_registered(self) -> None:
         # --- Check for registration.
-        if not self.subtensor.is_hotkey_registered(
+        if not await self.subtensor.is_hotkey_registered(
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
         ):
@@ -145,11 +157,11 @@ class BaseNeuron(ABC):
             )
             exit()
 
-    def should_sync_metagraph(self) -> bool:
+    async def should_sync_metagraph(self) -> bool:
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
-        return (self.block - self.metagraph.last_update[self.uid]) > self.config.neuron.epoch_length
+        return (await self.block - self.metagraph.last_update[self.uid]) > self.config.neuron.epoch_length
 
     def should_set_weights(self) -> bool:
         # Check if enough epoch blocks have elapsed since the last epoch.

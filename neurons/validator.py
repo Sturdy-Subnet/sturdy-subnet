@@ -47,7 +47,6 @@ from sturdy.protocol import (
     GetAllocationResponse,
     RequestInfoResponse,
 )
-from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
@@ -68,8 +67,8 @@ class Validator(BaseValidatorNeuron):
     end of each epoch.
     """
 
-    def __init__(self, config=None) -> None:
-        super().__init__(config=config)
+    async def _init_async(self, config=None) -> None:
+        await super()._init_async(config=config)
         self.uid_to_response = {}
 
     async def forward(self) -> Any:
@@ -238,7 +237,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     axon_times, result = await query_and_score_miners(
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
-        chain_data_provider=core_validator.w3,  # TODO: change this
+        chain_data_provider=core_validator.pool_data_providers[synapse.pool_data_provider],  # TODO: see TODO(provider)
         request_type=synapse.request_type,
         user_address=synapse.user_address,
     )
@@ -252,7 +251,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     pools = synapse.assets_and_pools["pools"]
 
     for contract_addr, pool in pools.items():
-        pool.sync(core_validator.w3)
+        await pool.sync(core_validator.pool_data_providers[synapse.pool_data_provider])  # TODO: see TODO(provider)
         metadata[contract_addr] = pool._yield_index
 
     with sql.get_db_connection() as conn:
@@ -302,7 +301,7 @@ async def request_info(
 
 async def main() -> None:
     global core_validator  # noqa: PLW0603
-    core_validator = Validator()
+    core_validator = await Validator.create()
 
     try:
         config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port)  # noqa: S104
