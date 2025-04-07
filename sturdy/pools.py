@@ -213,7 +213,7 @@ class BittensorAlphaTokenPool(BaseModel):
         default=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, description="type of pool data provider"
     )
 
-    _price_rao: int = PrivateAttr()  # current price of alpha token in rao
+    _price_rao: int = 0  # current price of alpha token in rao
     _current_block: int = 0  #
 
     class Config:
@@ -257,7 +257,7 @@ class BittensorAlphaTokenPool(BaseModel):
     # TODO: use async subtensor interface
     async def sync(self, subtensor: bt.AsyncSubtensor) -> None:
         try:
-            subnet = subtensor.subnet(netuid=self.netuid)
+            subnet = await subtensor.subnet(netuid=self.netuid)
             self._price_rao = subnet.price.rao
         except Exception as err:
             bt.logging.error("Failed to sync alpha token pool!")
@@ -1268,7 +1268,7 @@ async def generate_challenge_data(
     rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
 ) -> dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int]:  # generate pools
     if isinstance(chain_data_provider, bt.AsyncSubtensor):
-        return gen_bt_alpha_pools(chain_data_provider, rng_gen)
+        return await gen_bt_alpha_pools(chain_data_provider, rng_gen)
 
     selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
     bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
@@ -1281,7 +1281,7 @@ async def gen_bt_alpha_pools(
     rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
 ) -> dict[str, dict[str, BittensorAlphaTokenPool] | int]:
     # Filter out root and subnets that have >= MIN_TAO_IN_POOL TAO in their pools
-    all_subnets = await subtensor.all_subnets()[1:]
+    all_subnets = (await subtensor.all_subnets())[1:]
     subnets = [s for s in all_subnets if s.tao_in.tao > MIN_TAO_IN_POOL]
     num_subnets = len(subnets)
 

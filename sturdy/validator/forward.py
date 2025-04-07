@@ -64,10 +64,7 @@ async def forward(self) -> Any:
             rows_affected = delete_stale_active_allocs(conn)
         bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
 
-        # chain_data_provider = np.random.choice(self.pool_data_providers.values())
-        # only do web3 pools for now
-        # TODO: change this before committing
-        chain_data_provider = np.random.choice([self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET]])
+        chain_data_provider = np.random.choice(list(self.pool_data_providers.values()))
         try:
             challenge_data = await generate_challenge_data(chain_data_provider)
         except Exception as e:

@@ -11,7 +11,9 @@ class POOL_DATA_PROVIDER_TYPE(IntEnum):
 
 class PoolProviderFactory:
     @staticmethod
-    def create_pool_provider(provider: POOL_DATA_PROVIDER_TYPE, url: str, **kwargs: any) -> AsyncWeb3 | bt.AsyncSubtensor:
+    async def create_pool_provider(
+        provider: POOL_DATA_PROVIDER_TYPE, url: str, **kwargs: any
+    ) -> AsyncWeb3 | bt.AsyncSubtensor:
         """
         Create a pool provider based on the given provider type.
         :param provider: The provider type to create.
@@ -31,5 +33,7 @@ class PoolProviderFactory:
             # Merge the default config with the provided config
             config.update(args_config)
             kwargs["config"] = bt.config.fromDict(config)
-            return bt.AsyncSubtensor(**kwargs)
+            subtensor = bt.AsyncSubtensor(**kwargs)
+            await subtensor.initialize()
+            return subtensor
         raise ValueError(f"Unsupported provider type: {provider}")

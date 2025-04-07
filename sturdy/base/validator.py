@@ -65,10 +65,10 @@ class BaseValidatorNeuron(BaseNeuron):
             raise ValueError("You must provide a valid subtensor provider url")
 
         self.pool_data_providers = {
-            POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: PoolProviderFactory.create_pool_provider(
+            POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: await PoolProviderFactory.create_pool_provider(
                 POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, url=eth_provider_url
             ),
-            POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: PoolProviderFactory.create_pool_provider(
+            POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: await PoolProviderFactory.create_pool_provider(
                 POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, url=bittensor_mainnet_url
             ),
         }
