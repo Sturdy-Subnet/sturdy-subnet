@@ -14,23 +14,34 @@ from sturdy.protocol import AllocationsDict
 
 
 def calculate_cv_threshold(apys: list[int]) -> float:
+    """
+    Calculate the coefficient of variation (CV) threshold for APYs.
+    Filters out lower APYs dynamically by increasing percentile cutoff
+    and returns the CV of the highest performing subset.
+    """
     # Convert APY values to a NumPy array and clean up bad data
-    apy_values = np.nan_to_num(
+    apy_array = np.nan_to_num(
         apys,
         nan=0.0,  # Replace NaNs with 0
         posinf=0.0,  # Replace +inf with 0
         neginf=0.0,  # Replace -inf with 0
     )
 
-    # Remove lower than 90% quantile from threshold estimation to reduce the noise
-    apy_values = apy_values[apy_values > np.percentile(apy_values, 90)]
-    if apy_values.size == 0:
-        return APY_BIN_THRESHOLD_FALLBACK
+    # Dynamically estimate the threshold using high-percentile APYs
+    for percentile in reversed(range(50, 100, 5)):
+        threshold = np.percentile(apy_array.astype(np.float64), percentile)
+        high_apys = apy_array[apy_array > threshold]
 
-    # Calculate coefficient of variation as a dynamic threshold
-    std_dev = np.std(apy_values)
-    mean = np.mean(apy_values)
-    return float(std_dev / mean) if mean != 0 and std_dev != 0 else APY_BIN_THRESHOLD_FALLBACK
+        if high_apys.size == 0:
+            continue
+
+        std = np.std(high_apys)
+        mean = np.mean(high_apys)
+
+        if mean > 0 and std > 0:
+            # Calculate coefficient of variation as a dynamic threshold
+            return float(std / mean)
+    return APY_BIN_THRESHOLD_FALLBACK
 
 
 def create_apy_bins(apys: dict[str, int], threshold_func=calculate_cv_threshold) -> dict[int, list[str]]:
