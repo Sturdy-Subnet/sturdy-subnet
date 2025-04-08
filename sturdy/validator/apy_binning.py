@@ -21,7 +21,7 @@ def calculate_cv_threshold(apys: list[int]) -> float:
     """
     # Convert APY values to a NumPy array and clean up bad data
     apy_array = np.nan_to_num(
-        apys,
+        np.array(apys, dtype=np.float64),
         nan=0.0,  # Replace NaNs with 0
         posinf=0.0,  # Replace +inf with 0
         neginf=0.0,  # Replace -inf with 0
@@ -29,7 +29,7 @@ def calculate_cv_threshold(apys: list[int]) -> float:
 
     # Dynamically estimate the threshold using high-percentile APYs
     for percentile in reversed(range(50, 100, 5)):
-        threshold = np.percentile(apy_array.astype(np.float64), percentile)
+        threshold = np.percentile(apy_array, percentile)
         high_apys = apy_array[apy_array > threshold]
 
         if high_apys.size == 0:
