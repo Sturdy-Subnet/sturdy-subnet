@@ -15,6 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import asyncio
 import json
 import math
 from decimal import Decimal
@@ -35,6 +36,7 @@ from web3.types import BlockData
 from sturdy.constants import *
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE
+from sturdy.utils.bt_alpha import fetch_metagraph, fetch_nominator_dividends, fetch_total_alpha_stake
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import (
     async_retry_with_backoff,
@@ -84,7 +86,7 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
         case POOL_TYPES.DAI_SAVINGS:
             pass  # TODO: is there a more appropriate way to go about this?
         case _:  # not a valid pool type
-            return 1
+            return 0
 
     return 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
 
@@ -119,7 +121,7 @@ def check_allocations(
     # Check allocations
     for allocation in allocations.values():
         try:
-            allocation_value = Decimal(str(allocation))
+            allocation_value = Decimal(str(allocation.amount)) if not isinstance(allocation, int) else Decimal(str(allocation))
         except (ValueError, TypeError):
             return False
 
@@ -139,9 +141,10 @@ def check_allocations(
     # check if allocations are above the borrow amounts
     for pool_uid, pool in pools.items():
         allocation = allocations.get(pool_uid, 0)
+        allocation_value = Decimal(str(allocation.amount)) if not isinstance(allocation, int) else Decimal(str(allocation))
         min_alloc = get_minimum_allocation(pool)
 
-        if allocation < min_alloc:
+        if allocation_value < min_alloc:
             return False
 
     return True
@@ -208,13 +211,13 @@ class BittensorAlphaTokenPool(BaseModel):
     """This class represents an alpha token pool for a subnet on the Bittensor network"""
 
     pool_type: Literal[POOL_TYPES.BT_ALPHA] = POOL_TYPES.BT_ALPHA
-    netuid: int
+    netuid: int  # netuid of subnet
+    # TODO: support multi-vali staking in the future?
     pool_data_provider_type: POOL_DATA_PROVIDER_TYPE = Field(
         default=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, description="type of pool data provider"
     )
 
     _price_rao: int = 0  # current price of alpha token in rao
-    _current_block: int = 0  #
 
     class Config:
         arbitrary_types_allowed = True
@@ -238,27 +241,11 @@ class BittensorAlphaTokenPool(BaseModel):
     async def pool_init(self, subtensor: bt.AsyncSubtensor) -> None:
         await self.sync(subtensor)
 
-    # def rao_to_alpha(self, amount: int) -> int:
-    #     """returns amount of alpha one can get (in rao)"""
-    #     return self._subnet_info.tao_to_alpha_with_slippage(amount / 1e9)[0].rao
-
-    # def alpha_to_rao(self, amount: int) -> int:
-    #     """returns amount of TAO one can get (in rao)"""
-    #     return self._subnet_info.alpha_to_tao_with_slippage(amount / 1e9)[0].rao
-
-    # def should_update_alpha(self, subtensor: bt.Subtensor) -> bool:
-    #     current_block = subtensor.block
-    #     subnet = subtensor.subnet(netuid=self.netuid) # TODO: should we just not call this here to avoid duplicate chain calls?
-
-    #     last_epoch = current_block - 1 - (self.current_block + self.netuid + 1) % subnet.tempo
-    #     next_tempo_block_start = last_epoch + interval
-    #     if self.current_block > next_tempo_block_start: # TODO - > or >=?
-
     # TODO: use async subtensor interface
     async def sync(self, subtensor: bt.AsyncSubtensor) -> None:
         try:
-            subnet = await subtensor.subnet(netuid=self.netuid)
-            self._price_rao = subnet.price.rao
+            self._dynamic_info = await subtensor.subnet(netuid=self.netuid)
+            self._price_rao = self._dynamic_info.price.rao
         except Exception as err:
             bt.logging.error("Failed to sync alpha token pool!")
             bt.logging.error(err)
@@ -1297,7 +1284,7 @@ async def gen_bt_alpha_pools(
     challenge_data = {
         "assets_and_pools": {
             "pools": {},
-            "total_assets": num_pools * int(1e9),  # num_pools * 1 rao
+            "total_assets": TOTAL_RAO,
         }
     }
 

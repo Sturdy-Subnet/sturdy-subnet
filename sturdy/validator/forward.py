@@ -120,18 +120,22 @@ async def get_metadata(
     pools: dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool], chain_data_provider: AsyncWeb3 | bt.AsyncSubtensor
 ) -> dict:
     metadata = {}
-    for idx, pool in pools.items():
+    for pool_key, pool in pools.items():
         await pool.sync(chain_data_provider)
         if isinstance(chain_data_provider, AsyncWeb3):
             match pool.pool_type:
                 case T if T in (POOL_TYPES.STURDY_SILO, POOL_TYPES.MORPHO, POOL_TYPES.YEARN_V3):
-                    metadata[idx] = pool._yield_index
+                    metadata[pool_key] = pool._yield_index
                 case T if T in (POOL_TYPES.AAVE_DEFAULT, POOL_TYPES.AAVE_TARGET):
-                    metadata[idx] = pool._yield_index
+                    metadata[pool_key] = pool._yield_index
                 case _:
                     pass
         else:
-            metadata[idx] = pool._price_rao
+            # get current bittensor block
+            block = await chain_data_provider.block
+            price_rao = pool._price_rao
+            meta = {"block": block, "price_rao": price_rao}
+            metadata[pool_key] = meta
 
     return metadata
 
@@ -226,6 +230,7 @@ async def query_and_score_miners(
         request_type=request_type,
         assets_and_pools=assets_and_pools,
         user_address=user_address,
+        pool_data_provider=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET,
     )
 
     # query all miners

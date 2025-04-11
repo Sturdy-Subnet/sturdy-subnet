@@ -33,7 +33,15 @@ class REQUEST_TYPES(IntEnum):
     SYNTHETIC = 1
 
 
-AllocationsDict = dict[str, int]
+class AlphaTokenPoolAllocation(BaseModel):
+    delegate_ss58: str  # hotkey address of validator to delegate to
+    amount: int  # amount in rao, 1 tao = 1e9 rao
+
+
+AlphaTokenPoolAllocations = dict[str, AlphaTokenPoolAllocation]
+
+# TODO: is there a better way to type this?
+AllocationsDict = dict[str, int] | AlphaTokenPoolAllocations
 
 
 class AllocInfo(TypedDict):

@@ -26,6 +26,7 @@ from web3 import Web3
 from sturdy.constants import QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
+from sturdy.utils.bt_alpha import get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins
@@ -90,11 +91,12 @@ def _get_rewards(
     return rewards
 
 
-def annualized_yield_pct(
-    allocations: AllocationsDict,
+async def annualized_yield_pct(
+    allocations: dict,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     seconds_passed: int,
     extra_metadata: dict,
+    pool_data_provider: bt.AsyncSubtensor | None = None,
 ) -> int:
     """
     Calculates annualized yields of allocations in pools within scoring period
@@ -110,15 +112,19 @@ def annualized_yield_pct(
 
     seconds_per_year = 31536000
 
+    if isinstance(pool_data_provider, bt.AsyncSubtensor):
+        current_block = await pool_data_provider.block
+
     # TODO: refactor?
-    for contract_addr, pool in pools.items():
+    for key, pool in pools.items():
         # assume there is no allocation to that pool if not found
         try:
-            allocation = allocations[contract_addr]
+            allocation = allocations[key]
         except Exception as e:
             bt.logging.warning(e)
-            bt.logging.warning(f"could not find allocation to {contract_addr}, assuming it is 0...")
+            bt.logging.warning(f"could not find allocation to {key}, assuming it is 0...")
             allocation = 0
+            continue
         match pool.pool_type:
             case T if T in (
                 POOL_TYPES.STURDY_SILO,
@@ -129,7 +135,7 @@ def annualized_yield_pct(
             ):
                 # TODO: temp fix
                 if allocation > 0:
-                    last_share_price = extra_metadata[contract_addr]
+                    last_share_price = extra_metadata[key]
                     curr_share_price = pool._yield_index
                     pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
                     deposit_delta = allocation - pool._user_deposits
@@ -143,14 +149,30 @@ def annualized_yield_pct(
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
                         bt.logging.error(e)
             case POOL_TYPES.BT_ALPHA:
-                if allocation > 0:
-                    last_price = extra_metadata[contract_addr]
+                initial_alloc = allocation["amount"]
+                vali_hotkey = allocation["delegate_ss58"]
+                if initial_alloc > 0:
+                    metadata = extra_metadata[key]
+
+                    last_block = metadata["block"]
+                    last_price = metadata["price_rao"]
+
                     curr_price = pool._price_rao
-                    pct_delta = float(curr_price - last_price) / float(last_price)
-                    deposit_delta = allocation
                     try:
-                        annualized_pct_return = pct_delta * (seconds_per_year / seconds_passed)
-                        total_yield += int(allocation * annualized_pct_return)
+                        annualized_alpha_apy = await get_vali_avg_apy(
+                            subtensor=pool_data_provider,
+                            netuid=pool.netuid,
+                            hotkey=vali_hotkey,
+                            block=last_block,
+                            end_block=current_block,
+                        )
+
+                        alpha_amount = int(initial_alloc * (1 + annualized_alpha_apy))
+                        tao_pct_return = ((initial_alloc * last_price) - (alpha_amount * curr_price)) / (
+                            alpha_amount * curr_price
+                        )
+
+                        total_yield += int(tao_pct_return * 1e18)
                     except Exception as e:
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
                         bt.logging.error(e)
@@ -302,7 +324,9 @@ async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.As
                 bt.logging.error(e)
                 bt.logging.error("Failed miner hotkey check, continuing loop...")
                 continue
-        miner_apy = annualized_yield_pct(allocations, assets_and_pools, scoring_period_length, extra_metadata)
+        miner_apy = await annualized_yield_pct(
+            allocations, assets_and_pools, scoring_period_length, extra_metadata, chain_data_provider
+        )
         miner_axon_time = miner["axon_time"]
 
         miner_uids.append(miner_uid)

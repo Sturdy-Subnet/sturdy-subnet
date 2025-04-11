@@ -38,7 +38,7 @@ from sturdy.base.validator import BaseValidatorNeuron
 from sturdy.constants import DB_DIR, MIN_TOTAL_ASSETS_AMOUNT, ORGANIC_SCORING_PERIOD
 
 # Bittensor Validator Template:
-from sturdy.pools import PoolFactory
+from sturdy.pools import POOL_TYPES, PoolFactory
 from sturdy.protocol import (
     REQUEST_TYPES,
     AllocateAssets,
@@ -250,9 +250,9 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     metadata = {}
     pools = synapse.assets_and_pools["pools"]
 
-    for contract_addr, pool in pools.items():
+    for pool_key, pool in pools.items():
         await pool.sync(core_validator.pool_data_providers[synapse.pool_data_provider])  # TODO: see TODO(provider)
-        metadata[contract_addr] = pool._yield_index
+        metadata[pool_key] = pool._yield_index
 
     with sql.get_db_connection() as conn:
         sql.log_allocations(

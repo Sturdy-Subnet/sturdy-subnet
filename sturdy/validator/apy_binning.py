@@ -117,27 +117,44 @@ def calculate_base_rewards(bins: dict[int, list[str]], miner_uids: list[str]) ->
 
 
 def format_allocations(
-    allocations: AllocationsDict,
+    apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     assets_and_pools: dict,
 ) -> AllocationsDict:
-    # TODO: better way to do this?
-    if allocations is None:
-        allocations = {}
-    allocs = allocations.copy()
+    """
+    Format and standardize allocations dictionary by padding missing pools and normalizing allocation values.
+
+    Args:
+        apys_and_allocations: Dictionary of miner allocations and APYs
+        assets_and_pools: Dictionary containing pool information
+
+    Returns:
+        Formatted allocations dictionary sorted by miner UID
+    """
+    if not apys_and_allocations:
+        return {}
+
+    formatted_allocs = {}
     pools = assets_and_pools["pools"]
 
-    # pad the allocations
-    for contract_addr in pools:
-        if contract_addr not in allocs:
-            allocs[contract_addr] = 0
+    for miner_uid, miner_data in apys_and_allocations.items():
+        formatted_allocs[miner_uid] = {"allocations": {}}
 
-    # sort the allocations by contract address
-    return {contract_addr: allocs[contract_addr] for contract_addr in sorted(allocs.keys())}
+        for pool_key in pools:
+            # Get original allocation if it exists
+            original_alloc = miner_data["allocations"].get(pool_key, 0)
+
+            # Handle complex allocation objects (e.g., with amount field) - i.e. for alpha token pools
+            if isinstance(original_alloc, dict):
+                formatted_allocs[miner_uid]["allocations"][pool_key] = original_alloc.get("amount", 0)
+            else:
+                formatted_allocs[miner_uid]["allocations"][pool_key] = original_alloc
+
+    return dict(sorted(formatted_allocs.items()))
 
 
 def apply_similarity_penalties(
     bins: dict[int, list[str]],
-    allocations: AllocationsDict,
+    apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     axon_times: dict[str, float],
     assets_and_pools: dict,
     miner_uids: list[str],
@@ -151,7 +168,7 @@ def apply_similarity_penalties(
     uid_to_idx = {uid: idx for idx, uid in enumerate(miner_uids)}
 
     total_assets = assets_and_pools["total_assets"]
-    allocs = format_allocations(allocations, assets_and_pools)
+    allocs = format_allocations(apys_and_allocations, assets_and_pools)
 
     for bin_miners in bins.values():
         # Sort miners by axon time within each bin
@@ -278,7 +295,7 @@ def normalize_bin_rewards(
 
 def calculate_bin_rewards(
     bins: dict[int, list[str]],
-    allocations: AllocationsDict,
+    apys_and_allocations: dict[str, dict[str, AllocationsDict | int]],
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     axon_times: dict[str, float],
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -287,13 +304,13 @@ def calculate_bin_rewards(
     allocation uniqueness, and response times.
     """
     # Get list of miner UIDs in original order
-    miner_uids = list(allocations.keys())
+    miner_uids = list(apys_and_allocations.keys())
 
     # Calculate base rewards based on bin membership
     rewards = calculate_base_rewards(bins, miner_uids)
 
     # Apply penalties for similar allocations (only to later responders)
-    penalties = apply_similarity_penalties(bins, allocations, axon_times, assets_and_pools, miner_uids)
+    penalties = apply_similarity_penalties(bins, apys_and_allocations, axon_times, assets_and_pools, miner_uids)
 
     # Apply penalties to rewards
     post_penalty_rewards = apply_penalties_to_rewards(rewards, penalties)

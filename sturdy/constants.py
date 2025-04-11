@@ -41,6 +41,7 @@ APR_ORACLE = (
 
 # bittensor alpha token pools
 MIN_BT_POOLS = 3  # minimum number of alpha token pools to generate per query per epoch - for scoring miners
-MAX_BT_POOLS = 10  # maximum number of alpha token pools to generate per query per epoch - for scoring miners
+MAX_BT_POOLS = 100  # maximum number of alpha token pools to generate per query per epoch - for scoring miners
 
-MIN_TAO_IN_POOL = 500.0  # minimum amount of TAO a pool must have to consider it to be "valid"
+MIN_TAO_IN_POOL = 1000.0  # minimum amount of TAO a pool must have to consider it to be "valid"
+TOTAL_RAO = int(1000e9)  # total amount of rao to distribute across alpha token pools

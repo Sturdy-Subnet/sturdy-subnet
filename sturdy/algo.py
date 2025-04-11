@@ -11,7 +11,7 @@ from sturdy.pools import (
     PoolFactory,
     get_minimum_allocation,
 )
-from sturdy.protocol import AllocateAssets
+from sturdy.protocol import AllocateAssets, AlphaTokenPoolAllocation
 
 THRESHOLD = 0.99  # used to avoid over-allocations
 
@@ -74,5 +74,16 @@ async def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dic
                 apy = await pool.supply_rate(balance // len(pools))
                 rates[pool.contract_address] = apy
                 rates_sum += apy
+
+    # check the type of the first pool, if it's a bittensor alpha token pool then assume the rest are too
+    first_pool = next(iter(pools.values()))
+    delegate_ss58 = "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"  # This is OTF's hotkey
+    N = len(pools)
+    # by default we just distribute tao equally lol
+    if first_pool.pool_type == POOL_TYPES.BT_ALPHA:
+        self.pool_data_providers[first_pool.pool_data_provider_type]
+        return {
+            netuid: AlphaTokenPoolAllocation(delegate_ss58=delegate_ss58, amount=math.floor(balance / N)) for netuid in pools
+        }
 
     return {pool_uid: minimums[pool_uid] + math.floor((rates[pool_uid] / rates_sum) * balance) for pool_uid in pools}

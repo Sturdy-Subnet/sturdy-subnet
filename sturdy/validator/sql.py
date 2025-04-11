@@ -138,7 +138,7 @@ def to_json_string(input_data) -> str:
     :raises: ValueError - If the input_data is not a valid dict or JSON string.
     """
     if isinstance(input_data, dict):
-        return json.dumps(input_data)
+        return json.dumps(jsonable_encoder(input_data))
     if isinstance(input_data, str):
         try:
             # Check if the string is already a valid JSON string
