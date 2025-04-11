@@ -21,10 +21,12 @@ from typing import cast
 
 import bittensor as bt
 import numpy.typing as npt
+from web3 import Web3
 
 from sturdy.constants import QUERY_TIMEOUT
-from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
+from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
+from sturdy.utils.bt_alpha import get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins
@@ -89,11 +91,12 @@ def _get_rewards(
     return rewards
 
 
-def annualized_yield_pct(
-    allocations: AllocationsDict,
+async def annualized_yield_pct(
+    allocations: dict,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     seconds_passed: int,
     extra_metadata: dict,
+    pool_data_provider: bt.AsyncSubtensor | None = None,
 ) -> int:
     """
     Calculates annualized yields of allocations in pools within scoring period
@@ -109,15 +112,19 @@ def annualized_yield_pct(
 
     seconds_per_year = 31536000
 
+    if isinstance(pool_data_provider, bt.AsyncSubtensor):
+        current_block = await pool_data_provider.block
+
     # TODO: refactor?
-    for contract_addr, pool in pools.items():
+    for key, pool in pools.items():
         # assume there is no allocation to that pool if not found
         try:
-            allocation = allocations[contract_addr]
+            allocation = allocations[key]
         except Exception as e:
             bt.logging.warning(e)
-            bt.logging.warning(f"could not find allocation to {contract_addr}, assuming it is 0...")
+            bt.logging.warning(f"could not find allocation to {key}, assuming it is 0...")
             allocation = 0
+            continue
         match pool.pool_type:
             case T if T in (
                 POOL_TYPES.STURDY_SILO,
@@ -128,7 +135,7 @@ def annualized_yield_pct(
             ):
                 # TODO: temp fix
                 if allocation > 0:
-                    last_share_price = extra_metadata[contract_addr]
+                    last_share_price = extra_metadata[key]
                     curr_share_price = pool._yield_index
                     pct_delta = float(curr_share_price - last_share_price) / float(last_share_price)
                     deposit_delta = allocation - pool._user_deposits
@@ -138,6 +145,34 @@ def annualized_yield_pct(
                         )
                         annualized_pct_yield = adjusted_pct_delta * (seconds_per_year / seconds_passed)
                         total_yield += int(allocation * annualized_pct_yield)
+                    except Exception as e:
+                        bt.logging.error("Error calculating annualized pct yield, skipping:")
+                        bt.logging.error(e)
+            case POOL_TYPES.BT_ALPHA:
+                initial_alloc = allocation["amount"]
+                vali_hotkey = allocation["delegate_ss58"]
+                if initial_alloc > 0:
+                    metadata = extra_metadata[key]
+
+                    last_block = metadata["block"]
+                    last_price = metadata["price_rao"]
+
+                    curr_price = pool._price_rao
+                    try:
+                        annualized_alpha_apy = await get_vali_avg_apy(
+                            subtensor=pool_data_provider,
+                            netuid=pool.netuid,
+                            hotkey=vali_hotkey,
+                            block=last_block,
+                            end_block=current_block,
+                        )
+
+                        alpha_amount = int(initial_alloc * (1 + annualized_alpha_apy))
+                        tao_pct_return = ((initial_alloc * last_price) - (alpha_amount * curr_price)) / (
+                            alpha_amount * curr_price
+                        )
+
+                        total_yield += int(tao_pct_return * 1e18)
                     except Exception as e:
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
                         bt.logging.error(e)
@@ -153,6 +188,7 @@ def filter_allocations(
     uids: list[str],
     responses: list,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
+    query_timeout: int = QUERY_TIMEOUT,
 ) -> dict[str, AllocInfo]:
     """
     Returns a tensor of rewards for the given query and responses.
@@ -167,7 +203,7 @@ def filter_allocations(
     """
 
     filtered_allocs = {}
-    axon_times = get_response_times(uids=uids, responses=responses, timeout=QUERY_TIMEOUT)
+    axon_times = get_response_times(uids=uids, responses=responses, timeout=query_timeout)
 
     cheaters = []
     for response_idx, response in enumerate(responses):
@@ -189,7 +225,7 @@ def filter_allocations(
         # used to filter out miners who timed out
         # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
-        if response.allocations is not None and axon_times[uids[response_idx]] < QUERY_TIMEOUT:
+        if response.allocations is not None and axon_times[uids[response_idx]] < query_timeout:
             filtered_allocs[uids[response_idx]] = {
                 "allocations": response.allocations,
             }
@@ -197,7 +233,9 @@ def filter_allocations(
     bt.logging.warning(f"CHEATERS DETECTED: {cheaters}")
 
     curr_filtered_allocs = dict(sorted(filtered_allocs.items(), key=lambda item: int(item[0])))
-    sorted_axon_times = dict(sorted(axon_times.items(), key=lambda item: item[1]))
+
+    # round to 4 decimal places for nicer looking logs
+    sorted_axon_times = {uid: round(t, 4) for (uid, t) in sorted(axon_times.items(), key=lambda item: item[1])}
 
     bt.logging.debug(f"sorted axon times:\n{sorted_axon_times}")
 
@@ -207,7 +245,8 @@ def filter_allocations(
     return axon_times, curr_filtered_allocs
 
 
-def get_rewards(self, active_allocation) -> tuple[list, dict]:
+# TODO: we shouldn't need chain_data provider here, use self.pool_data_providers instead
+async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.AsyncSubtensor) -> tuple[list, dict]:
     # a dictionary, miner uids -> apy and allocations
     apys_and_allocations = {}
     miner_uids = []
@@ -240,15 +279,22 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
     pools = assets_and_pools["pools"]
     new_pools = {}
     for uid, pool in pools.items():
-        new_pool = PoolFactory.create_pool(
-            pool_type=pool["pool_type"],
-            web3_provider=self.w3,  # type: ignore[]
-            user_address=(pool["user_address"]),  # TODO: is there a cleaner way to do this?
-            contract_address=pool["contract_address"],
-        )
+        if pool["pool_type"] == POOL_TYPES.BT_ALPHA:
+            new_pool = PoolFactory.create_pool(
+                pool_type=pool["pool_type"],
+                netuid=int(pool["netuid"]),
+                pool_data_provider_type=pool["pool_data_provider_type"],
+            )
+        else:
+            new_pool = PoolFactory.create_pool(
+                pool_type=pool["pool_type"],
+                web3_provider=self.pool_data_providers[pool["pool_data_provider_type"]],  # type: ignore[]
+                user_address=(pool["user_address"]),  # TODO: is there a cleaner way to do this?
+                contract_address=pool["contract_address"],
+            )
 
         # sync pool
-        new_pool.sync(self.w3)
+        await new_pool.sync(chain_data_provider)
         new_pools[uid] = new_pool
 
     assets_and_pools["pools"] = new_pools
@@ -278,7 +324,9 @@ def get_rewards(self, active_allocation) -> tuple[list, dict]:
                 bt.logging.error(e)
                 bt.logging.error("Failed miner hotkey check, continuing loop...")
                 continue
-        miner_apy = annualized_yield_pct(allocations, assets_and_pools, scoring_period_length, extra_metadata)
+        miner_apy = await annualized_yield_pct(
+            allocations, assets_and_pools, scoring_period_length, extra_metadata, chain_data_provider
+        )
         miner_axon_time = miner["axon_time"]
 
         miner_uids.append(miner_uid)

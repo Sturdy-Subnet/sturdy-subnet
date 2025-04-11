@@ -7,43 +7,55 @@ from web3.constants import ADDRESS_ZERO
 from sturdy.base.miner import BaseMinerNeuron
 from sturdy.pools import (
     POOL_TYPES,
+    BittensorAlphaTokenPool,
     PoolFactory,
     get_minimum_allocation,
 )
-from sturdy.protocol import AllocateAssets
+from sturdy.protocol import AllocateAssets, AlphaTokenPoolAllocation
 
 THRESHOLD = 0.99  # used to avoid over-allocations
 
 
 # NOTE: THIS IS JUST AN EXAMPLE - THIS IS NOT VERY OPTIMIZED
-def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
+async def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     bt.logging.debug(f"received request type: {synapse.request_type}")
     pools = cast(dict, synapse.assets_and_pools["pools"])
 
     for uid, pool in pools.items():
-        pools[uid] = PoolFactory.create_pool(
-            pool_type=pool.pool_type,
-            web3_provider=self.w3,  # type: ignore[]
-            user_address=(
-                pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
-            ),  # TODO: is there a cleaner way to do this?
-            contract_address=pool.contract_address,
-        )
+        if isinstance(pool, BittensorAlphaTokenPool):
+            pools[uid] = PoolFactory.create_pool(
+                pool_type=pool.pool_type, netuid=pool.netuid, pool_data_provider_type=pool.pool_data_provider_type
+            )
+        else:
+            pools[uid] = PoolFactory.create_pool(
+                pool_type=pool.pool_type,
+                web3_provider=self.pool_data_providers[pool.pool_data_provider_type],  # type: ignore[]
+                user_address=(
+                    pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
+                ),  # TODO: is there a cleaner way to do this?
+                contract_address=pool.contract_address,
+            )
+    bt.logging.debug("created pools")
 
     total_assets_available = int(THRESHOLD * synapse.assets_and_pools["total_assets"])
     pools = cast(dict, synapse.assets_and_pools["pools"])
 
-    supply_rate_sum = 0
-    supply_rates = {}
+    rates_sum = 0
+    rates = {}
 
     # sync pool parameters by calling smart contracts on chain
     for pool in pools.values():
-        pool.sync(self.w3)
+        await pool.sync(self.pool_data_providers[pool.pool_data_provider_type])
+    bt.logging.debug("synced pools")
 
     # check the amounts that have been borrowed from the pools - and account for them
     minimums = {}
     for pool_uid, pool in pools.items():
-        minimums[pool_uid] = get_minimum_allocation(pool)
+        if isinstance(pool, BittensorAlphaTokenPool):
+            minimums[pool_uid] = 0
+        else:
+            minimums[pool_uid] = get_minimum_allocation(pool)
+    bt.logging.debug("set minimum allocation amounts")
 
     total_assets_available -= sum(minimums.values())
     balance = int(total_assets_available)  # obtain supply rates of pools - aave pool and sturdy silo
@@ -51,18 +63,27 @@ def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dict:
     for pool in pools.values():
         match pool.pool_type:
             case POOL_TYPES.DAI_SAVINGS:
-                apy = pool.supply_rate()
-                supply_rates[pool.contract_address] = apy
-                supply_rate_sum += apy
+                apy = await pool.supply_rate()
+                rates[pool.contract_address] = apy
+                rates_sum += apy
+            case POOL_TYPES.BT_ALPHA:
+                price = pool._price_rao
+                rates[str(pool.netuid)] = price
+                rates_sum += price
             case _:
-                apy = pool.supply_rate(balance // len(pools))
-                supply_rates[pool.contract_address] = apy
-                supply_rate_sum += apy
+                apy = await pool.supply_rate(balance // len(pools))
+                rates[pool.contract_address] = apy
+                rates_sum += apy
 
-    if supply_rate_sum == 0:
-        # If all rates are zero, distribute remaining balance equally
-        equal_share = balance // len(pools)
-        return {pool_uid: minimums[pool_uid] + equal_share for pool_uid in pools}
-    return {
-        pool_uid: minimums[pool_uid] + math.floor((supply_rates[pool_uid] / supply_rate_sum) * balance) for pool_uid in pools
-    }
+    # check the type of the first pool, if it's a bittensor alpha token pool then assume the rest are too
+    first_pool = next(iter(pools.values()))
+    delegate_ss58 = "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3"  # This is OTF's hotkey
+    N = len(pools)
+    # by default we just distribute tao equally lol
+    if first_pool.pool_type == POOL_TYPES.BT_ALPHA:
+        self.pool_data_providers[first_pool.pool_data_provider_type]
+        return {
+            netuid: AlphaTokenPoolAllocation(delegate_ss58=delegate_ss58, amount=math.floor(balance / N)) for netuid in pools
+        }
+
+    return {pool_uid: minimums[pool_uid] + math.floor((rates[pool_uid] / rates_sum) * balance) for pool_uid in pools}

@@ -12,7 +12,7 @@ module.exports = {
   networks: {
     hardhat: {
       forking: {
-        url: process.env.WEB3_PROVIDER_URL,
+        url: process.env.ETHEREUM_MAINNET_PROVIDER_URL,
         // blockNumber: 20233401,
         // blockNumber: 20825292,
         // blockNumber: 20874859

@@ -24,7 +24,8 @@ from typing_extensions import TypedDict
 from web3 import Web3
 from web3.constants import ADDRESS_ZERO
 
-from sturdy.pools import ChainBasedPoolModel
+from sturdy.pools import BittensorAlphaTokenPool, ChainBasedPoolModel
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 
 
 class REQUEST_TYPES(IntEnum):
@@ -32,7 +33,15 @@ class REQUEST_TYPES(IntEnum):
     SYNTHETIC = 1
 
 
-AllocationsDict = dict[str, int]
+class AlphaTokenPoolAllocation(BaseModel):
+    delegate_ss58: str  # hotkey address of validator to delegate to
+    amount: int  # amount in rao, 1 tao = 1e9 rao
+
+
+AlphaTokenPoolAllocations = dict[str, AlphaTokenPoolAllocation]
+
+# TODO: is there a better way to type this?
+AllocationsDict = dict[str, int] | AlphaTokenPoolAllocations
 
 
 class AllocInfo(TypedDict):
@@ -45,13 +54,17 @@ class AllocateAssetsRequest(BaseModel):
         use_enum_values = True
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int] = Field(
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
     user_address: str = Field(
         default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls for organic requests",
+    )
+    pool_data_provider: POOL_DATA_PROVIDER_TYPE | int = Field(
+        default=POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET,
+        description="data provider for the pool - defaults to ETHEREUM_MAINNET",
     )
     num_allocs: int = Field(default=1, description="number of miner allocations to receive")
 
@@ -102,13 +115,17 @@ class AllocateAssetsBase(BaseModel):
         use_enum_values = True
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int] = Field(
+    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
     user_address: str = Field(
         default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls",
+    )
+    pool_data_provider: POOL_DATA_PROVIDER_TYPE | int = Field(
+        default=POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET,
+        description="data provider for the pool - defaults to ETHEREUM_MAINNET",
     )
 
     # Optional request output, filled by recieving axon.
@@ -139,6 +156,8 @@ class AllocateAssetsBase(BaseModel):
         allocs = values.allocations
         if allocs is not None:
             for alloc_dict_key in allocs:
+                if isinstance(values.assets_and_pools["pools"][alloc_dict_key], BittensorAlphaTokenPool):
+                    continue
                 if not Web3.is_address(alloc_dict_key):
                     raise ValueError("contract address is invalid!")
 

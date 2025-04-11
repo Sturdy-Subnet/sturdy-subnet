@@ -1,4 +1,5 @@
 import traceback
+
 import bittensor as bt
 from aiohttp.client_exceptions import InvalidUrlClientError
 
@@ -8,7 +9,7 @@ from sturdy.constants import (
 from sturdy.validator.request import Request
 
 
-async def query_single_axon(dendrite: bt.dendrite, request: Request) -> Request | None:
+async def query_single_axon(dendrite: bt.dendrite, request: Request, query_timeout: int = QUERY_TIMEOUT) -> Request | None:
     """
     Query a single axon with a request.
 
@@ -24,14 +25,14 @@ async def query_single_axon(dendrite: bt.dendrite, request: Request) -> Request 
         result = await dendrite.call(
             target_axon=request.axon,
             synapse=request.synapse,
-            timeout=QUERY_TIMEOUT,
+            timeout=query_timeout,
             deserialize=False,
         )
 
         if not result:
             return None
         request.synapse = result
-        request.response_time = result.dendrite.process_time if result.dendrite.process_time is not None else QUERY_TIMEOUT
+        request.response_time = result.dendrite.process_time if result.dendrite.process_time is not None else query_timeout
 
         request.deserialized = result.deserialize()
         return request
