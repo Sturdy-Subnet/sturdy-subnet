@@ -21,16 +21,22 @@ from typing import cast
 
 import bittensor as bt
 import numpy.typing as npt
+from async_lru import alru_cache
 from web3 import Web3
 
 from sturdy.constants import QUERY_TIMEOUT
-from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, PoolFactory, check_allocations
+from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.bt_alpha import get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
+
+
+@alru_cache(maxsize=512, ttl=60)
+async def get_subtensor_block(subtensor: bt.AsyncSubtensor):
+    return await subtensor.block
 
 
 def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, float]:
@@ -113,7 +119,7 @@ async def annualized_yield_pct(
     seconds_per_year = 31536000
 
     if isinstance(pool_data_provider, bt.AsyncSubtensor):
-        current_block = await pool_data_provider.block
+        current_block = await get_subtensor_block(pool_data_provider)
 
     # TODO: refactor?
     for key, pool in pools.items():

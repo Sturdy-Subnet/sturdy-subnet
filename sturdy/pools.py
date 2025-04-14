@@ -15,7 +15,6 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import asyncio
 import json
 import math
 from decimal import Decimal
@@ -36,7 +35,6 @@ from web3.types import BlockData
 from sturdy.constants import *
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE
-from sturdy.utils.bt_alpha import fetch_metagraph, fetch_nominator_dividends, fetch_total_alpha_stake
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import (
     async_retry_with_backoff,

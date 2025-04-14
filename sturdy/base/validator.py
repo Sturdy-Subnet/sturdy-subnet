@@ -160,7 +160,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     self.step += 1
                     self.log_metrics()
 
-                await asyncio.sleep(1)
+                time.sleep(1)
 
         except Exception as e:
             bt.logging.exception(f"Error in main loop: {e}")

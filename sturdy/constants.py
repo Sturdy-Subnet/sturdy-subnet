@@ -1,11 +1,7 @@
 SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
-QUERY_FREQUENCY = 10  # time in seconds between validator queries
-QUERY_TIMEOUT = 3  # timeout (seconds)
-
 QUERY_FREQUENCY = 600  # time in seconds between validator queries
 QUERY_TIMEOUT = 3  # timeout (seconds)
-
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 
 ORGANIC_SCORING_PERIOD = 28800  # scoring period in seconds
@@ -40,7 +36,7 @@ APR_ORACLE = (
 )
 
 # bittensor alpha token pools
-MIN_BT_POOLS = 3  # minimum number of alpha token pools to generate per query per epoch - for scoring miners
+MIN_BT_POOLS = 2  # minimum number of alpha token pools to generate per query per epoch - for scoring miners
 MAX_BT_POOLS = 100  # maximum number of alpha token pools to generate per query per epoch - for scoring miners
 
 MIN_TAO_IN_POOL = 1000.0  # minimum amount of TAO a pool must have to consider it to be "valid"

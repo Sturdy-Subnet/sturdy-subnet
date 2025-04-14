@@ -28,7 +28,7 @@ def calculate_cv_threshold(apys: list[int]) -> float:
     )
 
     # Dynamically estimate the threshold using high-percentile APYs
-    for percentile in reversed(range(50, 100, 5)):
+    for percentile in np.arange(5, 100, 5)[::-1]:
         threshold = np.percentile(apy_array, percentile)
         high_apys = apy_array[apy_array > threshold]
 
@@ -138,6 +138,13 @@ def format_allocations(
 
     for miner_uid, miner_data in apys_and_allocations.items():
         formatted_allocs[miner_uid] = {"allocations": {}}
+
+        if miner_data is None:
+            current_data = {"allocations": {}}
+            miner_data = current_data
+
+        if miner_data["allocations"] is None:
+            miner_data["allocations"] = {}
 
         for pool_key in pools:
             # Get original allocation if it exists

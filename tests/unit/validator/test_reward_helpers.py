@@ -349,6 +349,9 @@ class TestCalculateApy(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
+        cls.pool_data_providers = {}
+        cls.pool_data_providers[POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET] = cls.w3
+
         cls.snapshot_id = await cls.w3.provider.make_request("evm_snapshot", [])  # type: ignore[]
 
     async def asyncTearDown(self) -> None:
@@ -401,7 +404,7 @@ class TestCalculateApy(unittest.IsolatedAsyncioTestCase):
         for pool in assets_and_pools["pools"].values():
             await pool.sync(self.w3)
 
-        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        apy = await annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
         print(f"annualized yield: {(float(apy) / 1e18) * 100}%")
         self.assertGreater(apy, 0)
 
@@ -466,7 +469,7 @@ class TestCalculateApy(unittest.IsolatedAsyncioTestCase):
         for pool in assets_and_pools["pools"].values():
             await pool.sync(self.w3)
 
-        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        apy = await annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
         print(f"annualized yield: {(float(apy) / 1e18) * 100}%")
         self.assertGreater(apy, 0)
 
@@ -516,7 +519,7 @@ class TestCalculateApy(unittest.IsolatedAsyncioTestCase):
         for pool in assets_and_pools["pools"].values():
             await pool.sync(self.w3)
 
-        apy = annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
+        apy = await annualized_yield_pct(allocations, assets_and_pools, 604800, extra_metadata)
         print(f"annualized yield: {(float(apy) / 1e18) * 100}%")
         self.assertGreater(apy, 0)
 
@@ -805,25 +808,27 @@ class TestBinRewardHelpers(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(penalties[2], 0.0)  # Similar to first response
 
     async def test_format_allocations(self) -> None:
-        # Test with missing pools
-        allocations = {"pool1": int(100e18)}
-        formatted = format_allocations(allocations, self.assets_and_pools)
+        # Test with valid allocations
+        apys_and_allocations = {"miner1": {"allocations": {"pool1": int(100e18)}, "apy": 123}}
+        formatted = format_allocations(apys_and_allocations, self.assets_and_pools)
 
         # Should have all pools
-        self.assertIn("pool1", formatted)
-        self.assertIn("pool2", formatted)
+        self.assertIn("pool1", formatted["miner1"]["allocations"])
+        self.assertIn("pool2", formatted["miner1"]["allocations"])
         # Missing pool should be 0
-        self.assertEqual(formatted["pool2"], 0)
+        self.assertEqual(formatted["miner1"]["allocations"]["pool2"], 0)
 
         # Test with None allocations
-        formatted = format_allocations(None, self.assets_and_pools)
-        self.assertEqual(formatted["pool1"], 0)
-        self.assertEqual(formatted["pool2"], 0)
+        apys_and_allocations = {"miner1": {"allocations": None, "apy": 123}}
+        formatted = format_allocations(apys_and_allocations, self.assets_and_pools)
+        self.assertEqual(formatted["miner1"]["allocations"]["pool1"], 0)
+        self.assertEqual(formatted["miner1"]["allocations"]["pool2"], 0)
 
         # Test with empty allocations
-        formatted = format_allocations({}, self.assets_and_pools)
-        self.assertEqual(formatted["pool1"], 0)
-        self.assertEqual(formatted["pool2"], 0)
+        apys_and_allocations = {"miner1": {"allocations": {}, "apy": 123}}
+        formatted = format_allocations(apys_and_allocations, self.assets_and_pools)
+        self.assertEqual(formatted["miner1"]["allocations"]["pool1"], 0)
+        self.assertEqual(formatted["miner1"]["allocations"]["pool2"], 0)
 
     async def test_apply_top_performer_bonus(self) -> None:
         rewards = np.array([0.5, 0.8, 0.3, 1.0])

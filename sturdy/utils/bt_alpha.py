@@ -1,5 +1,4 @@
 import asyncio
-from datetime import datetime
 
 import bittensor as bt
 import numpy as np

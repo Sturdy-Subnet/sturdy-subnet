@@ -17,6 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import asyncio
+import json
 import uuid
 from typing import Any
 
@@ -41,6 +42,7 @@ from sturdy.validator.sql import (
     delete_stale_active_allocs,
     get_active_allocs,
     get_db_connection,
+    get_request_info,
     log_allocations,
 )
 from sturdy.validator.utils.axon import query_single_axon
@@ -264,9 +266,17 @@ async def query_and_score_miners(
     uids_to_delete = []
     for active_alloc in active_alloc_rows:
         request_uid = active_alloc["request_uid"]
+        with get_db_connection(self.config.db_dir) as conn:
+            # NOTE: see TODO(provider)
+            request_info = get_request_info(conn, request_uid=request_uid)
+            data_pools = json.loads(request_info[0]["assets_and_pools"])["pools"]
+            first_entry = next(iter(data_pools.values()))
+            data_provider = self.pool_data_providers[int(first_entry["pool_data_provider_type"])]
+            bt.logging.debug(f"Pool data provider to use for scoring this pool: {data_provider}")
+
         uids_to_delete.append(request_uid)
         # calculate rewards for previous active allocations
-        miner_uids, rewards = await get_rewards(self, active_alloc, chain_data_provider)
+        miner_uids, rewards = await get_rewards(self, active_alloc, data_provider)
         bt.logging.debug(f"miner rewards: {rewards}")
         bt.logging.debug(f"sim penalities: {self.similarity_penalties}")
 
