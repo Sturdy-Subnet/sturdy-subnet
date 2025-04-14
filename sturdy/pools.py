@@ -24,21 +24,23 @@ from typing import Any, ClassVar, Literal
 
 import bittensor as bt
 import numpy as np
+from async_lru import _LRUCacheWrapper, alru_cache
 from eth_account import Account
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
-from web3 import Web3
+from web3 import AsyncWeb3
 from web3.constants import ADDRESS_ZERO
-from web3.contract.contract import Contract
+from web3.contract.async_contract import AsyncContract
 from web3.types import BlockData
 
 from sturdy.constants import *
 from sturdy.pool_registry.pool_registry import POOL_REGISTRY
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import (
+    async_retry_with_backoff,
     getReserveFactor,
     rayMul,
     retry_with_backoff,
-    ttl_cache,
 )
 
 
@@ -50,6 +52,7 @@ class POOL_TYPES(IntEnum):
     MORPHO = 5
     YEARN_V3 = 6
     AAVE_TARGET = 7
+    BT_ALPHA = 8
 
 
 def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
@@ -81,7 +84,7 @@ def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
         case POOL_TYPES.DAI_SAVINGS:
             pass  # TODO: is there a more appropriate way to go about this?
         case _:  # not a valid pool type
-            return 1
+            return 0
 
     return 0 if borrow_amount <= assets_available else assets_available if our_supply >= assets_available else 0
 
@@ -116,7 +119,7 @@ def check_allocations(
     # Check allocations
     for allocation in allocations.values():
         try:
-            allocation_value = Decimal(str(allocation))
+            allocation_value = Decimal(str(allocation.amount)) if not isinstance(allocation, int) else Decimal(str(allocation))
         except (ValueError, TypeError):
             return False
 
@@ -136,9 +139,10 @@ def check_allocations(
     # check if allocations are above the borrow amounts
     for pool_uid, pool in pools.items():
         allocation = allocations.get(pool_uid, 0)
+        allocation_value = Decimal(str(allocation.amount)) if not isinstance(allocation, int) else Decimal(str(allocation))
         min_alloc = get_minimum_allocation(pool)
 
-        if allocation < min_alloc:
+        if allocation_value < min_alloc:
             return False
 
     return True
@@ -154,7 +158,14 @@ class ChainBasedPoolModel(BaseModel):
     class Config:
         use_enum_values = True  # This will use the enum's value instead of the enum itself
 
+        # NOTE: added this here because functions using the decorator @alru_cache
+        # (i.e. supply_rate) returns a wrapper object, which pydantic does not like :(
+        ignored_types = (_LRUCacheWrapper,)
+
     pool_type: POOL_TYPES | int | str = Field(..., description="type of pool")
+    pool_data_provider_type: POOL_DATA_PROVIDER_TYPE = Field(
+        default=POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, description="type of pool data provider"
+    )
     user_address: str = Field(
         default=ADDRESS_ZERO,
         description="address of the 'user' - used for various on-chain calls",
@@ -178,25 +189,69 @@ class ChainBasedPoolModel(BaseModel):
 
     @model_validator(mode="after")
     def check_params(cls, values):  # noqa: ANN201
-        if not Web3.is_address(values.contract_address):
+        if not AsyncWeb3.is_address(values.contract_address):
             raise ValueError("pool address is invalid!")
-        if not Web3.is_address(values.user_address):
+        if not AsyncWeb3.is_address(values.user_address):
             raise ValueError("user address is invalid!")
         return values
 
-    def pool_init(self, **args: Any) -> None:
+    async def pool_init(self, **args: Any) -> None:
         raise NotImplementedError("pool_init() has not been implemented!")
 
-    def sync(self, **args: Any) -> None:
+    async def sync(self, **args: Any) -> None:
         raise NotImplementedError("sync() has not been implemented!")
 
-    def supply_rate(self, **args: Any) -> int:
+    async def supply_rate(self, **args: Any) -> int:
         raise NotImplementedError("supply_rate() has not been implemented!")
+
+
+class BittensorAlphaTokenPool(BaseModel):
+    """This class represents an alpha token pool for a subnet on the Bittensor network"""
+
+    pool_type: Literal[POOL_TYPES.BT_ALPHA] = POOL_TYPES.BT_ALPHA
+    netuid: int  # netuid of subnet
+    # TODO: support multi-vali staking in the future?
+    pool_data_provider_type: POOL_DATA_PROVIDER_TYPE = Field(
+        default=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, description="type of pool data provider"
+    )
+
+    _price_rao: int = 0  # current price of alpha token in rao
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    @field_validator("netuid", mode="before")
+    def check_params(cls, value) -> int:
+        if value == 0:
+            raise ValueError("Invalid subnet netuid - root (subnet 0) does not have an alpha token pool")
+        return value
+
+    # TODO: can we just return a "hash" repr of the subnet uid instead?
+    def __hash__(self) -> int:
+        return hash(self.netuid)
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, BittensorAlphaTokenPool):
+            return NotImplemented
+        # Compare the attributes for equality
+        return self.netuid == other.netuid
+
+    async def pool_init(self, subtensor: bt.AsyncSubtensor) -> None:
+        await self.sync(subtensor)
+
+    # TODO: use async subtensor interface
+    async def sync(self, subtensor: bt.AsyncSubtensor) -> None:
+        try:
+            self._dynamic_info = await subtensor.subnet(netuid=self.netuid)
+            self._price_rao = self._dynamic_info.price.rao
+        except Exception as err:
+            bt.logging.error("Failed to sync alpha token pool!")
+            bt.logging.error(err)
 
 
 class PoolFactory:
     @staticmethod
-    def create_pool(pool_type: POOL_TYPES, **kwargs: Any) -> ChainBasedPoolModel:
+    def create_pool(pool_type: POOL_TYPES, **kwargs: Any) -> BittensorAlphaTokenPool | ChainBasedPoolModel:
         match pool_type:
             case POOL_TYPES.AAVE_DEFAULT:
                 return AaveV3DefaultInterestRateV2Pool(**kwargs)
@@ -212,6 +267,8 @@ class PoolFactory:
                 return YearnV3Vault(**kwargs)
             case POOL_TYPES.AAVE_TARGET:
                 return AaveV3RateTargetBaseInterestRatePool(**kwargs)
+            case POOL_TYPES.BT_ALPHA:
+                return BittensorAlphaTokenPool(**kwargs)
             case _:
                 raise ValueError(f"Unknown pool type: {pool_type}")
 
@@ -221,9 +278,9 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
 
     pool_type: Literal[POOL_TYPES.AAVE_DEFAULT] = POOL_TYPES.AAVE_DEFAULT
 
-    _atoken_contract: Contract = PrivateAttr()
-    _pool_contract: Contract = PrivateAttr()
-    _underlying_asset_contract: Contract = PrivateAttr()
+    _atoken_contract: AsyncContract = PrivateAttr()
+    _pool_contract: AsyncContract = PrivateAttr()
+    _underlying_asset_contract: AsyncContract = PrivateAttr()
     _underlying_asset_address: str = PrivateAttr()
     _reserve_data = PrivateAttr()
     _strategy_contract = PrivateAttr()
@@ -253,11 +310,11 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
             other._underlying_asset_address,
         )
 
-    def pool_init(self, web3_provider: Web3) -> None:
+    async def pool_init(self, web3_provider: AsyncWeb3) -> None:
         try:
-            assert web3_provider.is_connected()
+            assert await web3_provider.is_connected()
         except Exception as err:
-            bt.logging.error("Failed to connect to Web3 instance!")
+            bt.logging.error("Failed to connect to AsyncWeb3 instance!")
             bt.logging.error(err)  # type: ignore[]
 
         try:
@@ -277,12 +334,12 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
             pool_abi_file.close()
 
             atoken_contract = self._atoken_contract
-            pool_address = retry_with_backoff(atoken_contract.functions.POOL().call)
+            pool_address = await async_retry_with_backoff(atoken_contract.functions.POOL().call)
 
             pool_contract = web3_provider.eth.contract(abi=pool_abi, decode_tuples=True)
             self._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
 
-            self._underlying_asset_address = retry_with_backoff(
+            self._underlying_asset_address = await async_retry_with_backoff(
                 self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call,
             )
 
@@ -297,7 +354,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
                 address=self._underlying_asset_address,
             )
 
-            self._total_supplied_assets = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
+            self._total_supplied_assets = await async_retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
 
             self._initted = True
 
@@ -305,10 +362,10 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
             bt.logging.error("Failed to load contract!")
             bt.logging.error(err)  # type: ignore[]
 
-    def sync(self, web3_provider: Web3) -> None:
+    async def sync(self, web3_provider: AsyncWeb3) -> None:
         """Syncs with chain"""
         if not self._initted:
-            self.pool_init(web3_provider)
+            await self.pool_init(web3_provider)
         try:
             pool_abi_file_path = Path(__file__).parent / "abi/Pool.json"
             pool_abi_file = pool_abi_file_path.open()
@@ -316,16 +373,16 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
             pool_abi_file.close()
 
             atoken_contract_onchain = self._atoken_contract
-            pool_address = retry_with_backoff(atoken_contract_onchain.functions.POOL().call)
+            pool_address = await async_retry_with_backoff(atoken_contract_onchain.functions.POOL().call)
 
             pool_contract = web3_provider.eth.contract(abi=pool_abi, decode_tuples=True)
             self._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
 
-            self._underlying_asset_address = retry_with_backoff(
+            self._underlying_asset_address = await async_retry_with_backoff(
                 self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call,
             )
 
-            self._reserve_data = retry_with_backoff(
+            self._reserve_data = await async_retry_with_backoff(
                 self._pool_contract.functions.getReserveData(self._underlying_asset_address).call,
             )
 
@@ -356,7 +413,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
                 self._nextTotalStableDebt,
                 self._nextAvgStableBorrowRate,
                 _,
-            ) = retry_with_backoff(stable_debt_token_contract.functions.getSupplyData().call)
+            ) = await async_retry_with_backoff(stable_debt_token_contract.functions.getSupplyData().call)
 
             variable_debt_token_abi_file_path = Path(__file__).parent / "abi/IVariableDebtToken.json"
             variable_debt_token_abi_file = variable_debt_token_abi_file_path.open()
@@ -371,21 +428,23 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
 
             nextVariableBorrowIndex = self._reserve_data.variableBorrowIndex
 
-            nextScaledVariableDebt = retry_with_backoff(self._variable_debt_token_contract.functions.scaledTotalSupply().call)
+            nextScaledVariableDebt = await async_retry_with_backoff(
+                self._variable_debt_token_contract.functions.scaledTotalSupply().call
+            )
             self._totalVariableDebt = rayMul(nextScaledVariableDebt, nextVariableBorrowIndex)
 
             reserveConfiguration = self._reserve_data.configuration
             self._reserveFactor = getReserveFactor(reserveConfiguration)
-            self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
-            self._user_deposits = retry_with_backoff(
-                self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+            self._decimals = await async_retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
+            self._user_deposits = await async_retry_with_backoff(
+                self._atoken_contract.functions.balanceOf(AsyncWeb3.to_checksum_address(self.user_address)).call
             )
 
-            self._user_asset_balance = retry_with_backoff(
-                self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+            self._user_asset_balance = await async_retry_with_backoff(
+                self._underlying_asset_contract.functions.balanceOf(AsyncWeb3.to_checksum_address(self.user_address)).call
             )
 
-            self._yield_index = retry_with_backoff(
+            self._yield_index = await async_retry_with_backoff(
                 self._pool_contract.functions.getReserveNormalizedIncome(self._underlying_asset_address).call
             )
 
@@ -394,8 +453,8 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
             bt.logging.error(err)  # type: ignore[]
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, amount: int) -> int:
+    @alru_cache(maxsize=256, ttl=60)
+    async def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
             already_deposited = self._user_deposits
@@ -403,7 +462,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
             to_deposit = max(0, delta)
             to_remove = abs(delta) if delta < 0 else 0
 
-            (nextLiquidityRate, _) = retry_with_backoff(
+            (nextLiquidityRate, _) = await async_retry_with_backoff(
                 self._strategy_contract.functions.calculateInterestRates(
                     (
                         self._reserve_data.unbacked,
@@ -418,7 +477,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
                 ).call,
             )
 
-            return Web3.to_wei(nextLiquidityRate / 1e27, "ether")
+            return AsyncWeb3.to_wei(nextLiquidityRate / 1e27, "ether")
 
         except Exception as e:
             bt.logging.error("Failed to retrieve supply apy!")
@@ -432,9 +491,9 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
 
     pool_type: Literal[POOL_TYPES.AAVE_TARGET] = POOL_TYPES.AAVE_TARGET
 
-    _atoken_contract: Contract = PrivateAttr()
-    _pool_contract: Contract = PrivateAttr()
-    _underlying_asset_contract: Contract = PrivateAttr()
+    _atoken_contract: AsyncContract = PrivateAttr()
+    _pool_contract: AsyncContract = PrivateAttr()
+    _underlying_asset_contract: AsyncContract = PrivateAttr()
     _underlying_asset_address: str = PrivateAttr()
     _reserve_data = PrivateAttr()
     _strategy_contract = PrivateAttr()
@@ -464,11 +523,11 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
             other._underlying_asset_address,
         )
 
-    def pool_init(self, web3_provider: Web3) -> None:
+    async def pool_init(self, web3_provider: AsyncWeb3) -> None:
         try:
-            assert web3_provider.is_connected()
+            assert await web3_provider.is_connected()
         except Exception as err:
-            bt.logging.error("Failed to connect to Web3 instance!")
+            bt.logging.error("Failed to connect to AsyncWeb3 instance!")
             bt.logging.error(err)  # type: ignore[]
 
         try:
@@ -488,12 +547,12 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
             pool_abi_file.close()
 
             atoken_contract = self._atoken_contract
-            pool_address = retry_with_backoff(atoken_contract.functions.POOL().call)
+            pool_address = await async_retry_with_backoff(atoken_contract.functions.POOL().call)
 
             pool_contract = web3_provider.eth.contract(abi=pool_abi, decode_tuples=True)
             self._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
 
-            self._underlying_asset_address = retry_with_backoff(
+            self._underlying_asset_address = await async_retry_with_backoff(
                 self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call,
             )
 
@@ -508,7 +567,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
                 address=self._underlying_asset_address,
             )
 
-            self._total_supplied_assets = retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
+            self._total_supplied_assets = await async_retry_with_backoff(self._atoken_contract.functions.totalSupply().call)
 
             self._initted = True
 
@@ -516,10 +575,10 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
             bt.logging.error("Failed to load contract!")
             bt.logging.error(err)  # type: ignore[]
 
-    def sync(self, web3_provider: Web3) -> None:
+    async def sync(self, web3_provider: AsyncWeb3) -> None:
         """Syncs with chain"""
         if not self._initted:
-            self.pool_init(web3_provider)
+            await self.pool_init(web3_provider)
         try:
             pool_abi_file_path = Path(__file__).parent / "abi/Pool.json"
             pool_abi_file = pool_abi_file_path.open()
@@ -527,16 +586,16 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
             pool_abi_file.close()
 
             atoken_contract_onchain = self._atoken_contract
-            pool_address = retry_with_backoff(atoken_contract_onchain.functions.POOL().call)
+            pool_address = await async_retry_with_backoff(atoken_contract_onchain.functions.POOL().call)
 
             pool_contract = web3_provider.eth.contract(abi=pool_abi, decode_tuples=True)
             self._pool_contract = retry_with_backoff(pool_contract, address=pool_address)
 
-            self._underlying_asset_address = retry_with_backoff(
+            self._underlying_asset_address = await async_retry_with_backoff(
                 self._atoken_contract.functions.UNDERLYING_ASSET_ADDRESS().call,
             )
 
-            self._reserve_data = retry_with_backoff(
+            self._reserve_data = await async_retry_with_backoff(
                 self._pool_contract.functions.getReserveData(self._underlying_asset_address).call,
             )
 
@@ -567,7 +626,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
                 self._nextTotalStableDebt,
                 self._nextAvgStableBorrowRate,
                 _,
-            ) = retry_with_backoff(stable_debt_token_contract.functions.getSupplyData().call)
+            ) = await async_retry_with_backoff(stable_debt_token_contract.functions.getSupplyData().call)
 
             variable_debt_token_abi_file_path = Path(__file__).parent / "abi/IVariableDebtToken.json"
             variable_debt_token_abi_file = variable_debt_token_abi_file_path.open()
@@ -582,21 +641,23 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
 
             nextVariableBorrowIndex = self._reserve_data.variableBorrowIndex
 
-            nextScaledVariableDebt = retry_with_backoff(self._variable_debt_token_contract.functions.scaledTotalSupply().call)
+            nextScaledVariableDebt = await async_retry_with_backoff(
+                self._variable_debt_token_contract.functions.scaledTotalSupply().call
+            )
             self._totalVariableDebt = rayMul(nextScaledVariableDebt, nextVariableBorrowIndex)
 
             reserveConfiguration = self._reserve_data.configuration
             self._reserveFactor = getReserveFactor(reserveConfiguration)
-            self._decimals = retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
-            self._user_deposits = retry_with_backoff(
-                self._atoken_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+            self._decimals = await async_retry_with_backoff(self._underlying_asset_contract.functions.decimals().call)
+            self._user_deposits = await async_retry_with_backoff(
+                self._atoken_contract.functions.balanceOf(AsyncWeb3.to_checksum_address(self.user_address)).call
             )
 
-            self._user_asset_balance = retry_with_backoff(
-                self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+            self._user_asset_balance = await async_retry_with_backoff(
+                self._underlying_asset_contract.functions.balanceOf(AsyncWeb3.to_checksum_address(self.user_address)).call
             )
 
-            self._yield_index = retry_with_backoff(
+            self._yield_index = await async_retry_with_backoff(
                 self._pool_contract.functions.getReserveNormalizedIncome(self._underlying_asset_address).call
             )
 
@@ -605,8 +666,8 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
             bt.logging.error(err)  # type: ignore[]
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, amount: int) -> int:
+    @alru_cache(maxsize=256, ttl=60)
+    async def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
             already_deposited = self._user_deposits
@@ -614,7 +675,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
             to_deposit = max(0, delta)
             to_remove = abs(delta) if delta < 0 else 0
 
-            (nextLiquidityRate, _, _) = retry_with_backoff(
+            (nextLiquidityRate, _, _) = await async_retry_with_backoff(
                 self._strategy_contract.functions.calculateInterestRates(
                     (
                         self._reserve_data.unbacked,
@@ -630,7 +691,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
                 ).call,
             )
 
-            return Web3.to_wei(nextLiquidityRate / 1e27, "ether")
+            return AsyncWeb3.to_wei(nextLiquidityRate / 1e27, "ether")
 
         except Exception as e:
             bt.logging.error("Failed to retrieve supply apy!")
@@ -642,9 +703,9 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
 class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     pool_type: Literal[POOL_TYPES.STURDY_SILO] = POOL_TYPES.STURDY_SILO
 
-    _silo_strategy_contract: Contract = PrivateAttr()
-    _pair_contract: Contract = PrivateAttr()
-    _rate_model_contract: Contract = PrivateAttr()
+    _silo_strategy_contract: AsyncContract = PrivateAttr()
+    _pair_contract: AsyncContract = PrivateAttr()
+    _rate_model_contract: AsyncContract = PrivateAttr()
 
     _user_deposits: int = PrivateAttr()
     _util_prec: int = PrivateAttr()
@@ -657,10 +718,10 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
     _block: BlockData = PrivateAttr()
 
     _decimals: int = PrivateAttr()
-    _asset: Contract = PrivateAttr()
+    _asset: AsyncContract = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
     _user_total_assets: int = PrivateAttr()
-    _yield_index: Contract = PrivateAttr()
+    _yield_index: AsyncContract = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash((self._silo_strategy_contract.address, self._pair_contract))
@@ -674,11 +735,11 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             other._pair_contract.address,
         )
 
-    def pool_init(self, web3_provider: Web3) -> None:
+    async def pool_init(self, web3_provider: AsyncWeb3) -> None:
         try:
-            assert web3_provider.is_connected()
+            assert await web3_provider.is_connected()
         except Exception as err:
-            bt.logging.error("Failed to connect to Web3 instance!")
+            bt.logging.error("Failed to connect to AsyncWeb3 instance!")
             bt.logging.error(err)  # type: ignore[]
 
         try:
@@ -695,7 +756,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             pair_abi = json.load(pair_abi_file)
             pair_abi_file.close()
 
-            pair_contract_address = retry_with_backoff(self._silo_strategy_contract.functions.pair().call)
+            pair_contract_address = await async_retry_with_backoff(self._silo_strategy_contract.functions.pair().call)
             pair_contract = web3_provider.eth.contract(abi=pair_abi, decode_tuples=True)
             self._pair_contract = retry_with_backoff(pair_contract, address=pair_contract_address)
 
@@ -704,17 +765,17 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
             rate_model_abi = json.load(rate_model_abi_file)
             rate_model_abi_file.close()
 
-            rate_model_contract_address = retry_with_backoff(self._pair_contract.functions.rateContract().call)
+            rate_model_contract_address = await async_retry_with_backoff(self._pair_contract.functions.rateContract().call)
             rate_model_contract = web3_provider.eth.contract(abi=rate_model_abi, decode_tuples=True)
             self._rate_model_contract = retry_with_backoff(rate_model_contract, address=rate_model_contract_address)
-            self._decimals = retry_with_backoff(self._pair_contract.functions.decimals().call)
+            self._decimals = await async_retry_with_backoff(self._pair_contract.functions.decimals().call)
 
             erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
             erc20_abi_file = erc20_abi_file_path.open()
             erc20_abi = json.load(erc20_abi_file)
             erc20_abi_file.close()
 
-            asset_address = retry_with_backoff(self._pair_contract.functions.asset().call)
+            asset_address = await async_retry_with_backoff(self._pair_contract.functions.asset().call)
             asset_contract = web3_provider.eth.contract(abi=erc20_abi, decode_tuples=True)
             self._asset = retry_with_backoff(asset_contract, address=asset_address)
 
@@ -723,34 +784,34 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         except Exception as e:
             bt.logging.error(e)  # type: ignore[]
 
-    def sync(self, web3_provider: Web3) -> None:
+    async def sync(self, web3_provider: AsyncWeb3) -> None:
         """Syncs with chain"""
         if not self._initted:
-            self.pool_init(web3_provider)
+            await self.pool_init(web3_provider)
 
-        user_shares = retry_with_backoff(self._pair_contract.functions.balanceOf(self.contract_address).call)
-        self._user_deposits = retry_with_backoff(self._pair_contract.functions.convertToAssets(user_shares).call)
+        user_shares = await async_retry_with_backoff(self._pair_contract.functions.balanceOf(self.contract_address).call)
+        self._user_deposits = await async_retry_with_backoff(self._pair_contract.functions.convertToAssets(user_shares).call)
 
-        constants = retry_with_backoff(self._pair_contract.functions.getConstants().call)
+        constants = await async_retry_with_backoff(self._pair_contract.functions.getConstants().call)
         self._util_prec = constants[2]
         self._fee_prec = constants[3]
-        self._total_supplied_assets: Any = retry_with_backoff(self._pair_contract.functions.totalAssets().call)
-        self._totalBorrow: Any = retry_with_backoff(self._pair_contract.functions.totalBorrow().call).amount
+        self._total_supplied_assets: Any = await async_retry_with_backoff(self._pair_contract.functions.totalAssets().call)
+        self._totalBorrow: Any = (await async_retry_with_backoff(self._pair_contract.functions.totalBorrow().call)).amount
 
-        self._block = web3_provider.eth.get_block("latest")
+        self._block = await web3_provider.eth.get_block("latest")
 
-        self._current_rate_info = retry_with_backoff(self._pair_contract.functions.currentRateInfo().call)
+        self._current_rate_info = await async_retry_with_backoff(self._pair_contract.functions.currentRateInfo().call)
 
-        self._rate_prec = retry_with_backoff(self._rate_model_contract.functions.RATE_PREC().call)
+        self._rate_prec = await async_retry_with_backoff(self._rate_model_contract.functions.RATE_PREC().call)
 
-        self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
+        self._user_asset_balance = await async_retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
         # get current price per share
-        self._yield_index = retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
+        self._yield_index = await async_retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, amount: int) -> int:
+    @alru_cache(maxsize=256, ttl=60)
+    async def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
         delta = amount - self._user_deposits
 
@@ -762,7 +823,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         delta_time = int(current_timestamp - last_update_timestamp)
 
         protocol_fee = self._current_rate_info.feeToProtocolRate
-        (new_rate_per_sec, _) = retry_with_backoff(
+        (new_rate_per_sec, _) = await async_retry_with_backoff(
             self._rate_model_contract.functions.getNewRate(
                 delta_time,
                 util_rate,
@@ -786,11 +847,11 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
     pool_type: Literal[POOL_TYPES.COMPOUND_V3] = POOL_TYPES.COMPOUND_V3
 
-    _ctoken_contract: Contract = PrivateAttr()
-    _base_oracle_contract: Contract = PrivateAttr()
-    _reward_oracle_contract: Contract = PrivateAttr()
-    _base_token_contract: Contract = PrivateAttr()
-    _reward_token_contract: Contract = PrivateAttr()
+    _ctoken_contract: AsyncContract = PrivateAttr()
+    _base_oracle_contract: AsyncContract = PrivateAttr()
+    _reward_oracle_contract: AsyncContract = PrivateAttr()
+    _base_token_contract: AsyncContract = PrivateAttr()
+    _reward_token_contract: AsyncContract = PrivateAttr()
     _base_token_price: float = PrivateAttr()
     _reward_token_price: float = PrivateAttr()
     _base_decimals: int = PrivateAttr()
@@ -802,7 +863,7 @@ class CompoundV3Pool(ChainBasedPoolModel):
         "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # WETH -> ETH
     }
 
-    def pool_init(self, web3_provider: Web3) -> None:
+    async def pool_init(self, web3_provider: AsyncWeb3) -> None:
         comet_abi_file_path = Path(__file__).parent / "abi/Comet.json"
         comet_abi_file = comet_abi_file_path.open()
         comet_abi = json.load(comet_abi_file)
@@ -828,10 +889,10 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
         chainlink_registry_contract = retry_with_backoff(chainlink_registry, address=chainlink_registry_address)
 
-        base_token_address = retry_with_backoff(self._ctoken_contract.functions.baseToken().call)
+        base_token_address = await async_retry_with_backoff(self._ctoken_contract.functions.baseToken().call)
         asset_address = self._CompoundTokenMap.get(base_token_address, base_token_address)
 
-        base_oracle_address = retry_with_backoff(
+        base_oracle_address = await async_retry_with_backoff(
             chainlink_registry_contract.functions.getFeed(asset_address, usd_address).call,
         )
         base_oracle_contract = web3_provider.eth.contract(abi=oracle_abi, decode_tuples=True)
@@ -843,27 +904,27 @@ class CompoundV3Pool(ChainBasedPoolModel):
 
         self._initted = True
 
-    def sync(self, web3_provider: Web3) -> None:
+    async def sync(self, web3_provider: AsyncWeb3) -> None:
         if not self._initted:
-            self.pool_init(web3_provider)
+            await self.pool_init(web3_provider)
 
         # get token prices - in wei
-        base_decimals = retry_with_backoff(self._base_oracle_contract.functions.decimals().call)
+        base_decimals = await async_retry_with_backoff(self._base_oracle_contract.functions.decimals().call)
         self._base_decimals = base_decimals
-        reward_decimals = retry_with_backoff(self._reward_oracle_contract.functions.decimals().call)
-        self._total_borrow = retry_with_backoff(self._ctoken_contract.functions.totalBorrow().call)
+        reward_decimals = await async_retry_with_backoff(self._reward_oracle_contract.functions.decimals().call)
+        self._total_borrow = await async_retry_with_backoff(self._ctoken_contract.functions.totalBorrow().call)
 
         self._base_token_price = (
-            retry_with_backoff(self._base_oracle_contract.functions.latestAnswer().call) / 10**base_decimals
+            await async_retry_with_backoff(self._base_oracle_contract.functions.latestAnswer().call) / 10**base_decimals
         )
         self._reward_token_price = (
-            retry_with_backoff(self._reward_oracle_contract.functions.latestAnswer().call) / 10**reward_decimals
+            await async_retry_with_backoff(self._reward_oracle_contract.functions.latestAnswer().call) / 10**reward_decimals
         )
 
-        self._user_deposits = retry_with_backoff(self._ctoken_contract.functions.balanceOf(self.user_address).call)
-        self._total_supplied_assets = retry_with_backoff(self._ctoken_contract.functions.totalSupply().call)
+        self._user_deposits = await async_retry_with_backoff(self._ctoken_contract.functions.balanceOf(self.user_address).call)
+        self._total_supplied_assets = await async_retry_with_backoff(self._ctoken_contract.functions.totalSupply().call)
 
-    def supply_rate(self, amount: int) -> int:
+    async def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
         # get pool supply rate (base token)
         already_in_pool = self._user_deposits
@@ -876,18 +937,22 @@ class CompoundV3Pool(ChainBasedPoolModel):
         seconds_per_year = 31536000
         seconds_per_day = 86400
 
-        pool_rate = retry_with_backoff(self._ctoken_contract.functions.getSupplyRate(utilization).call) * seconds_per_year
+        pool_rate = (
+            await async_retry_with_backoff(self._ctoken_contract.functions.getSupplyRate(utilization).call) * seconds_per_year
+        )
 
-        base_scale = retry_with_backoff(self._ctoken_contract.functions.baseScale().call)
+        base_scale = await async_retry_with_backoff(self._ctoken_contract.functions.baseScale().call)
         conv_total_supply = new_supply / base_scale
 
-        base_index_scale = retry_with_backoff(self._ctoken_contract.functions.baseIndexScale().call)
-        base_tracking_supply_speed = retry_with_backoff(self._ctoken_contract.functions.baseTrackingSupplySpeed().call)
+        base_index_scale = await async_retry_with_backoff(self._ctoken_contract.functions.baseIndexScale().call)
+        base_tracking_supply_speed = await async_retry_with_backoff(
+            self._ctoken_contract.functions.baseTrackingSupplySpeed().call
+        )
         reward_per_day = base_tracking_supply_speed / base_index_scale * seconds_per_day
         comp_rate = 0
 
         if conv_total_supply * self._base_token_price > 0:
-            comp_rate = Web3.to_wei(
+            comp_rate = AsyncWeb3.to_wei(
                 self._reward_token_price * reward_per_day / (conv_total_supply * self._base_token_price) * 365,
                 "ether",
             )
@@ -900,8 +965,8 @@ class DaiSavingsRate(ChainBasedPoolModel):
 
     pool_type: Literal[POOL_TYPES.DAI_SAVINGS] = POOL_TYPES.DAI_SAVINGS
 
-    _sdai_contract: Contract = PrivateAttr()
-    _pot_contract: Contract = PrivateAttr()
+    _sdai_contract: AsyncContract = PrivateAttr()
+    _pot_contract: AsyncContract = PrivateAttr()
 
     def __hash__(self) -> int:
         return hash(self._sdai_contract.address)
@@ -912,7 +977,7 @@ class DaiSavingsRate(ChainBasedPoolModel):
         # Compare the attributes for equality
         return self._sdai_contract.address == other._sdai_contract.address  # type: ignore[]
 
-    def pool_init(self, web3_provider: Web3) -> None:
+    async def pool_init(self, web3_provider: AsyncWeb3) -> None:
         sdai_abi_file_path = Path(__file__).parent / "abi/SavingsDai.json"
         sdai_abi_file = sdai_abi_file_path.open()
         sdai_abi = json.load(sdai_abi_file)
@@ -926,22 +991,22 @@ class DaiSavingsRate(ChainBasedPoolModel):
         pot_abi = json.load(pot_abi_file)
         pot_abi_file.close()
 
-        pot_address = retry_with_backoff(self._sdai_contract.functions.pot().call)
+        pot_address = await async_retry_with_backoff(self._sdai_contract.functions.pot().call)
 
         pot_contract = web3_provider.eth.contract(abi=pot_abi, decode_tuples=True)
         self._pot_contract = retry_with_backoff(pot_contract, address=pot_address)
 
         self._initted = True
 
-    def sync(self, web3_provider: Web3) -> None:
+    async def sync(self, web3_provider: AsyncWeb3) -> None:
         if not self._initted:
-            self.pool_init(web3_provider)
+            await self.pool_init(web3_provider)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self) -> int:
+    @alru_cache(maxsize=256, ttl=60)
+    async def supply_rate(self) -> int:
         RAY = 1e27
-        dsr = retry_with_backoff(self._pot_contract.functions.dsr().call)
+        dsr = await async_retry_with_backoff(self._pot_contract.functions.dsr().call)
         seconds_per_year = 31536000
         x = (dsr / RAY) ** seconds_per_year
         return int(math.floor((x - 1) * 1e18))
@@ -952,8 +1017,8 @@ class MorphoVault(ChainBasedPoolModel):
 
     pool_type: Literal[POOL_TYPES.MORPHO] = POOL_TYPES.MORPHO
 
-    _vault_contract: Contract = PrivateAttr()
-    _morpho_contract: Contract = PrivateAttr()
+    _vault_contract: AsyncContract = PrivateAttr()
+    _morpho_contract: AsyncContract = PrivateAttr()
     _irm_abi: str = PrivateAttr()
     _decimals: int = PrivateAttr()
     _DECIMALS_OFFSET: int = PrivateAttr()
@@ -963,7 +1028,7 @@ class MorphoVault(ChainBasedPoolModel):
     _user_deposits: int = PrivateAttr()
     _curr_borrows: int = PrivateAttr()
     _asset_decimals: int = PrivateAttr()
-    _underlying_asset_contract: Contract = PrivateAttr()
+    _underlying_asset_contract: AsyncContract = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
     _yield_index: int = PrivateAttr()
 
@@ -979,7 +1044,7 @@ class MorphoVault(ChainBasedPoolModel):
         # Compare the attributes for equality
         return self._vault_contract.address == other._vault_contract.address  # type: ignore[]
 
-    def pool_init(self, web3_provider: Web3) -> None:
+    async def pool_init(self, web3_provider: AsyncWeb3) -> None:
         vault_abi_file_path = Path(__file__).parent / "abi/MetaMorpho.json"
         vault_abi_file = vault_abi_file_path.open()
         vault_abi = json.load(vault_abi_file)
@@ -993,13 +1058,13 @@ class MorphoVault(ChainBasedPoolModel):
         morpho_abi = json.load(morpho_abi_file)
         morpho_abi_file.close()
 
-        morpho_address = retry_with_backoff(self._vault_contract.functions.MORPHO().call)
+        morpho_address = await async_retry_with_backoff(self._vault_contract.functions.MORPHO().call)
 
         morpho_contract = web3_provider.eth.contract(abi=morpho_abi, decode_tuples=True)
         self._morpho_contract = retry_with_backoff(morpho_contract, address=morpho_address)
 
-        self._decimals = retry_with_backoff(self._vault_contract.functions.decimals().call)
-        self._DECIMALS_OFFSET = retry_with_backoff(self._vault_contract.functions.DECIMALS_OFFSET().call)
+        self._decimals = await async_retry_with_backoff(self._vault_contract.functions.decimals().call)
+        self._DECIMALS_OFFSET = await async_retry_with_backoff(self._vault_contract.functions.DECIMALS_OFFSET().call)
         self._asset_decimals = self._decimals - self._DECIMALS_OFFSET
 
         irm_abi_file_path = Path(__file__).parent / "abi/AdaptiveCurveIrm.json"
@@ -1007,7 +1072,7 @@ class MorphoVault(ChainBasedPoolModel):
         self._irm_abi = json.load(irm_abi_file)
         irm_abi_file.close()
 
-        underlying_asset_address = retry_with_backoff(self._vault_contract.functions.asset().call)
+        underlying_asset_address = await async_retry_with_backoff(self._vault_contract.functions.asset().call)
 
         erc20_abi_file_path = Path(__file__).parent / "abi/IERC20.json"
         erc20_abi_file = erc20_abi_file_path.open()
@@ -1022,13 +1087,14 @@ class MorphoVault(ChainBasedPoolModel):
 
         self._initted = True
 
-    def sync(self, web3_provider: Web3) -> None:
+    async def sync(self, web3_provider: AsyncWeb3) -> None:
         if not self._initted:
-            self.pool_init(web3_provider)
+            await self.pool_init(web3_provider)
 
-        supply_queue_length = retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
+        supply_queue_length = await async_retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
         market_ids = [
-            retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
+            await async_retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call)
+            for idx in range(supply_queue_length)
         ]
 
         total_borrows = 0
@@ -1036,8 +1102,8 @@ class MorphoVault(ChainBasedPoolModel):
         for market_id in market_ids:
             # calculate current supply apy
             # TODO: can we make this more efficient by making this not be called twice?
-            market = retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
-            market_params = retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
+            market = await async_retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
+            market_params = await async_retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
             irm_address = market_params.irm
             irm_contract_raw = web3_provider.eth.contract(abi=self._irm_abi, decode_tuples=True)
             irm_contract = retry_with_backoff(irm_contract_raw, address=irm_address)
@@ -1045,15 +1111,17 @@ class MorphoVault(ChainBasedPoolModel):
 
             total_borrows += market.totalBorrowAssets
 
-        self._total_supplied_assets = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
-        curr_user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
-        self._user_deposits = retry_with_backoff(self._vault_contract.functions.convertToAssets(curr_user_shares).call)
-        self._user_asset_balance = retry_with_backoff(
-            self._underlying_asset_contract.functions.balanceOf(Web3.to_checksum_address(self.user_address)).call
+        self._total_supplied_assets = await async_retry_with_backoff(self._vault_contract.functions.totalAssets().call)
+        curr_user_shares = await async_retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
+        self._user_deposits = await async_retry_with_backoff(
+            self._vault_contract.functions.convertToAssets(curr_user_shares).call
+        )
+        self._user_asset_balance = await async_retry_with_backoff(
+            self._underlying_asset_contract.functions.balanceOf(AsyncWeb3.to_checksum_address(self.user_address)).call
         )
         self._curr_borrows = total_borrows
 
-        self._yield_index = retry_with_backoff(self._vault_contract.functions.convertToAssets(int(1e18)).call)
+        self._yield_index = await async_retry_with_backoff(self._vault_contract.functions.convertToAssets(int(1e18)).call)
 
     @classmethod
     def assets_to_shares_down(cls, assets: int, total_assets: int, total_shares: int) -> int:
@@ -1064,11 +1132,12 @@ class MorphoVault(ChainBasedPoolModel):
         return (shares * (total_assets + cls._VIRTUAL_ASSETS)) // (total_shares + cls._VIRTUAL_SHARES)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @ttl_cache(maxsize=256, ttl=60)
-    def supply_rate(self, amount: int) -> int:
-        supply_queue_length = retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
+    @alru_cache(maxsize=256, ttl=60)
+    async def supply_rate(self, amount: int) -> int:
+        supply_queue_length = await async_retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
         market_ids = [
-            retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call) for idx in range(supply_queue_length)
+            await async_retry_with_backoff(self._vault_contract.functions.supplyQueue(idx).call)
+            for idx in range(supply_queue_length)
         ]
 
         total_asset_delta = amount - self._user_deposits
@@ -1081,8 +1150,8 @@ class MorphoVault(ChainBasedPoolModel):
         # calculate the supply apys for each market
         for market_id in market_ids:
             # calculate current supply apy
-            market = retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
-            market_params = retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
+            market = await async_retry_with_backoff(self._morpho_contract.functions.market(market_id).call)
+            market_params = await async_retry_with_backoff(self._morpho_contract.functions.idToMarketParams(market_id).call)
             irm_contract = self._irm_contracts[market_id]
             irm_address = irm_contract.address
 
@@ -1091,7 +1160,7 @@ class MorphoVault(ChainBasedPoolModel):
                 current_assets.append(0)
                 continue
 
-            borrow_rate = retry_with_backoff(irm_contract.functions.borrowRateView(market_params, market).call)
+            borrow_rate = await async_retry_with_backoff(irm_contract.functions.borrowRateView(market_params, market).call)
 
             seconds_per_year = 31536000
             utilization = market.totalBorrowAssets / market.totalSupplyAssets
@@ -1102,7 +1171,9 @@ class MorphoVault(ChainBasedPoolModel):
             current_supply_apys.append(int(supply_apy_raw * 1e18))
 
             # calculate current assets allocated to the market
-            position = retry_with_backoff(self._morpho_contract.functions.position(market_id, self.contract_address).call)
+            position = await async_retry_with_backoff(
+                self._morpho_contract.functions.position(market_id, self.contract_address).call
+            )
             allocated_assets = self.shares_to_assets_down(
                 position.supplyShares, market.totalSupplyAssets, market.totalSupplyShares
             )
@@ -1118,16 +1189,16 @@ class MorphoVault(ChainBasedPoolModel):
 class YearnV3Vault(ChainBasedPoolModel):
     pool_type: Literal[POOL_TYPES.YEARN_V3] = POOL_TYPES.YEARN_V3
 
-    _vault_contract: Contract = PrivateAttr()
-    _apr_oracle: Contract = PrivateAttr()
+    _vault_contract: AsyncContract = PrivateAttr()
+    _apr_oracle: AsyncContract = PrivateAttr()
     _max_withdraw: int = PrivateAttr()
     _user_deposits: int = PrivateAttr()
-    _asset: Contract = PrivateAttr()
+    _asset: AsyncContract = PrivateAttr()
     _total_supplied_assets: int = PrivateAttr()
     _user_asset_balance: int = PrivateAttr()
     _yield_index: int = PrivateAttr()
 
-    def pool_init(self, web3_provider: Web3) -> None:
+    async def pool_init(self, web3_provider: AsyncWeb3) -> None:
         vault_abi_file_path = Path(__file__).parent / "abi/Yearn_V3_Vault.json"
         vault_abi_file = vault_abi_file_path.open()
         vault_abi = json.load(vault_abi_file)
@@ -1149,26 +1220,26 @@ class YearnV3Vault(ChainBasedPoolModel):
         erc20_abi = json.load(erc20_abi_file)
         erc20_abi_file.close()
 
-        asset_address = retry_with_backoff(self._vault_contract.functions.asset().call)
+        asset_address = await async_retry_with_backoff(self._vault_contract.functions.asset().call)
         asset_contract = web3_provider.eth.contract(abi=erc20_abi, decode_tuples=True)
         self._asset = retry_with_backoff(asset_contract, address=asset_address)
 
-    def sync(self, web3_provider: Web3) -> None:
+    async def sync(self, web3_provider: AsyncWeb3) -> None:
         if not self._initted:
-            self.pool_init(web3_provider)
+            await self.pool_init(web3_provider)
 
-        self._max_withdraw = retry_with_backoff(self._vault_contract.functions.maxWithdraw(self.user_address).call)
-        user_shares = retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
-        self._user_deposits = retry_with_backoff(self._vault_contract.functions.convertToAssets(user_shares).call)
-        self._total_supplied_assets: Any = retry_with_backoff(self._vault_contract.functions.totalAssets().call)
-        self._user_asset_balance = retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
+        self._max_withdraw = await async_retry_with_backoff(self._vault_contract.functions.maxWithdraw(self.user_address).call)
+        user_shares = await async_retry_with_backoff(self._vault_contract.functions.balanceOf(self.user_address).call)
+        self._user_deposits = await async_retry_with_backoff(self._vault_contract.functions.convertToAssets(user_shares).call)
+        self._total_supplied_assets: Any = await async_retry_with_backoff(self._vault_contract.functions.totalAssets().call)
+        self._user_asset_balance = await async_retry_with_backoff(self._asset.functions.balanceOf(self.user_address).call)
 
         # get current price per share
-        self._yield_index = retry_with_backoff(self._vault_contract.functions.pricePerShare().call)
+        self._yield_index = await async_retry_with_backoff(self._vault_contract.functions.pricePerShare().call)
 
-    def supply_rate(self, amount: int) -> int:
+    async def supply_rate(self, amount: int) -> int:
         delta = amount - self._user_deposits
-        return retry_with_backoff(self._apr_oracle.functions.getExpectedApr(self.contract_address, delta).call)
+        return await async_retry_with_backoff(self._apr_oracle.functions.getExpectedApr(self.contract_address, delta).call)
 
 
 def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
@@ -1177,18 +1248,53 @@ def generate_eth_public_key(rng_gen: np.random.RandomState) -> str:
     return account.address
 
 
-def generate_challenge_data(
-    web3_provider: Web3,
+async def generate_challenge_data(
+    chain_data_provider: AsyncWeb3 | bt.AsyncSubtensor,
     rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
-) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
+) -> dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int]:  # generate pools
+    if isinstance(chain_data_provider, bt.AsyncSubtensor):
+        return await gen_bt_alpha_pools(chain_data_provider, rng_gen)
+
     selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
     bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
 
-    return assets_pools_for_challenge_data(selected_entry, web3_provider)
+    return await gen_evm_pools_for_challenge(selected_entry, chain_data_provider)
 
 
-def assets_pools_for_challenge_data(
-    selected_entry, web3_provider: Web3
+async def gen_bt_alpha_pools(
+    subtensor: bt.AsyncSubtensor,
+    rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
+) -> dict[str, dict[str, BittensorAlphaTokenPool] | int]:
+    # Filter out root and subnets that have >= MIN_TAO_IN_POOL TAO in their pools
+    all_subnets = (await subtensor.all_subnets())[1:]
+    subnets = [s for s in all_subnets if s.tao_in.tao > MIN_TAO_IN_POOL]
+    num_subnets = len(subnets)
+
+    # check if num subnets is less than min - if so, raise error
+    if num_subnets < MIN_BT_POOLS:
+        raise ValueError(f"Not enough eligible subnets (found {num_subnets}, need at least {MIN_BT_POOLS})")
+
+    num_pools = rng_gen.randint(MIN_BT_POOLS, min(MAX_BT_POOLS + 1, num_subnets + 1))
+
+    # sample `num_pools` unique subnets without replacement
+    selected_subnets = rng_gen.choice(subnets, size=num_pools, replace=False)
+
+    challenge_data = {
+        "assets_and_pools": {
+            "pools": {},
+            "total_assets": TOTAL_RAO,
+        }
+    }
+
+    for subnet in selected_subnets:
+        pool: BittensorAlphaTokenPool = PoolFactory.create_pool(pool_type=POOL_TYPES.BT_ALPHA, netuid=subnet.netuid)
+        challenge_data["assets_and_pools"]["pools"][str(pool.netuid)] = pool
+
+    return challenge_data
+
+
+async def gen_evm_pools_for_challenge(
+    selected_entry, chain_data_provider: AsyncWeb3
 ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
     challenge_data = {}
 
@@ -1216,7 +1322,6 @@ def assets_pools_for_challenge_data(
     if total_assets is None:
         total_assets = 0
         first_pool = pool_list[0]
-        first_pool.sync(web3_provider)
         match first_pool.pool_type:
             case T if T in (
                 POOL_TYPES.STURDY_SILO,
@@ -1225,12 +1330,12 @@ def assets_pools_for_challenge_data(
                 POOL_TYPES.MORPHO,
                 POOL_TYPES.YEARN_V3,
             ):
+                await first_pool.sync(chain_data_provider)
                 total_assets = first_pool._user_asset_balance
             case _:
                 pass
 
         for pool in pools.values():
-            pool.sync(web3_provider)
             total_asset = 0
             match pool.pool_type:
                 case T if T in (
@@ -1240,6 +1345,7 @@ def assets_pools_for_challenge_data(
                     POOL_TYPES.MORPHO,
                     POOL_TYPES.YEARN_V3,
                 ):
+                    await pool.sync(chain_data_provider)
                     total_asset += pool._user_deposits
                 case _:
                     pass

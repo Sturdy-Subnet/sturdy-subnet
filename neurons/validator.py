@@ -38,7 +38,7 @@ from sturdy.base.validator import BaseValidatorNeuron
 from sturdy.constants import DB_DIR, MIN_TOTAL_ASSETS_AMOUNT, ORGANIC_SCORING_PERIOD
 
 # Bittensor Validator Template:
-from sturdy.pools import PoolFactory
+from sturdy.pools import POOL_TYPES, PoolFactory
 from sturdy.protocol import (
     REQUEST_TYPES,
     AllocateAssets,
@@ -67,9 +67,8 @@ class Validator(BaseValidatorNeuron):
     end of each epoch.
     """
 
-    def __init__(self, config=None) -> None:
-        super().__init__(config=config)
-        bt.logging.info("load_state()")
+    async def _init_async(self, config=None) -> None:
+        await super()._init_async(config=config)
         self.uid_to_response = {}
 
     async def forward(self) -> Any:
@@ -223,7 +222,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     for uid, pool in pools.items():
         new_pool = PoolFactory.create_pool(
             pool_type=pool.pool_type,
-            web3_provider=core_validator.w3,  # type: ignore[]
+            web3_provider=core_validator.pool_data_providers[synapse.pool_data_provider],  # type: ignore[]
             user_address=(
                 pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
             ),  # TODO: is there a cleaner way to do this?
@@ -234,9 +233,11 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     synapse.assets_and_pools["pools"] = new_pools
 
     bt.logging.info("Querying miners...")
+
     axon_times, result = await query_and_score_miners(
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
+        chain_data_provider=core_validator.pool_data_providers[synapse.pool_data_provider],  # TODO: see TODO(provider)
         request_type=synapse.request_type,
         user_address=synapse.user_address,
     )
@@ -249,9 +250,9 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     metadata = {}
     pools = synapse.assets_and_pools["pools"]
 
-    for contract_addr, pool in pools.items():
-        pool.sync(core_validator.w3)
-        metadata[contract_addr] = pool._yield_index
+    for pool_key, pool in pools.items():
+        await pool.sync(core_validator.pool_data_providers[synapse.pool_data_provider])  # TODO: see TODO(provider)
+        metadata[pool_key] = pool._yield_index
 
     with sql.get_db_connection() as conn:
         sql.log_allocations(
@@ -300,7 +301,7 @@ async def request_info(
 
 async def main() -> None:
     global core_validator  # noqa: PLW0603
-    core_validator = Validator()
+    core_validator = await Validator.create()
 
     try:
         config = uvicorn.Config(app, host="0.0.0.0", port=core_validator.config.api_port)  # noqa: S104

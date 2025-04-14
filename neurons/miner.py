@@ -16,6 +16,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import asyncio
 import time
 import typing
 
@@ -43,8 +44,8 @@ class Miner(BaseMinerNeuron):
     requests based on stake, and forwarding requests to the forward function. If you need to define custom
     """
 
-    def __init__(self, config=None) -> None:
-        super().__init__(config=config)
+    async def _init_async(self, config=None) -> None:
+        await super()._init_async(config=config)
 
     async def forward(self, synapse: sturdy.protocol.AllocateAssets) -> sturdy.protocol.AllocateAssets:
         """
@@ -65,9 +66,9 @@ class Miner(BaseMinerNeuron):
 
         # try use default greedy alloaction algorithm to generate allocations
         try:
-            synapse.allocations = naive_algorithm(self, synapse)
+            synapse.allocations = await naive_algorithm(self, synapse)
         except Exception as e:
-            bt.logging.error(f"Error: {e}")
+            bt.logging.exception(f"Error: {e}")
             # just return the auto vali generated allocations
             synapse.allocations = synapse.allocations
 
@@ -154,9 +155,14 @@ class Miner(BaseMinerNeuron):
         return priority
 
 
-# This is the main function, which runs the miner.
-if __name__ == "__main__":
-    with Miner() as miner:
+async def main() -> None:
+    miner = await Miner.create()
+    async with miner:
         while True:
             bt.logging.info(f"Miner running... {time.time()}")
-            time.sleep(5)
+            await asyncio.sleep(5)  # Add await here
+
+
+# This is the main function, which runs the miner.
+if __name__ == "__main__":
+    asyncio.run(main())

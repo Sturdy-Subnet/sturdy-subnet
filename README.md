@@ -60,10 +60,10 @@ There are three core files.
         selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
         bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
 
-        return assets_pools_for_challenge_data(selected_entry, web3_provider)
+        return gen_evm_pools_for_challenge(selected_entry, web3_provider)
 
 
-    def assets_pools_for_challenge_data(
+    def gen_evm_pools_for_challenge(
         selected_entry, web3_provider: Web3
     ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
         challenge_data = {}

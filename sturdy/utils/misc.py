@@ -16,6 +16,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import asyncio
 import time
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -26,6 +27,7 @@ from typing import Any
 import bittensor as bt
 import numpy as np
 import numpy.typing as npt
+from async_lru import alru_cache
 from pydantic import BaseModel
 
 from sturdy.constants import (
@@ -83,6 +85,29 @@ def randrange_float(
     num_steps = int((stop - start) / step)
     random_step = rng_gen.randint(0, num_steps + 1)
     return format_num_prec(start + random_step * step, sig=sig, max_prec=max_prec)
+
+
+async def async_retry_with_backoff(func, *args: Any, **kwargs: Any) -> Any:
+    """
+    Retry a function with exponential backoff and jitter when rate limited.
+    """
+    max_retries = 5  # Maximum number of retries
+    base_delay = 0.1  # Initial delay in seconds
+    max_delay = 60  # Maximum delay in seconds
+
+    retries = 0
+    while retries < max_retries:
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            if "Rate limited" in str(e):
+                delay = min(base_delay * 2**retries, max_delay)
+                jitter = np.random.uniform(delay / 2, delay * 1.5)
+                asyncio.sleep(jitter)
+                retries += 1
+            else:
+                raise
+    raise Exception(f"Maximum retries ({max_retries}) exceeded for {func.__name__}")  # noqa: TRY002
 
 
 def retry_with_backoff(func, *args: Any, **kwargs: Any) -> Any:
@@ -221,8 +246,8 @@ def _ttl_hash_gen(seconds: int):  # noqa: ANN202
 
 
 # 12 seconds updating block.
-@ttl_cache(maxsize=1, ttl=12)
-def ttl_get_block(self) -> int:
+@alru_cache(maxsize=1, ttl=12)
+async def ttl_get_block(self) -> int:
     """
     Retrieves the current block number from the blockchain. This method is cached with a time-to-live (TTL)
     of 12 seconds, meaning that it will only refresh the block number from the blockchain at most every 12 seconds,
@@ -240,4 +265,4 @@ def ttl_get_block(self) -> int:
 
     Note: self here is the miner or validator instance
     """
-    return self.subtensor.get_current_block()
+    return await self.subtensor.get_current_block()

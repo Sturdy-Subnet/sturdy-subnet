@@ -9,14 +9,15 @@ import bittensor as bt
 import numpy as np
 import numpy.typing as npt
 from dotenv import load_dotenv
-from web3 import Web3
 
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
 from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
+from sturdy.utils.weight_utils import process_weights_for_netuid
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -31,11 +32,11 @@ class BaseValidatorNeuron(BaseNeuron):
         super().add_args(parser)
         add_validator_args(cls, parser)
 
-    def __init__(self, config=None) -> None:
+    async def _init_async(self, config=None) -> None:
         # Initialize thread_pool first before any potential early returns
         self.thread_pool = None
 
-        super().__init__(config=config)
+        await super()._init_async(config=config)
         load_dotenv()
 
         # set last query time to be 0
@@ -52,12 +53,25 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        # set web3 provider url
-        w3_provider_url = os.environ.get("WEB3_PROVIDER_URL")
-        if w3_provider_url is None:
+        # TODO: move setup to a separate function?
+        # setup ethereum mainnet provider
+        eth_provider_url = os.environ.get("ETHEREUM_MAINNET_PROVIDER_URL")
+        if eth_provider_url is None:
             raise ValueError("You must provide a valid web3 provider url")
 
-        self.w3 = Web3(Web3.HTTPProvider(w3_provider_url))
+        # setup bittensor mainnet provider
+        bittensor_mainnet_url = os.environ.get("BITTENSOR_MAINNET_PROVIDER_URL")
+        if bittensor_mainnet_url is None:
+            raise ValueError("You must provide a valid subtensor provider url")
+
+        self.pool_data_providers = {
+            POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: await PoolProviderFactory.create_pool_provider(
+                POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, url=eth_provider_url
+            ),
+            POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: await PoolProviderFactory.create_pool_provider(
+                POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, url=bittensor_mainnet_url
+            ),
+        }
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         if self.config.mock:
@@ -78,11 +92,11 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info("load_state()")
         self.load_state()
         # Init sync with the network. Updates the metagraph.
-        self.sync()
+        await self.sync()
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
-            self.serve_axon()
+            await self.serve_axon()
         else:
             bt.logging.warning("axon off, not serving ip to chain.")
 
@@ -100,7 +114,10 @@ class BaseValidatorNeuron(BaseNeuron):
         self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.validator.max_workers)
 
     def __del__(self) -> None:
-        self.thread_pool.shutdown(wait=True)
+        if self.thread_pool:
+            # Shutdown the thread pool when the object is deleted
+            bt.logging.info("Shutting down thread pool...")
+            self.thread_pool.shutdown(wait=True)
 
     async def start(self) -> None:
         """Start validator tasks"""
@@ -124,7 +141,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     async def run_main_loop(self) -> None:
         """Main validator loop"""
-        self.sync()
+        await self.sync()
         bt.logging.info("Validator starting...")
 
         try:
@@ -136,17 +153,17 @@ class BaseValidatorNeuron(BaseNeuron):
                     try:
                         await self.concurrent_forward()
                     except Exception as e:
-                        bt.logging.error(f"Error in concurrent forward: {e}")
+                        bt.logging.exception(f"Error in concurrent forward: {e}")
 
                     self.last_query_time = current_time
-                    self.sync()
+                    await self.sync()
                     self.step += 1
                     self.log_metrics()
 
-                await asyncio.sleep(1)
+                time.sleep(1)
 
         except Exception as e:
-            bt.logging.error(f"Error in main loop: {e}")
+            bt.logging.exception(f"Error in main loop: {e}")
 
     def log_metrics(self) -> None:
         """Log metrics to wandb"""
@@ -173,7 +190,7 @@ class BaseValidatorNeuron(BaseNeuron):
         except Exception as e:
             bt.logging.error(f"Failed to log metrics: {e}")
 
-    def serve_axon(self) -> None:
+    async def serve_axon(self) -> None:
         """Serve axon to enable external connections."""
 
         bt.logging.info("serving ip to chain...")
@@ -181,7 +198,7 @@ class BaseValidatorNeuron(BaseNeuron):
             self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
             try:
-                self.subtensor.serve_axon(
+                await self.subtensor.serve_axon(
                     netuid=self.config.netuid,
                     axon=self.axon,
                 )
@@ -200,7 +217,7 @@ class BaseValidatorNeuron(BaseNeuron):
         coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
         await asyncio.gather(*coroutines)
 
-    def set_weights(self) -> None:
+    async def set_weights(self) -> None:
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights
         determine the trust and incentive level the validator assigns to miner nodes on the network.
@@ -223,13 +240,14 @@ class BaseValidatorNeuron(BaseNeuron):
         (
             processed_weight_uids,
             processed_weights,
-        ) = bt.utils.weight_utils.process_weights_for_netuid(
+        ) = await process_weights_for_netuid(
             uids=self.metagraph.uids,
             weights=raw_weights,
             netuid=self.config.netuid,
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
+
         bt.logging.debug(f"processed_weights {processed_weights}")
         bt.logging.debug(f"processed_weight_uids {processed_weight_uids}")
 
@@ -242,7 +260,7 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.debug(f"uint_uids {uint_uids}")
 
         # Set the weights on chain via our subtensor connection.
-        result, msg = self.subtensor.set_weights(
+        result, msg = await self.subtensor.set_weights(
             wallet=self.wallet,
             netuid=self.config.netuid,
             uids=uint_uids,
@@ -256,7 +274,7 @@ class BaseValidatorNeuron(BaseNeuron):
         else:
             bt.logging.error("set_weights failed", msg)
 
-    def resync_metagraph(self) -> None:
+    async def resync_metagraph(self) -> None:
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
         bt.logging.info("resync_metagraph()")
 
@@ -264,7 +282,7 @@ class BaseValidatorNeuron(BaseNeuron):
         previous_metagraph = copy.deepcopy(self.metagraph)
 
         # Sync the metagraph.
-        self.metagraph.sync(subtensor=self.subtensor)
+        await self.metagraph.sync(subtensor=self.subtensor)
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
