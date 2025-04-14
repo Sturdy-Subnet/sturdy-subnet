@@ -178,7 +178,7 @@ async def annualized_yield_pct(
                             alpha_amount * curr_price
                         )
 
-                        total_yield += int(tao_pct_return * alpha_amount * 1e18)
+                        total_yield += int(tao_pct_return * alpha_amount)
                 except Exception as e:
                     bt.logging.error("Error calculating annualized pct yield, skipping:")
                     bt.logging.error(e)
