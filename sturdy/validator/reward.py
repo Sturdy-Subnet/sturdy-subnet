@@ -149,16 +149,16 @@ async def annualized_yield_pct(
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
                         bt.logging.error(e)
             case POOL_TYPES.BT_ALPHA:
-                initial_alloc = allocation["amount"]
-                vali_hotkey = allocation["delegate_ss58"]
-                if initial_alloc > 0:
-                    metadata = extra_metadata[key]
+                try:
+                    initial_alloc = allocation["amount"]
+                    vali_hotkey = allocation["delegate_ss58"]
+                    if initial_alloc > 0:
+                        metadata = extra_metadata[key]
 
-                    last_block = metadata["block"]
-                    last_price = metadata["price_rao"]
+                        last_block = metadata["block"]
+                        last_price = metadata["price_rao"]
 
-                    curr_price = pool._price_rao
-                    try:
+                        curr_price = pool._price_rao
                         annualized_alpha_apy = await get_vali_avg_apy(
                             subtensor=pool_data_provider,
                             netuid=pool.netuid,
@@ -173,9 +173,9 @@ async def annualized_yield_pct(
                         )
 
                         total_yield += int(tao_pct_return * alpha_amount * 1e18)
-                    except Exception as e:
-                        bt.logging.error("Error calculating annualized pct yield, skipping:")
-                        bt.logging.error(e)
+                except Exception as e:
+                    bt.logging.error("Error calculating annualized pct yield, skipping:")
+                    bt.logging.error(e)
             case _:
                 total_yield += 0
 

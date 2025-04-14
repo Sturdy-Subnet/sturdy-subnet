@@ -18,29 +18,6 @@ async def fetch_metagraph(sub: bt.AsyncSubtensor, block: int, netuid: int) -> tu
         return block, None
 
 
-# Create tasks for fetching dividends and timestamps
-async def fetch_validator_dividends_and_timestamps(
-    sub: bt.AsyncSubtensor, block: int, hotkey: str, metagraph: bt.MetagraphInfo
-) -> tuple[int, int, datetime]:
-    if metagraph is None:
-        return block, None, None
-    try:
-        uid = await sub.get_uid_for_hotkey_on_subnet(
-            hotkey_ss58=hotkey,
-            netuid=metagraph.netuid,
-            block=block,
-        )
-        if uid is None:
-            return block, None
-        dividends = metagraph.alpha_dividends_per_hotkey[uid][1].tao
-        timestamp = await sub.get_timestamp(block=block)
-        bt.logging.trace(f"Fetched dividends for block {block}: {dividends}")
-        return block, dividends, timestamp
-    except Exception as e:
-        bt.logging.error(f"Error fetching dividends for block {block}: {e}")
-        return block, None, None
-
-
 # Create tasks for fetching dividends of nominator from a validator and timestamps
 async def fetch_nominator_dividends(
     sub: bt.AsyncSubtensor, block: int, hotkey: str, metagraph: bt.MetagraphInfo
