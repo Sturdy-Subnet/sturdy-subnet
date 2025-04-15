@@ -33,6 +33,8 @@ The outputs of the subnet will be used by third-party applications to move real 
 Ethereum network. The first application using the Sturdy Subnet is the [Sturdy
 protocol](https://sturdy.finance/), with more to come.
 
+Currently, Sturdy Subnet supports various types of pools active on the Ethereum network, as well as alpha token poola on Bittensor.
+
 ### Codebase
 
 There are three core files. 
@@ -47,90 +49,11 @@ There are three core files.
    subnet validator requests information from the subnet miners and determines the scores.
 
 ### Subnet Overview
-- Validators are responsible for distributing lists of pools (of which contain relevant parameters
+- Validators are responsible for distributing lists of pools (which, in the case of lending pools on Ethereum, contain relevant parameters
   such as base interest rate, base interest rate slope, minimum borrow amount, etc), as well as a
   maximum token balance miners can allocate to pools. Below are the function present in the codebase
   used for generating challenge data in [pools.py](./sturdy/pools.py) used for
-  synthetic requests. The selection of different assets and pools which can be used in such requests are defined in the [pool registry](./sturdy/pool_registry/pool_registry.py), and are all based on pools which are real and do indeed exist on-chain (i.e. on the Ethereum Mainnet):
-    ```python
-    def generate_challenge_data(
-        web3_provider: Web3,
-        rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
-    ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
-        selected_entry = POOL_REGISTRY[rng_gen.choice(list(POOL_REGISTRY.keys()))]
-        bt.logging.debug(f"Selected pool registry entry: {selected_entry}")
-
-        return gen_evm_pools_for_challenge(selected_entry, web3_provider)
-
-
-    def gen_evm_pools_for_challenge(
-        selected_entry, web3_provider: Web3
-    ) -> dict[str, dict[str, ChainBasedPoolModel] | int]:  # generate pools
-        challenge_data = {}
-
-        selected_assets_and_pools = selected_entry["assets_and_pools"]
-        selected_pools = selected_assets_and_pools["pools"]
-        global_user_address = selected_entry.get("user_address", None)
-
-        pool_list = []
-
-        for pool_dict in selected_pools.values():
-            user_address = pool_dict.get("user_address", None)
-            pool = PoolFactory.create_pool(
-                pool_type=POOL_TYPES._member_map_[pool_dict["pool_type"]],
-                user_address=global_user_address if user_address is None else user_address,
-                contract_address=pool_dict["contract_address"],
-            )
-            pool_list.append(pool)
-
-        pools = {str(pool.contract_address): pool for pool in pool_list}
-
-        # we assume that the user address is the same across pools (valid)
-        # and also that the asset contracts are the same across said pools
-        total_assets = selected_entry.get("total_assets", None)
-
-        if total_assets is None:
-            total_assets = 0
-            first_pool = pool_list[0]
-            first_pool.sync(web3_provider)
-            match first_pool.pool_type:
-                case T if T in (
-                    POOL_TYPES.STURDY_SILO,
-                    POOL_TYPES.AAVE_DEFAULT,
-                    POOL_TYPES.AAVE_TARGET,
-                    POOL_TYPES.MORPHO,
-                    POOL_TYPES.YEARN_V3,
-                ):
-                    total_assets = first_pool._user_asset_balance
-                case _:
-                    pass
-
-            for pool in pools.values():
-                pool.sync(web3_provider)
-                total_asset = 0
-                match pool.pool_type:
-                    case T if T in (
-                        POOL_TYPES.STURDY_SILO,
-                        POOL_TYPES.AAVE_DEFAULT,
-                        POOL_TYPES.AAVE_TARGET,
-                        POOL_TYPES.MORPHO,
-                        POOL_TYPES.YEARN_V3,
-                    ):
-                        total_asset += pool._user_deposits
-                    case _:
-                        pass
-
-                total_assets += total_asset
-
-        challenge_data["assets_and_pools"] = {}
-        challenge_data["assets_and_pools"]["pools"] = pools
-        challenge_data["assets_and_pools"]["total_assets"] = total_assets
-        if global_user_address is not None:
-            challenge_data["user_address"] = global_user_address
-
-        return challenge_data
-
-    ```
+  synthetic requests. The selection of different assets and pools which can be used in such requests are defined in the [pool registry](./sturdy/pool_registry/pool_registry.py), and are all based on pools which are real and do indeed exist on-chain (i.e. on the Ethereum Mainnet).
     Validators can optionally run an API server and sell their bandwidth to outside users to send
     their own pools (organic requests) to the subnet. For more information on this process - please read
     [docs/validator.md](docs/validator.md)
@@ -145,8 +68,8 @@ There are three core files.
   pools, and allocating more to pools which have a higher current supply rate.
 
 - After generating allocations, miners then send their outputs to validators to be scored. These requests are generated and sent to miners roughly every 15 minutes.
-  Organic requests, on the other hand, are sent by to validators, upon which they are then routed to miners. After the "scoring period" for requests have passed, miners are then scored based on how much yield pools have generated within the scoring period - with the miner with the most yield obtaining the highest score. Scoring these miners involves gather on chain info about pools, with most if not all such information being obtained from smart contracts on the the Ethereum Network.  Miners which have similar allocations to other miners will be penalized if they are
-  not perceived as being original. If miners fail to respond in ~45 seconds after receiving the
+  Organic requests, on the other hand, are sent by to validators, upon which they are then routed to miners. After the "scoring period" for requests have passed, miners are then scored based on how much yield pools have generated within the scoring period - with the miner with the most yield obtaining the highest score. Scoring these miners involves gather on chain info about pools, with most if not all such information being obtained from smart contracts on the the Ethereum Network (or, in the case of alpha token pools, gather information directly from the Bittensor chain through an archive node). Miners which have similar allocations to other miners will be penalized if they are
+  not perceived as being original. If miners fail to respond in ~3 seconds after receiving the
   request they are scored poorly.
   The best allocating miner will receive the most emissions. For more information on how
   miners are rewarded - please see [forward.py](sturdy/validator/forward.py), [reward.py](sturdy/validator/reward.py), and [validator.py](neurons/validator.py). A diagram is provided below highlighting the interactions that takes place within

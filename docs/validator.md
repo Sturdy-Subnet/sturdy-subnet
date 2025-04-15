@@ -51,8 +51,10 @@ All validators are required to have a connection to an Ethereum RPC to handle re
 ##### Preparing Environment
 The next step involves interacting with an API. We've provided an [.env.example](../.env.example) file which should be copied as a `.env` file in the root of this repository before proceeding.
 
-##### Connecting to a Web3 Provider
-We recommend using a third party service to connect to an RPC to perform on-chain calls such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `ETHEREUM_MAINNET_PROVIDER_URL` alias.
+##### Connecting to chain providers for pool data
+We recommend using a third party service to connect to an RPC to perform on-chain calls to evm-based chains (e.g. Ethereum) such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `ETHEREUM_MAINNET_PROVIDER_URL` alias.
+
+We also support bittensor alpha token pools, and as a validator you will need access to an archive subtensor node for historical data. The environment variable for this is `BITTENSOR_MAINNET_URL`. Thankfully, there is already a public one that can be used (see `.env.example`).
 
 ### Spinning Up Validator
 
