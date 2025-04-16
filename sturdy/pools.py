@@ -18,7 +18,7 @@
 import json
 import math
 from decimal import Decimal
-from enum import IntEnum
+from enum import Enum, auto
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
@@ -44,15 +44,15 @@ from sturdy.utils.misc import (
 )
 
 
-class POOL_TYPES(IntEnum):
-    STURDY_SILO = 1
-    AAVE_DEFAULT = 2
-    DAI_SAVINGS = 3
-    COMPOUND_V3 = 4
-    MORPHO = 5
-    YEARN_V3 = 6
-    AAVE_TARGET = 7
-    BT_ALPHA = 8
+class POOL_TYPES(str, Enum):
+    STURDY_SILO = "STURDY_SILO"
+    AAVE_DEFAULT = "AAVE_DEFAULT"
+    DAI_SAVINGS = "DAI_SAVINGS"
+    COMPOUND_V3 = "COMPOUND_V3"
+    MORPHO = "MORPHO"
+    YEARN_V3 = "YEARN_V3"
+    AAVE_TARGET = "AAVE_TARGET"
+    BT_ALPHA = "BT_ALPHA"
 
 
 def get_minimum_allocation(pool: "ChainBasedPoolModel") -> int:
@@ -163,8 +163,8 @@ class ChainBasedPoolModel(BaseModel):
         ignored_types = (_LRUCacheWrapper,)
 
     pool_model_disc: Literal["EVM_CHAIN_BASED"] = Field(default="EVM_CHAIN_BASED", description="pool model discriminator")
-    pool_type: POOL_TYPES | int | str = Field(..., description="type of pool")
-    pool_data_provider_type: POOL_DATA_PROVIDER_TYPE = Field(
+    pool_type: POOL_TYPES | str = Field(..., description="type of pool")
+    pool_data_provider_type: POOL_DATA_PROVIDER_TYPE | str = Field(
         default=POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, description="type of pool data provider"
     )
     user_address: str = Field(
@@ -176,7 +176,7 @@ class ChainBasedPoolModel(BaseModel):
     _initted: bool = PrivateAttr(False)  # noqa: FBT003
 
     @field_validator("pool_type", mode="before")
-    def validator_pool_type(cls, value) -> POOL_TYPES | int | str:
+    def validator_pool_type(cls, value) -> POOL_TYPES | str:
         if isinstance(value, POOL_TYPES):
             return value
         if isinstance(value, int):
@@ -209,18 +209,20 @@ class ChainBasedPoolModel(BaseModel):
 class BittensorAlphaTokenPool(BaseModel):
     """This class represents an alpha token pool for a subnet on the Bittensor network"""
 
+    class Config:
+        arbitrary_types_allowed = True
+        use_enum_values = True
+
     pool_model_disc: Literal["BT_ALPHA"] = Field(default="BT_ALPHA", description="pool model discriminator")
-    pool_type: Literal[POOL_TYPES.BT_ALPHA] = POOL_TYPES.BT_ALPHA
+    pool_type: POOL_TYPES | str = Field(default=POOL_TYPES.BT_ALPHA, description="type of pool")
     netuid: int  # netuid of subnet
     # TODO: support multi-vali staking in the future?
-    pool_data_provider_type: POOL_DATA_PROVIDER_TYPE = Field(
+    # NOTE: see TODO(provider)
+    pool_data_provider_type: POOL_DATA_PROVIDER_TYPE | str = Field(
         default=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, description="type of pool data provider"
     )
 
     _price_rao: int = 0  # current price of alpha token in rao
-
-    class Config:
-        arbitrary_types_allowed = True
 
     @field_validator("netuid", mode="before")
     def check_params(cls, value) -> int:

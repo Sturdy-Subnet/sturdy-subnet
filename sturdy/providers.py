@@ -1,12 +1,12 @@
-from enum import IntEnum
+from enum import Enum, auto
 
 import bittensor as bt
 from web3 import AsyncWeb3
 
 
-class POOL_DATA_PROVIDER_TYPE(IntEnum):
-    ETHEREUM_MAINNET = 0
-    BITTENSOR_MAINNET = 1
+class POOL_DATA_PROVIDER_TYPE(str, Enum):
+    ETHEREUM_MAINNET = "ETHEREUM_MAINNET"
+    BITTENSOR_MAINNET = "BITTENSOR_MAINNET"
 
 
 class PoolProviderFactory:

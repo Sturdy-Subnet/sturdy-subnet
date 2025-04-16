@@ -154,6 +154,16 @@ class Miner(BaseMinerNeuron):
         bt.logging.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", priority)  # type: ignore[]
         return priority
 
+    async def save_state(self) -> None:
+        """Saves the miner state - currently no state to save for miners."""
+        bt.logging.info("Miner state saving skipped - no state to save.")
+        pass
+
+    async def load_state(self) -> None:
+        """Loads the miner state - currently no state to load for miners."""
+        bt.logging.info("Miner state loading skipped - no state to load.")
+        pass
+
 
 async def main() -> None:
     miner = await Miner.create()

@@ -51,6 +51,7 @@ from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
 from sturdy.validator import forward, query_and_score_miners, sql
+from sturdy.validator.forward import get_metadata
 
 
 class Validator(BaseValidatorNeuron):
@@ -224,7 +225,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
             new_pool = PoolFactory.create_pool(
                 pool_type=pool.pool_type,
                 netuid=int(pool.netuid),
-                pool_data_provider_type=core_validator.pool_data_providers[synapse.pool_data_provider],
+                pool_data_provider_type=synapse.pool_data_provider,
             )
         else:
             new_pool = PoolFactory.create_pool(
@@ -242,10 +243,11 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     bt.logging.info("Querying miners...")
 
+    chain_data_provider = core_validator.pool_data_providers[synapse.pool_data_provider]
     axon_times, result = await query_and_score_miners(
         core_validator,
         assets_and_pools=synapse.assets_and_pools,
-        chain_data_provider=core_validator.pool_data_providers[synapse.pool_data_provider],  # TODO: see TODO(provider)
+        chain_data_provider=chain_data_provider,  # TODO: see TODO(provider)
         request_type=synapse.request_type,
         user_address=synapse.user_address,
     )
@@ -255,12 +257,9 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     ret = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
     to_log = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
 
-    metadata = {}
     pools = synapse.assets_and_pools["pools"]
 
-    for pool_key, pool in pools.items():
-        await pool.sync(core_validator.pool_data_providers[synapse.pool_data_provider])  # TODO: see TODO(provider)
-        metadata[pool_key] = pool._yield_index
+    metadata = await get_metadata(pools, chain_data_provider)
 
     with sql.get_db_connection() as conn:
         sql.log_allocations(
