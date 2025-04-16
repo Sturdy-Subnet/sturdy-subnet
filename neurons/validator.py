@@ -220,14 +220,22 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     new_pools = {}
     for uid, pool in pools.items():
-        new_pool = PoolFactory.create_pool(
-            pool_type=pool.pool_type,
-            web3_provider=core_validator.pool_data_providers[synapse.pool_data_provider],  # type: ignore[]
-            user_address=(
-                pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
-            ),  # TODO: is there a cleaner way to do this?
-            contract_address=pool.contract_address,
-        )
+        if pool.pool_type == POOL_TYPES.BT_ALPHA:
+            new_pool = PoolFactory.create_pool(
+                pool_type=pool.pool_type,
+                netuid=int(pool.netuid),
+                pool_data_provider_type=core_validator.pool_data_providers[synapse.pool_data_provider],
+            )
+        else:
+            new_pool = PoolFactory.create_pool(
+                pool_type=pool.pool_type,
+                web3_provider=core_validator.pool_data_providers[synapse.pool_data_provider],  # type: ignore[]
+                user_address=(
+                    pool.user_address if pool.user_address != ADDRESS_ZERO else synapse.user_address
+                ),  # TODO: is there a cleaner way to do this?
+                contract_address=pool.contract_address,
+            )
+
         new_pools[uid] = new_pool
 
     synapse.assets_and_pools["pools"] = new_pools

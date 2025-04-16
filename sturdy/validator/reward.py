@@ -153,7 +153,7 @@ async def annualized_yield_pct(
                         total_yield += int(allocation * annualized_pct_yield)
                     except Exception as e:
                         bt.logging.error("Error calculating annualized pct yield, skipping:")
-                        bt.logging.error(e)
+                        bt.logging.exception(e)
             case POOL_TYPES.BT_ALPHA:
                 try:
                     initial_alloc = allocation["amount"]
@@ -181,7 +181,7 @@ async def annualized_yield_pct(
                         total_yield += int(tao_pct_return * alpha_amount)
                 except Exception as e:
                     bt.logging.error("Error calculating annualized pct yield, skipping:")
-                    bt.logging.error(e)
+                    bt.logging.exception(e)
             case _:
                 total_yield += 0
 

@@ -162,6 +162,7 @@ class ChainBasedPoolModel(BaseModel):
         # (i.e. supply_rate) returns a wrapper object, which pydantic does not like :(
         ignored_types = (_LRUCacheWrapper,)
 
+    pool_model_disc: Literal["EVM_CHAIN_BASED"] = Field(default="EVM_CHAIN_BASED", description="pool model discriminator")
     pool_type: POOL_TYPES | int | str = Field(..., description="type of pool")
     pool_data_provider_type: POOL_DATA_PROVIDER_TYPE = Field(
         default=POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, description="type of pool data provider"
@@ -208,6 +209,7 @@ class ChainBasedPoolModel(BaseModel):
 class BittensorAlphaTokenPool(BaseModel):
     """This class represents an alpha token pool for a subnet on the Bittensor network"""
 
+    pool_model_disc: Literal["BT_ALPHA"] = Field(default="BT_ALPHA", description="pool model discriminator")
     pool_type: Literal[POOL_TYPES.BT_ALPHA] = POOL_TYPES.BT_ALPHA
     netuid: int  # netuid of subnet
     # TODO: support multi-vali staking in the future?

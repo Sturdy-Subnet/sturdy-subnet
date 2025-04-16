@@ -90,7 +90,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Load state
         bt.logging.info("load_state()")
-        self.load_state()
+        await self.load_state()
         # Init sync with the network. Updates the metagraph.
         await self.sync()
 
@@ -128,7 +128,9 @@ class BaseValidatorNeuron(BaseNeuron):
         self._stop_event.set()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
+            bt.logging.debug("Ran validator tasks")
             self._tasks.clear()
+            bt.logging.debug("Cleared validator tasks")
 
     async def __aenter__(self) -> "BaseValidatorNeuron":
         await self.start()
@@ -157,10 +159,13 @@ class BaseValidatorNeuron(BaseNeuron):
 
                     self.last_query_time = current_time
                     await self.sync()
+                    bt.logging.debug("Syncing complete")
                     self.step += 1
+                    bt.logging.debug("Logging metrics")
                     self.log_metrics()
+                    bt.logging.debug("Logged metrics")
 
-                time.sleep(1)
+                await asyncio.sleep(1)
 
         except Exception as e:
             bt.logging.exception(f"Error in main loop: {e}")
@@ -337,34 +342,41 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
-    def save_state(self) -> None:
-        """Saves the state of the validator to a file."""
+    async def save_state(self) -> None:
+        """Saves the state of the validator to a file asynchronously."""
         bt.logging.info("Saving validator state...")
-        # Save the state of the validator to file.
-        np.savez(
-            self.config.neuron.full_path + "/state",
-            step=self.step,
-            scores=self.scores,
-            hotkeys=self.hotkeys,
+
+        # Run np.savez in an executor to avoid blocking
+        await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: np.savez(
+                self.config.neuron.full_path + "/state",
+                step=self.step,
+                scores=self.scores,
+                hotkeys=self.hotkeys,
+            ),
         )
+
         bt.logging.info("Saved")
 
-    def load_state(self) -> None:
-        """Loads the state of the validator from a file."""
+    async def load_state(self) -> None:
+        """Loads the state of the validator from a file asynchronously."""
         bt.logging.info("Loading validator state.")
 
         state_path = f"{self.config.neuron.full_path}/state.npz"
 
         try:
-            # Load the state of the validator from file
-            state = np.load(state_path)
+            # Load state in executor
+            state = await asyncio.get_event_loop().run_in_executor(None, lambda: np.load(state_path))
+
             self.step = state["step"]
             self.scores = state["scores"]
             self.hotkeys = state["hotkeys"]
+
             bt.logging.info(f"Loaded state with {len(self.hotkeys)} hotkeys")
+
         except FileNotFoundError:
             bt.logging.info(f"No state file found at {state_path}. Starting with empty state.")
-            # Initialize with default values since no state file exists
             self.step = 0
             self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
             self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
