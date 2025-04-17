@@ -177,11 +177,13 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
         {
           "request_type": "ORGANIC",
           "user_address": "0xD8f9475A4A1A6812212FD62e80413d496038A89A",
+          "pool_data_provider": "ETHEREUM_MAINNET",
           "assets_and_pools": {
             "total_assets": 1000000000000000000,
             "pools": {
               ...
               "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227": {
+                "pool_model_disc": "EVM_CHAIN_BASED",
                 "pool_type": "STURDY_SILO",
                 "contract_address": "0x6311fF24fb15310eD3d2180D3d0507A21a8e5227"
               },
