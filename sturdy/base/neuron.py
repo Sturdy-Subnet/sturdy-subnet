@@ -124,8 +124,6 @@ class BaseNeuron(ABC):
         """
         Wrapper for synchronizing the state of the network for the given miner or validator.
         """
-        # Ensure miner or validator hotkey is still registered on the network.
-
         try:
             await self.check_registered()
         except Exception:
@@ -145,8 +143,8 @@ class BaseNeuron(ABC):
             bt.logging.error("Failed to set weights! See Error:")
             bt.logging.exception(e)
 
-        # Always save state.
-        self.save_state()
+        # Always save state asynchronously
+        await self.save_state()
 
     async def check_registered(self) -> None:
         # --- Check for registration.
@@ -172,9 +170,10 @@ class BaseNeuron(ABC):
             return False
         return self.neuron_type != "MinerNeuron"  # don't set weights if you're a miner
 
-    # TODO: is there a better way of going about this? ew.
-    def save_state(self) -> None:  # noqa: B027
+    @abstractmethod
+    async def save_state(self) -> None:  # Changed to async
         pass
 
-    def load_state(self) -> None:  # noqa: B027
+    @abstractmethod
+    async def load_state(self) -> None:  # Changed to async for consistency
         pass

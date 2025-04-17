@@ -17,6 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 from enum import IntEnum
+from typing import Annotated
 
 import bittensor as bt
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -49,12 +50,15 @@ class AllocInfo(TypedDict):
     allocations: AllocationsDict | None
 
 
+PoolModel = Annotated[ChainBasedPoolModel | BittensorAlphaTokenPool, Field(discriminator="pool_model_disc")]
+
+
 class AllocateAssetsRequest(BaseModel):
     class Config:
         use_enum_values = True
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int] = Field(
+    assets_and_pools: dict[str, dict[str, PoolModel] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )
@@ -115,7 +119,7 @@ class AllocateAssetsBase(BaseModel):
         use_enum_values = True
 
     request_type: REQUEST_TYPES | int | str = Field(default=REQUEST_TYPES.ORGANIC, description="type of request")
-    assets_and_pools: dict[str, dict[str, ChainBasedPoolModel | BittensorAlphaTokenPool] | int] = Field(
+    assets_and_pools: dict[str, dict[str, PoolModel] | int] = Field(
         ...,
         description="pools for miners to produce allocation amounts for - uid -> pool_info",
     )

@@ -106,7 +106,7 @@ async def get_vali_avg_apy(
             ]
         )
     except Exception as e:
-        bt.logging.error(f"Error calculating alpha apy, assuming it to be 0: {e}")
+        bt.logging.warn(f"Error calculating alpha apy, assuming it to be 0: {e}")
         return 0
 
     return np.nan_to_num(nominator_apy_pct.mean())

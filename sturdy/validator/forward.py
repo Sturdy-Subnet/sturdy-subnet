@@ -271,7 +271,7 @@ async def query_and_score_miners(
             request_info = get_request_info(conn, request_uid=request_uid)
             data_pools = json.loads(request_info[0]["assets_and_pools"])["pools"]
             first_entry = next(iter(data_pools.values()))
-            data_provider = self.pool_data_providers[int(first_entry["pool_data_provider_type"])]
+            data_provider = self.pool_data_providers[first_entry["pool_data_provider_type"]]
             bt.logging.debug(f"Pool data provider to use for scoring this pool: {data_provider}")
 
         uids_to_delete.append(request_uid)
