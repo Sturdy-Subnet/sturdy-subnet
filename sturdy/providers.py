@@ -1,4 +1,4 @@
-from enum import Enum, auto
+from enum import Enum
 
 import bittensor as bt
 from web3 import AsyncWeb3

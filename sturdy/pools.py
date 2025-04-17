@@ -18,7 +18,7 @@
 import json
 import math
 from decimal import Decimal
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
