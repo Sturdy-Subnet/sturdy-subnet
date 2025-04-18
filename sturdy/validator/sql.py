@@ -159,7 +159,7 @@ def log_allocations(
     allocations: dict[str, AllocInfo],
     axon_times: dict[str, float],
     request_type: REQUEST_TYPES,
-    scoring_period: int,
+    scoring_period: int | None = None,
 ) -> None:
     """
     Logs allocation data into the database.
@@ -180,9 +180,8 @@ def log_allocations(
     None
     """
     ts_now = datetime.utcnow().timestamp()
-    challenge_end = ts_now + scoring_period
-    scoring_period_end = datetime.fromtimestamp(challenge_end)  # noqa: DTZ006
     datetime_now = datetime.fromtimestamp(ts_now)  # noqa: DTZ006
+
     conn.execute(
         f"INSERT INTO {ALLOCATION_REQUESTS_TABLE} VALUES (?, json(?), ?, ?, json(?))",
         (
@@ -195,15 +194,19 @@ def log_allocations(
         ),
     )
 
-    conn.execute(
-        f"INSERT INTO {ACTIVE_ALLOCS} VALUES (?, ?, ?, json(?))",
-        (
-            request_uid,
-            scoring_period_end,
-            datetime_now,
-            json.dumps(miners),
-        ),
-    )
+    if scoring_period is not None:
+        challenge_end = ts_now + scoring_period
+        scoring_period_end = datetime.fromtimestamp(challenge_end)  # noqa: DTZ006
+
+        conn.execute(
+            f"INSERT INTO {ACTIVE_ALLOCS} VALUES (?, ?, ?, json(?))",
+            (
+                request_uid,
+                scoring_period_end,
+                datetime_now,
+                json.dumps(miners),
+            ),
+        )
 
     to_insert = []
     for miner_uid, miner_allocation in allocations.items():

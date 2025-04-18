@@ -208,6 +208,24 @@ def prepare_single_request(self, uid: int, synapse: bt.Synapse) -> Request | Non
         return None
 
 
+def sort_allocation_by_score(allocations: dict[str, AllocInfo], scores: list) -> dict[str, AllocInfo]:
+    """
+    Sort the allocations by score in descending order.
+    """
+    sorted_indices = [idx for idx, val in sorted(enumerate(scores), key=lambda k: k[1], reverse=True)]
+    sorted_allocs = {}
+    rank = 1
+    for idx in sorted_indices:
+        alloc = allocations.get(str(idx), None)
+        if alloc is None:
+            continue
+
+        alloc["rank"] = rank
+        sorted_allocs[str(idx)] = alloc
+        rank += 1
+    return sorted_allocs
+
+
 # TODO(provider): Don't rely on chain provider parameter
 # we should be depedendant on the information directly from each pool model vs. having
 # to rely on a chain_data_provider input parameter - which is actually very limiting -
@@ -228,11 +246,16 @@ async def query_and_score_miners(
 
     bt.logging.debug(f"active_uids: {active_uids}")
 
+    # TODO: see TODO(provider)
+    pools = assets_and_pools["pools"]
+    first_pool = next(iter(pools.values()))
+    pool_data_provider_type = first_pool.pool_data_provider_type
+
     synapse = AllocateAssets(
         request_type=request_type,
         assets_and_pools=assets_and_pools,
         user_address=user_address,
-        pool_data_provider=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET,
+        pool_data_provider=pool_data_provider_type,
     )
 
     # query all miners
@@ -305,19 +328,80 @@ async def query_and_score_miners(
         query_timeout=self.config.neuron.timeout,
     )
 
-    sorted_indices = [idx for idx, val in sorted(enumerate(self.scores), key=lambda k: k[1], reverse=True)]
-
-    sorted_allocs = {}
-    rank = 1
-    for idx in sorted_indices:
-        alloc = filtered_allocs.get(str(idx), None)
-        if alloc is None:
-            continue
-
-        alloc["rank"] = rank
-        sorted_allocs[str(idx)] = alloc
-        rank += 1
+    sorted_allocs = sort_allocation_by_score(filtered_allocs, self.scores)
 
     bt.logging.debug(f"sorted allocations: {sorted_allocs}")
+
+    return axon_times, sorted_allocs
+
+
+async def query_top_n_miners(
+    self,
+    n: int,
+    assets_and_pools: Any,
+    request_type: REQUEST_TYPES = REQUEST_TYPES.SYNTHETIC,
+    user_address: str = ADDRESS_ZERO,
+) -> tuple[list, dict[str, AllocInfo]]:
+    """
+    Query the top n miners by their scores and return their allocations.
+    Args:
+        self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
+        n (int): The number of top miners to query.
+        assets_and_pools (dict): The assets and pools to be allocated.
+        request_type (REQUEST_TYPES): The type of request to be sent to the miners.
+        user_address (str): The address of the user making the request.
+    Returns:
+        tuple: A tuple containing the axon times and the allocations of the top n miners.
+    """
+
+    # get the top n miners by their scores (self.scores). the index of each score is the uid of the miner
+    top_n_uids = np.argsort(self.scores)[-n:]
+    top_n_uids = [str(uid) for uid in top_n_uids]
+    bt.logging.debug(f"top_n_uids: {top_n_uids}")
+
+    # TODO: see TODO(provider)
+    pools = assets_and_pools["pools"]
+    first_pool = next(iter(pools.values()))
+    pool_data_provider_type = first_pool.pool_data_provider_type
+
+    # query the top n miners
+    synapse = AllocateAssets(
+        request_type=request_type,
+        assets_and_pools=assets_and_pools,
+        user_address=user_address,
+        pool_data_provider=pool_data_provider_type,
+    )
+
+    responses = await query_multiple_miners(
+        self,
+        synapse,
+        top_n_uids,
+    )
+
+    bt.logging.debug(f"Received responses: {responses}")
+    allocations = {uid: responses[idx].allocations for idx, uid in enumerate(top_n_uids)}  # type: ignore[]
+    bt.logging.debug(f"Received allocations: {allocations}")
+    # Log the results for monitoring purposes.
+    bt.logging.info(f"Assets and pools: {synapse.assets_and_pools}")
+    bt.logging.info(f"Received allocations (uid -> allocations): {allocations}")
+
+    chain_data_provider = self.pool_data_providers[first_pool.pool_data_provider_type]
+    curr_pools = assets_and_pools["pools"]
+    for pool in curr_pools.values():
+        await pool.sync(chain_data_provider)
+
+    # filter the allocations
+    axon_times, filtered_allocs = filter_allocations(
+        self,
+        query=self.step,
+        uids=top_n_uids,
+        responses=responses,
+        assets_and_pools=assets_and_pools,
+        query_timeout=self.config.neuron.timeout,
+    )
+    bt.logging.debug(f"Filtered allocations: {filtered_allocs}")
+    # sort the allocations by score
+    sorted_allocs = sort_allocation_by_score(filtered_allocs, self.scores)
+    bt.logging.debug(f"Sorted allocations: {sorted_allocs}")
 
     return axon_times, sorted_allocs

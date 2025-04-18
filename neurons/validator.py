@@ -26,6 +26,7 @@ import bittensor as bt
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
@@ -44,14 +45,16 @@ from sturdy.protocol import (
     AllocateAssets,
     AllocateAssetsRequest,
     AllocateAssetsResponse,
+    BTAlphaPoolRequest,
     GetAllocationResponse,
     RequestInfoResponse,
 )
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
 from sturdy.validator import forward, query_and_score_miners, sql
-from sturdy.validator.forward import get_metadata
+from sturdy.validator.forward import get_metadata, query_top_n_miners
 
 
 class Validator(BaseValidatorNeuron):
@@ -118,7 +121,9 @@ async def api_key_validator(request, call_next) -> Response:
     if api_key_info is None:
         return JSONResponse(status_code=HTTP_401_UNAUTHORIZED, content={"detail": "Invalid API key"})
 
-    credits_required = 1  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
+    credits_required = (
+        1 if request.url.path != "/api_key_info" else 0
+    )  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
 
     # Now check credits
     if api_key_info[sql.BALANCE] is not None and api_key_info[sql.BALANCE] <= credits_required:
@@ -246,13 +251,15 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     bt.logging.info("Querying miners...")
 
     chain_data_provider = core_validator.pool_data_providers[synapse.pool_data_provider]
-    axon_times, result = await query_and_score_miners(
+
+    axon_times, result = await query_top_n_miners(
         core_validator,
+        n=body.num_allocs,
         assets_and_pools=synapse.assets_and_pools,
-        chain_data_provider=chain_data_provider,  # TODO: see TODO(provider)
         request_type=synapse.request_type,
         user_address=synapse.user_address,
     )
+
     request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
     to_ret = dict(list(result.items())[: body.num_allocs])
@@ -261,7 +268,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     pools = synapse.assets_and_pools["pools"]
 
-    metadata = await get_metadata(pools, chain_data_provider)
+    metadata = {}
 
     with sql.get_db_connection() as conn:
         sql.log_allocations(
@@ -273,7 +280,6 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
             to_log.allocations,
             axon_times,
             REQUEST_TYPES.ORGANIC,
-            ORGANIC_SCORING_PERIOD,
         )
 
     return ret
@@ -306,6 +312,106 @@ async def request_info(
     if not info:
         raise HTTPException(status_code=404, detail="No request info found")
     return info
+
+
+@app.get("/api_key_info")
+async def get_api_key_info(
+    request: Request,
+    db_dir: str = DB_DIR,
+) -> dict:
+    """
+    Get information about the API key used in the request.
+
+    Returns:
+        dict: Contains key details including:
+            - balance: Remaining credits
+            - rate_limit_per_minute: Maximum requests allowed per minute
+            - name: Name associated with the key
+            - created_at: When the key was created
+
+    Raises:
+        HTTPException: If API key is missing or invalid
+    """
+    api_key = _get_api_key(request)
+    if not api_key:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="API key is missing")
+
+    with sql.get_db_connection(db_dir) as conn:
+        api_key_info = sql.get_api_key_info(conn, api_key)
+
+    if api_key_info is None:
+        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    return {
+        "balance": api_key_info[sql.BALANCE],
+        "rate_limit_per_minute": api_key_info[sql.RATE_LIMIT_PER_MINUTE],
+        "name": api_key_info[sql.NAME],
+        "created_at": api_key_info[sql.CREATED_AT],
+    }
+
+
+@app.post("/allocate_bt", response_model=AllocateAssetsResponse)
+async def allocate_bt(body: BTAlphaPoolRequest) -> AllocateAssetsResponse | None:
+    """
+    Simplified endpoint for Bittensor alpha token pool allocations.
+
+    Args:
+        body (BTAlphaPoolRequest): Contains:
+            - netuids: list of subnet UIDs
+            - total_assets: Total assets to allocate (in RAO)
+            - num_allocs: Number of miner allocations to receive
+
+    Returns:
+        AllocateAssetsResponse: The allocations response
+    """
+    # Return error if total assets is <= 0
+    if body.total_assets <= MIN_TOTAL_ASSETS_AMOUNT:
+        raise HTTPException(status_code=400, detail="Total assets must be greater than 0")
+
+    # Construct pools dictionary
+    pools = {}
+    for netuid in body.netuids:
+        if netuid == 0:
+            raise HTTPException(
+                status_code=400, detail="Invalid subnet netuid - root (subnet 0) does not have an alpha token pool"
+            )
+        pool = PoolFactory.create_pool(
+            pool_type=POOL_TYPES.BT_ALPHA, netuid=netuid, pool_data_provider_type=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET
+        )
+        pools[str(netuid)] = pool
+
+    # Construct the assets and pools structure
+    assets_and_pools = {"pools": pools, "total_assets": body.total_assets}
+
+    bt.logging.info("Querying miners...")
+
+    axon_times, result = await query_top_n_miners(
+        core_validator,
+        n=body.num_allocs,
+        assets_and_pools=assets_and_pools,
+        request_type=REQUEST_TYPES.ORGANIC,
+        user_address=ADDRESS_ZERO,
+    )
+
+    request_uuid = str(uuid.uuid4()).replace("-", "")
+    to_ret = dict(list(result.items())[: body.num_allocs])
+
+    ret = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
+
+    with sql.get_db_connection() as conn:
+        sql.log_allocations(
+            conn,
+            ret.request_uuid,
+            core_validator.metagraph.hotkeys,
+            assets_and_pools,
+            {},  # Empty metadata
+            ret.allocations,
+            axon_times,
+            REQUEST_TYPES.ORGANIC,
+            None,  # No scoring period
+        )
+
+    return ret
 
 
 async def main() -> None:

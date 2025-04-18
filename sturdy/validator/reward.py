@@ -127,8 +127,7 @@ async def annualized_yield_pct(
         try:
             allocation = allocations[key]
         except Exception as e:
-            bt.logging.warning(e)
-            bt.logging.warning(f"could not find allocation to {key}, assuming it is 0...")
+            bt.logging.trace(f"could not find allocation to {key}, assuming it is 0...")
             allocation = 0
             continue
         match pool.pool_type:
@@ -195,17 +194,17 @@ def filter_allocations(
     responses: list,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     query_timeout: int = QUERY_TIMEOUT,
-) -> dict[str, AllocInfo]:
+) -> tuple[dict[str, float], dict[str, AllocInfo]]:
     """
-    Returns a tensor of rewards for the given query and responses.
+    Returns filtered allocations based on the query and responses from the miner.
 
     Args:
     - query (int): The query sent to the miner.
     - responses (list[float]): A list of responses from the miner.
 
     Returns:
-    - torch.Tensor: A tensor of rewards for the given query and responses.
-    - allocs: miner allocations along with their respective yields
+    - dict[str, float]: A dictionary containing the axon times for each uid.
+    - dict[str, AllocInfo]: A dictionary containing the filtered allocations.
     """
 
     filtered_allocs = {}
