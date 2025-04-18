@@ -385,6 +385,11 @@ async def query_top_n_miners(
     bt.logging.info(f"Assets and pools: {synapse.assets_and_pools}")
     bt.logging.info(f"Received allocations (uid -> allocations): {allocations}")
 
+    chain_data_provider = self.pool_data_providers[first_pool.pool_data_provider_type]
+    curr_pools = assets_and_pools["pools"]
+    for pool in curr_pools.values():
+        await pool.sync(chain_data_provider)
+
     # filter the allocations
     axon_times, filtered_allocs = filter_allocations(
         self,

@@ -118,7 +118,9 @@ async def api_key_validator(request, call_next) -> Response:
     if api_key_info is None:
         return JSONResponse(status_code=HTTP_401_UNAUTHORIZED, content={"detail": "Invalid API key"})
 
-    credits_required = 1  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
+    credits_required = (
+        1 if request.url.path != "/api_key_info" else 0
+    )  # TODO: make this non-constant in the future???? (i.e. dependent on number of pools)????
 
     # Now check credits
     if api_key_info[sql.BALANCE] is not None and api_key_info[sql.BALANCE] <= credits_required:
@@ -307,6 +309,42 @@ async def request_info(
     if not info:
         raise HTTPException(status_code=404, detail="No request info found")
     return info
+
+
+@app.get("/api_key_info")
+async def get_api_key_info(
+    request: Request,
+    db_dir: str = DB_DIR,
+) -> dict:
+    """
+    Get information about the API key used in the request.
+
+    Returns:
+        dict: Contains key details including:
+            - balance: Remaining credits
+            - rate_limit_per_minute: Maximum requests allowed per minute
+            - name: Name associated with the key
+            - created_at: When the key was created
+
+    Raises:
+        HTTPException: If API key is missing or invalid
+    """
+    api_key = _get_api_key(request)
+    if not api_key:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="API key is missing")
+
+    with sql.get_db_connection(db_dir) as conn:
+        api_key_info = sql.get_api_key_info(conn, api_key)
+
+    if api_key_info is None:
+        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    return {
+        "balance": api_key_info[sql.BALANCE],
+        "rate_limit_per_minute": api_key_info[sql.RATE_LIMIT_PER_MINUTE],
+        "name": api_key_info[sql.NAME],
+        "created_at": api_key_info[sql.CREATED_AT],
+    }
 
 
 async def main() -> None:
