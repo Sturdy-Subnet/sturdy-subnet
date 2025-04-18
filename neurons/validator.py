@@ -51,7 +51,7 @@ from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
 from sturdy.validator import forward, query_and_score_miners, sql
-from sturdy.validator.forward import get_metadata
+from sturdy.validator.forward import get_metadata, query_top_n_miners
 
 
 class Validator(BaseValidatorNeuron):
@@ -246,13 +246,15 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     bt.logging.info("Querying miners...")
 
     chain_data_provider = core_validator.pool_data_providers[synapse.pool_data_provider]
-    axon_times, result = await query_and_score_miners(
+
+    axon_times, result = await query_top_n_miners(
         core_validator,
+        n=body.num_allocs,
         assets_and_pools=synapse.assets_and_pools,
-        chain_data_provider=chain_data_provider,  # TODO: see TODO(provider)
         request_type=synapse.request_type,
         user_address=synapse.user_address,
     )
+
     request_uuid = uid = str(uuid.uuid4()).replace("-", "")
 
     to_ret = dict(list(result.items())[: body.num_allocs])
@@ -261,7 +263,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     pools = synapse.assets_and_pools["pools"]
 
-    metadata = await get_metadata(pools, chain_data_provider)
+    metadata = {}
 
     with sql.get_db_connection() as conn:
         sql.log_allocations(
@@ -273,7 +275,6 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
             to_log.allocations,
             axon_times,
             REQUEST_TYPES.ORGANIC,
-            ORGANIC_SCORING_PERIOD,
         )
 
     return ret
