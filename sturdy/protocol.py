@@ -94,6 +94,14 @@ class AllocateAssetsRequest(BaseModel):
         return values
 
 
+class BTAlphaPoolRequest(BaseModel):
+    """Simplified request model for Bittensor alpha token pools"""
+
+    netuids: list[int]
+    total_assets: int
+    num_allocs: int = Field(default=1, description="number of miner allocations to receive")
+
+
 class AllocateAssetsResponse(BaseModel):
     class Config:
         use_enum_values = True

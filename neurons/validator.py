@@ -26,6 +26,7 @@ import bittensor as bt
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
@@ -44,9 +45,11 @@ from sturdy.protocol import (
     AllocateAssets,
     AllocateAssetsRequest,
     AllocateAssetsResponse,
+    BTAlphaPoolRequest,
     GetAllocationResponse,
     RequestInfoResponse,
 )
+from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
@@ -345,6 +348,70 @@ async def get_api_key_info(
         "name": api_key_info[sql.NAME],
         "created_at": api_key_info[sql.CREATED_AT],
     }
+
+
+@app.post("/allocate_bt", response_model=AllocateAssetsResponse)
+async def allocate_bt(body: BTAlphaPoolRequest) -> AllocateAssetsResponse | None:
+    """
+    Simplified endpoint for Bittensor alpha token pool allocations.
+
+    Args:
+        body (BTAlphaPoolRequest): Contains:
+            - netuids: list of subnet UIDs
+            - total_assets: Total assets to allocate (in RAO)
+            - num_allocs: Number of miner allocations to receive
+
+    Returns:
+        AllocateAssetsResponse: The allocations response
+    """
+    # Return error if total assets is <= 0
+    if body.total_assets <= MIN_TOTAL_ASSETS_AMOUNT:
+        raise HTTPException(status_code=400, detail="Total assets must be greater than 0")
+
+    # Construct pools dictionary
+    pools = {}
+    for netuid in body.netuids:
+        if netuid == 0:
+            raise HTTPException(
+                status_code=400, detail="Invalid subnet netuid - root (subnet 0) does not have an alpha token pool"
+            )
+        pool = PoolFactory.create_pool(
+            pool_type=POOL_TYPES.BT_ALPHA, netuid=netuid, pool_data_provider_type=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET
+        )
+        pools[str(netuid)] = pool
+
+    # Construct the assets and pools structure
+    assets_and_pools = {"pools": pools, "total_assets": body.total_assets}
+
+    bt.logging.info("Querying miners...")
+
+    axon_times, result = await query_top_n_miners(
+        core_validator,
+        n=body.num_allocs,
+        assets_and_pools=assets_and_pools,
+        request_type=REQUEST_TYPES.ORGANIC,
+        user_address=ADDRESS_ZERO,
+    )
+
+    request_uuid = str(uuid.uuid4()).replace("-", "")
+    to_ret = dict(list(result.items())[: body.num_allocs])
+
+    ret = AllocateAssetsResponse(allocations=to_ret, request_uuid=request_uuid)
+
+    with sql.get_db_connection() as conn:
+        sql.log_allocations(
+            conn,
+            ret.request_uuid,
+            core_validator.metagraph.hotkeys,
+            assets_and_pools,
+            {},  # Empty metadata
+            ret.allocations,
+            axon_times,
+            REQUEST_TYPES.ORGANIC,
+            None,  # No scoring period
+        )
+
+    return ret
 
 
 async def main() -> None:
