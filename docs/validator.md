@@ -156,7 +156,7 @@ Please see [docs/api_usage.md](api_usage.md) for more information on how to use 
 
 We provide a Docker image for easy deployment of validators. Here's how to run a validator using Docker:
 
-1. Run using docker-compose on mainnet with environment variables:
+1. Run using `docker compose` on mainnet with environment variables:
 ```bash
 NETUID=10 \
 NETWORK=wss://entrypoint-finney.opentensor.ai:443 \
@@ -165,7 +165,7 @@ WALLET_HOTKEY=WALLET_HOTKEY \
 AXON_PORT=AXON_PORT \
 API_PORT=API_PORT \
 WANDB_OFF=false \
-docker-compose up -d
+docker compose up -d
 ```
 
 This will:
@@ -178,15 +178,15 @@ This will:
 2. View logs:
 ```bash
 # View all logs
-docker-compose logs -f
+docker compose logs -f
 
 # View only validator logs
-docker-compose logs -f sturdy-validator
+docker compose logs -f sturdy-validator
 ```
 
 3. Stop the validator:
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Docker Environment Variables
@@ -203,7 +203,7 @@ docker-compose down
 
 ### Docker Volumes
 
-The docker-compose configuration mounts these volumes:
+The docker compose configuration mounts these volumes:
 
 - `.:/app` - Mounts the current directory to allow database persistence
 - `~/.bittensor/wallets/:/root/.bittensor/wallets` - Mounts your local wallet directory
@@ -212,7 +212,7 @@ The docker-compose configuration mounts these volumes:
 
 The included watchtower service will automatically check for new Docker image versions every 30 seconds and update your validator container if a new version is available.
 
-To disable auto-updates, remove the watchtower service from your docker-compose.yml file.
+To disable auto-updates, remove the watchtower service from your docker compose.yml file.
 
 ### Examples
 
@@ -222,10 +222,10 @@ WALLET_NAME=myvalidator \
 WALLET_HOTKEY=mykey \
 AXON_PORT=9001 \
 API_PORT=9000 \
-docker-compose up -d
+docker compose up -d
 ```
 
 Run with wandb disabled:
 ```bash
-WANDB_OFF=true docker-compose up -d
+WANDB_OFF=true docker compose up -d
 ```
