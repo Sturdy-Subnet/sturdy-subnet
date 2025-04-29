@@ -123,7 +123,7 @@ sturdy some-command --help
 
 To get more info about that command!
 
-# Examples
+#### Examples
 
 For example:
 
@@ -151,3 +151,81 @@ For them to use your server, you will need to communicate:
 - The API key you generated for them
 
 Please see [docs/api_usage.md](api_usage.md) for more information on how to use the API.
+
+## Running with Docker
+
+We provide a Docker image for easy deployment of validators. Here's how to run a validator using Docker:
+
+1. Run using docker-compose on mainnet with environment variables:
+```bash
+NETUID=10 \
+NETWORK=wss://entrypoint-finney.opentensor.ai:443 \
+WALLET_NAME=WALLET_NAME \
+WALLET_HOTKEY=WALLET_HOTKEY \
+AXON_PORT=AXON_PORT \
+API_PORT=API_PORT \
+WANDB_OFF=false \
+docker-compose up -d
+```
+
+This will:
+- Initialize the SQLite database
+- Start the validator process with PM2
+- Enable auto-updates using watchtower
+- Mount your local wallets directory
+- Expose the API and Axon ports
+
+2. View logs:
+```bash
+# View all logs
+docker-compose logs -f
+
+# View only validator logs
+docker-compose logs -f sturdy-validator
+```
+
+3. Stop the validator:
+```bash
+docker-compose down
+```
+
+### Docker Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NETUID` | Subnet ID | 10 |
+| `NETWORK` | Subtensor network endpoint | wss://entrypoint-finney.opentensor.ai:443 |  
+| `WALLET_NAME` | Wallet name | default |
+| `WALLET_HOTKEY` | Wallet hotkey | default |
+| `AXON_PORT` | Port for Axon server | 8001 |
+| `API_PORT` | Port for API server | 8000 |
+| `WANDB_OFF` | Disable wandb logging | false |
+
+### Docker Volumes
+
+The docker-compose configuration mounts these volumes:
+
+- `.:/app` - Mounts the current directory to allow database persistence
+- `~/.bittensor/wallets/:/root/.bittensor/wallets` - Mounts your local wallet directory
+
+### Auto-Updates
+
+The included watchtower service will automatically check for new Docker image versions every 30 seconds and update your validator container if a new version is available.
+
+To disable auto-updates, remove the watchtower service from your docker-compose.yml file.
+
+### Examples
+
+Run with custom wallet and ports:
+```bash
+WALLET_NAME=myvalidator \
+WALLET_HOTKEY=mykey \
+AXON_PORT=9001 \
+API_PORT=9000 \
+docker-compose up -d
+```
+
+Run with wandb disabled:
+```bash
+WANDB_OFF=true docker-compose up -d
+```

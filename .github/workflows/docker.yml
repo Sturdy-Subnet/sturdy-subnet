@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: Sturdy-subnet/sturdy-subnet
+  IMAGE_NAME: sturdy-subnet/sturdy-subnet
 
 jobs:
   build-and-push:
