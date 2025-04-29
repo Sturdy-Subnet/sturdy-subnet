@@ -26,7 +26,6 @@ import bittensor as bt
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
@@ -36,7 +35,7 @@ from web3.constants import ADDRESS_ZERO
 
 # import base validator class which takes care of most of the boilerplate
 from sturdy.base.validator import BaseValidatorNeuron
-from sturdy.constants import DB_DIR, MIN_TOTAL_ASSETS_AMOUNT, ORGANIC_SCORING_PERIOD
+from sturdy.constants import DB_DIR, MIN_TOTAL_ASSETS_AMOUNT
 
 # Bittensor Validator Template:
 from sturdy.pools import POOL_TYPES, PoolFactory
@@ -53,8 +52,8 @@ from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.utils.misc import get_synapse_from_body
 
 # api key db
-from sturdy.validator import forward, query_and_score_miners, sql
-from sturdy.validator.forward import get_metadata, query_top_n_miners
+from sturdy.validator import forward, sql
+from sturdy.validator.forward import query_top_n_miners
 
 
 class Validator(BaseValidatorNeuron):
