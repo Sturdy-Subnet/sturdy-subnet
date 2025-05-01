@@ -17,6 +17,19 @@ async def fetch_metagraph(sub: bt.AsyncSubtensor, block: int, netuid: int) -> tu
         return block, None
 
 
+# Create tasks for fetching dynamicinfo for a subnet
+@alru_cache(maxsize=256, ttl=60)
+async def fetch_dynamic_info(sub: bt.AsyncSubtensor, block: int, netuid: int) -> bt.DynamicInfo:
+    try:
+        dynamic_info = await sub.subnet(netuid=netuid, block=block)
+        bt.logging.trace(f"Fetched data for block {block}")
+        return dynamic_info
+    except Exception as e:
+        bt.logging.error(f"Error fetching data for block {block}")
+        bt.logging.exception(e)
+        return None
+
+
 # Create tasks for fetching dividends of nominator from a validator and timestamps
 async def fetch_nominator_dividends(
     sub: bt.AsyncSubtensor, block: int, hotkey: str, metagraph: bt.MetagraphInfo
@@ -60,7 +73,13 @@ async def fetch_total_alpha_stake(
 
 @alru_cache(maxsize=256, ttl=60)
 async def get_vali_avg_apy(
-    subtensor: bt.AsyncSubtensor, netuid: int, hotkey: str, block: int, end_block: int | None, interval: int | None = None
+    subtensor: bt.AsyncSubtensor,
+    netuid: int,
+    hotkey: str,
+    block: int,
+    end_block: int | None,
+    interval: int | None = None,
+    delta_tao: int = 0,
 ) -> int:
     ending_block = end_block if end_block is not None else await subtensor.block
     if block >= ending_block:
@@ -100,13 +119,13 @@ async def get_vali_avg_apy(
             [
                 # TODO: should "7280" be variable? - dependant on tempo (360 on all subnets)?
                 # 7280 is approx. seconds per year /avg block time/360
-                ((1 + (divs / alpha_stake_results[block])) ** 7280) - 1
+                ((1 + (divs / (alpha_stake_results[block] + delta_tao))) ** 7280) - 1
                 for block, divs in nominator_earnings.items()
                 if divs is not None
             ]
         )
+
+        return np.nan_to_num(nominator_apy_pct.mean())
     except Exception as e:
         bt.logging.warn(f"Error calculating alpha apy, assuming it to be 0: {e}")
         return 0
-
-    return np.nan_to_num(nominator_apy_pct.mean())

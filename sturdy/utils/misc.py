@@ -87,6 +87,21 @@ def randrange_float(
     return format_num_prec(start + random_step * step, sig=sig, max_prec=max_prec)
 
 
+def generate_random_partition_np(
+    total_sum: int,
+    n: int,
+    rng_gen: np.random.RandomState = np.random.RandomState(),  # noqa: B008
+) -> np.ndarray:
+    if n <= 0 or total_sum < 0:
+        raise ValueError("N must be > 0 and total_sum must be >= 0")
+
+    # Generate N-1 sorted random integers between 0 and total_sum
+    break_points = np.sort(rng_gen.randint(0, total_sum, n - 1))
+
+    # Compute the differences between successive breakpoints
+    return np.diff(np.concatenate(([0], break_points, [total_sum])))
+
+
 async def async_retry_with_backoff(func, *args: Any, **kwargs: Any) -> Any:
     """
     Retry a function with exponential backoff and jitter when rate limited.

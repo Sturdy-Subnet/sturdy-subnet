@@ -24,7 +24,10 @@ async def naive_algorithm(self: BaseMinerNeuron, synapse: AllocateAssets) -> dic
     for uid, pool in pools.items():
         if isinstance(pool, BittensorAlphaTokenPool):
             pools[uid] = PoolFactory.create_pool(
-                pool_type=pool.pool_type, netuid=pool.netuid, pool_data_provider_type=pool.pool_data_provider_type
+                pool_type=pool.pool_type,
+                netuid=pool.netuid,
+                current_amount=pool.current_amount,
+                pool_data_provider_type=pool.pool_data_provider_type,
             )
         else:
             pools[uid] = PoolFactory.create_pool(

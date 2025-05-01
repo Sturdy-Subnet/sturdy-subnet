@@ -70,7 +70,7 @@ async def forward(self) -> Any:
         try:
             challenge_data = await generate_challenge_data(chain_data_provider)
         except Exception as e:
-            bt.logging.error(f"Failed to generate challenge data: {e}")
+            bt.logging.exception(f"Failed to generate challenge data: {e}")
             continue
 
         request_uuid = str(uuid.uuid4()).replace("-", "")

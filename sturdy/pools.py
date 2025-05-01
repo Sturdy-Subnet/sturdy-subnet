@@ -38,6 +38,7 @@ from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import (
     async_retry_with_backoff,
+    generate_random_partition_np,
     getReserveFactor,
     rayMul,
     retry_with_backoff,
@@ -216,6 +217,7 @@ class BittensorAlphaTokenPool(BaseModel):
     pool_model_disc: Literal["BT_ALPHA"] = Field(default="BT_ALPHA", description="pool model discriminator")
     pool_type: POOL_TYPES | str = Field(default=POOL_TYPES.BT_ALPHA, description="type of pool")
     netuid: int  # netuid of subnet
+    current_amount: int  # TAO value of alpha tokens deposited in pool at this moment in rao
     # TODO: support multi-vali staking in the future?
     # NOTE: see TODO(provider)
     pool_data_provider_type: POOL_DATA_PROVIDER_TYPE | str = Field(
@@ -1290,8 +1292,15 @@ async def gen_bt_alpha_pools(
         }
     }
 
-    for subnet in selected_subnets:
-        pool: BittensorAlphaTokenPool = PoolFactory.create_pool(pool_type=POOL_TYPES.BT_ALPHA, netuid=subnet.netuid)
+    # randomly generate amount that is already allocated across the pools
+    total_allocated = rng_gen.randint(0, TOTAL_RAO + 1)
+    # generate an array of random integer amounts for each subnet that add up to TOTAL_RAO
+    current_amounts = generate_random_partition_np(total_allocated, len(selected_subnets), rng_gen)
+
+    for idx, subnet in enumerate(selected_subnets):
+        pool: BittensorAlphaTokenPool = PoolFactory.create_pool(
+            pool_type=POOL_TYPES.BT_ALPHA, netuid=subnet.netuid, current_amount=current_amounts[idx]
+        )
         challenge_data["assets_and_pools"]["pools"][str(pool.netuid)] = pool
 
     return challenge_data

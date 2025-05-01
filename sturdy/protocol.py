@@ -99,6 +99,7 @@ class BTAlphaPoolRequest(BaseModel):
 
     netuids: list[int]
     total_assets: int
+    current_allocations: dict[int, int] = Field(default={}, description="current allocations across alpha token pools")
     num_allocs: int = Field(default=1, description="number of miner allocations to receive")
 
 
