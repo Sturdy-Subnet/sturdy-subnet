@@ -175,8 +175,9 @@ async def annualized_yield_pct(
                             _, alpha_lost_bal = dynamic_info.tao_to_alpha_with_slippage(Balance.from_rao(delta))
                             alpha_lost = alpha_lost_bal.rao
                         elif delta < 0:
-                            alpha_amount = int(abs(delta) / dynamic_info.price)
-                            _, alpha_lost = dynamic_info.alpha_to_tao_with_slippage(Balance.from_rao(alpha_amount))
+                            alpha_num = int(abs(delta) / dynamic_info.price)
+                            _, tao_lost_bal = dynamic_info.alpha_to_tao_with_slippage(Balance.from_rao(alpha_num))
+                            alpha_lost = int(tao_lost_bal.rao * (last_price / 1e9))
 
                         curr_price = pool._price_rao
                         delta_tao = Balance.from_rao(delta).tao
@@ -189,12 +190,20 @@ async def annualized_yield_pct(
                             delta_tao=delta_tao,
                         )
 
-                        alpha_amount = int((initial_alloc - alpha_lost) * (1 + annualized_alpha_apy))
-                        tao_pct_return = ((alpha_amount * curr_price) - (initial_alloc * last_price)) / (
-                            alpha_amount * curr_price
-                        )
+                        initial_amount = int(initial_alloc / (last_price / 1e9) - alpha_lost)
+                        alpha_amount = int((initial_amount) * (1 + annualized_alpha_apy))
+                        tao_pct_return = ((alpha_amount * (curr_price / 1e9)) - (initial_alloc)) / (initial_alloc)
 
-                        total_yield += int(tao_pct_return * alpha_amount)
+                        total_yield += int(tao_pct_return * initial_alloc)
+                        ## log the info above
+                        bt.logging.debug(
+                            f"initial amount: {initial_amount}, alpha amount: {alpha_amount}, \
+                            delta_tao: {delta_tao}, annualized alpha apy: {annualized_alpha_apy}, \
+                            tao_pct_return: {tao_pct_return}, initial_alloc: {initial_alloc}, \
+                            current_amount: {pool.current_amount}, delta: {delta}, \
+                            alpha_lost: {alpha_lost}, last_price: {last_price}, \
+                            last_block: {last_block}, current_block: {current_block}"
+                        )
                 except Exception as e:
                     bt.logging.error("Error calculating annualized pct yield, skipping:")
                     bt.logging.exception(e)
