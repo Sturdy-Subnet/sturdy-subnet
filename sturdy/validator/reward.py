@@ -22,12 +22,13 @@ from typing import cast
 import bittensor as bt
 import numpy.typing as npt
 from async_lru import alru_cache
+from bittensor import Balance
 from web3 import Web3
 
 from sturdy.constants import QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo
-from sturdy.utils.bt_alpha import get_vali_avg_apy
+from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins
@@ -163,21 +164,46 @@ async def annualized_yield_pct(
                         last_block = metadata["block"]
                         last_price = metadata["price_rao"]
 
+                        dynamic_info: bt.DynamicInfo = await fetch_dynamic_info(
+                            sub=pool_data_provider, block=last_block, netuid=pool.netuid
+                        )
+                        delta = initial_alloc - pool.current_amount
+
+                        # consider slippage
+                        alpha_lost = 0
+                        if delta > 0:
+                            _, alpha_lost_bal = dynamic_info.tao_to_alpha_with_slippage(Balance.from_rao(delta))
+                            alpha_lost = alpha_lost_bal.rao
+                        elif delta < 0:
+                            alpha_num = int(abs(delta) / dynamic_info.price)
+                            _, tao_lost_bal = dynamic_info.alpha_to_tao_with_slippage(Balance.from_rao(alpha_num))
+                            alpha_lost = int(tao_lost_bal.rao * (last_price / 1e9))
+
                         curr_price = pool._price_rao
+                        delta_tao = Balance.from_rao(delta).tao
                         annualized_alpha_apy = await get_vali_avg_apy(
                             subtensor=pool_data_provider,
                             netuid=pool.netuid,
                             hotkey=vali_hotkey,
                             block=last_block,
                             end_block=current_block,
+                            delta_tao=delta_tao,
                         )
 
-                        alpha_amount = int(initial_alloc * (1 + annualized_alpha_apy))
-                        tao_pct_return = ((alpha_amount * curr_price) - (initial_alloc * last_price)) / (
-                            alpha_amount * curr_price
-                        )
+                        initial_amount = int(initial_alloc / (last_price / 1e9) - alpha_lost)
+                        alpha_amount = int((initial_amount) * (1 + annualized_alpha_apy))
+                        tao_pct_return = ((alpha_amount * (curr_price / 1e9)) - (initial_alloc)) / (initial_alloc)
 
-                        total_yield += int(tao_pct_return * alpha_amount)
+                        total_yield += int(tao_pct_return * initial_alloc)
+                        ## log the info above
+                        bt.logging.debug(
+                            f"initial amount: {initial_amount}, alpha amount: {alpha_amount}, \
+                            delta_tao: {delta_tao}, annualized alpha apy: {annualized_alpha_apy}, \
+                            tao_pct_return: {tao_pct_return}, initial_alloc: {initial_alloc}, \
+                            current_amount: {pool.current_amount}, delta: {delta}, \
+                            alpha_lost: {alpha_lost}, last_price: {last_price}, \
+                            last_block: {last_block}, current_block: {current_block}"
+                        )
                 except Exception as e:
                     bt.logging.error("Error calculating annualized pct yield, skipping:")
                     bt.logging.exception(e)
@@ -288,6 +314,7 @@ async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.As
             new_pool = PoolFactory.create_pool(
                 pool_type=pool["pool_type"],
                 netuid=int(pool["netuid"]),
+                current_amount=int(pool["current_amount"]),
                 pool_data_provider_type=pool["pool_data_provider_type"],
             )
         else:

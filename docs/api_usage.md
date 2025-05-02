@@ -122,11 +122,26 @@ Here's an example of a request to obtain a suggestion on how to allocate TAO acr
 curl -X POST \
   http://{HOST_ADDRESS}/allocate_bt \
   -H 'Content-Type: application/json
-  -H 'Authorization : Bearer {API_KEY}' \
+  -H 'Authorization: Bearer {API_KEY}' \
   -d '{
     "netuids": [3, 10, 64],
     "total_assets": 100000000000,
     "num_allocs": 1
+}'
+```
+
+Optionally, you may also specify how much you may have already allocated across the pools. This is useful information to provide if you want the miners to account for slippage when rebalancing your allocations:
+
+```bash
+curl -X POST \
+  http://{HOST_ADDRESS}/allocate_bt \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer {API_KEY}' \
+  -d '{
+    "netuids": [3, 10, 64],
+    "total_assets": 100000000000,
+    "num_allocs": 1
+    "current_allocations": {"3": 25000000000}
 }'
 ```
 
@@ -135,6 +150,7 @@ Some annotations are provided below to further help understand the request forma
     "netuids": [3, 10, 64], # netuids of the subnets miners can return allocations for
     "total_assets": 100000000000, # total assets available to a miner to allocate (in RAO - 1e9 RAO = 1 TAO)
     "num_allocs": 1 # number of top allocations to return - by default this is set to 1
+    "current_allocations": {"3": 25000000000} # current allocations across the pools - this is used to determine how much to allocate to each pool
 }
 ```
 

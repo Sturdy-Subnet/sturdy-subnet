@@ -231,6 +231,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
             new_pool = PoolFactory.create_pool(
                 pool_type=pool.pool_type,
                 netuid=int(pool.netuid),
+                current_amount=int(pool.current_amount),
                 pool_data_provider_type=synapse.pool_data_provider,
             )
         else:
@@ -369,15 +370,28 @@ async def allocate_bt(body: BTAlphaPoolRequest) -> AllocateAssetsResponse | None
 
     # Construct pools dictionary
     pools = {}
+    total_amount_alloced = 0
     for netuid in body.netuids:
         if netuid == 0:
             raise HTTPException(
                 status_code=400, detail="Invalid subnet netuid - root (subnet 0) does not have an alpha token pool"
             )
+        current_allocation = body.current_allocations.get(netuid, 0)
         pool = PoolFactory.create_pool(
-            pool_type=POOL_TYPES.BT_ALPHA, netuid=netuid, pool_data_provider_type=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET
+            pool_type=POOL_TYPES.BT_ALPHA,
+            netuid=netuid,
+            current_amount=current_allocation,
+            pool_data_provider_type=POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET,
         )
+        total_amount_alloced += pool.current_amount
         pools[str(netuid)] = pool
+
+    # checked that total assets is greater than the sum of current allocations
+    if body.total_assets <= total_amount_alloced:
+        raise HTTPException(
+            status_code=400,
+            detail="Total assets must be greater than the sum of current allocations",
+        )
 
     # Construct the assets and pools structure
     assets_and_pools = {"pools": pools, "total_assets": body.total_assets}
