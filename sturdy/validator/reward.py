@@ -196,12 +196,13 @@ async def annualized_yield_pct(
 
                         total_yield += int(tao_pct_return * initial_alloc)
                         ## log the info above
-                        bt.logging.debug(
+                        bt.logging.trace(
                             f"initial amount: {initial_amount}, alpha amount: {alpha_amount}, \
                             delta_tao: {delta_tao}, annualized alpha apy: {annualized_alpha_apy}, \
                             tao_pct_return: {tao_pct_return}, initial_alloc: {initial_alloc}, \
                             current_amount: {pool.current_amount}, delta: {delta}, \
                             alpha_lost: {alpha_lost}, last_price: {last_price}, \
+                            current_price: {curr_price} \
                             last_block: {last_block}, current_block: {current_block}"
                         )
                 except Exception as e:
