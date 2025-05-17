@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Initialize the database if it doesn't exist
-dbmate --url "sqlite:/app/validator_database.db" up
+# dbmate --url "sqlite:/app/validator_database.db" up
 
 # Create logs directory if it doesn't exist
 mkdir -p /app/logs

@@ -7,8 +7,10 @@ services:
       - "${API_PORT:-8000}:${API_PORT:-8000}"
       - "${AXON_PORT:-8001}:${API_PORT:-8001}"
     volumes:
-      - .:/app
+      - ${DB_DIR:-./validator_database.db}:/app/validator_database.db
       - ~/.bittensor/wallets/:/root/.bittensor/wallets
+      - ~/.bittensor/miners/:/root/.bittensor/miners/
+      - .env/:/app/.env
     environment:
       - NETUID=${NETUID:-10}
       - NETWORK=${NETWORK:-wss://entrypoint-finney.opentensor.ai:443}
