@@ -459,7 +459,7 @@ class AaveV3DefaultInterestRateV2Pool(ChainBasedPoolModel):
             bt.logging.error(err)  # type: ignore[]
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @alru_cache(maxsize=256, ttl=60)
+    @alru_cache(maxsize=512, ttl=60)
     async def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
@@ -672,7 +672,7 @@ class AaveV3RateTargetBaseInterestRatePool(ChainBasedPoolModel):
             bt.logging.error(err)  # type: ignore[]
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @alru_cache(maxsize=256, ttl=60)
+    @alru_cache(maxsize=512, ttl=60)
     async def supply_rate(self, amount: int) -> int:
         """Returns supply rate given new deposit amount"""
         try:
@@ -816,7 +816,7 @@ class VariableInterestSturdySiloStrategy(ChainBasedPoolModel):
         self._yield_index = await async_retry_with_backoff(self._pair_contract.functions.pricePerShare().call)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @alru_cache(maxsize=256, ttl=60)
+    @alru_cache(maxsize=512, ttl=60)
     async def supply_rate(self, amount: int) -> int:
         # amount scaled down to the asset's decimals from 18 decimals (wei)
         delta = amount - self._user_deposits
@@ -1009,7 +1009,7 @@ class DaiSavingsRate(ChainBasedPoolModel):
             await self.pool_init(web3_provider)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @alru_cache(maxsize=256, ttl=60)
+    @alru_cache(maxsize=512, ttl=60)
     async def supply_rate(self) -> int:
         RAY = 1e27
         dsr = await async_retry_with_backoff(self._pot_contract.functions.dsr().call)
@@ -1138,7 +1138,7 @@ class MorphoVault(ChainBasedPoolModel):
         return (shares * (total_assets + cls._VIRTUAL_ASSETS)) // (total_shares + cls._VIRTUAL_SHARES)
 
     # last 256 unique calls to this will be cached for the next 60 seconds
-    @alru_cache(maxsize=256, ttl=60)
+    @alru_cache(maxsize=512, ttl=60)
     async def supply_rate(self, amount: int) -> int:
         supply_queue_length = await async_retry_with_backoff(self._vault_contract.functions.supplyQueueLength().call)
         market_ids = [
