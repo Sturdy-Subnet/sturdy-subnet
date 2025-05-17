@@ -345,8 +345,8 @@ async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.As
         miner_uid = miner["miner_uid"]
         if miners_to_score:
             try:
-                prev_hotkey = self.metagraph.hotkeys[int(miner_uid)]
-                new_hotkey = miners_to_score[int(miner_uid)]
+                prev_hotkey = miners_to_score[int(miner_uid)]
+                new_hotkey = self.metagraph.hotkeys[int(miner_uid)]
                 if new_hotkey != prev_hotkey:
                     bt.logging.info(
                         f"Miner with uid {miner_uid} and hotkey {new_hotkey} recently replaced {prev_hotkey}. \
