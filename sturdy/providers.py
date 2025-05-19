@@ -23,17 +23,7 @@ class PoolProviderFactory:
         if provider == POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET:
             return AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url, **kwargs))
         if provider == POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET:
-            # a dict of keyword arguments to pass to the constructor
-            config = {
-                "subtensor": {
-                    "chain_endpoint": url,
-                }
-            }
-            args_config = kwargs.get("config", {})
-            # Merge the default config with the provided config
-            config.update(args_config)
-            kwargs["config"] = bt.config.fromDict(config)
-            subtensor = bt.AsyncSubtensor(**kwargs)
+            subtensor = bt.AsyncSubtensor(url)
             await subtensor.initialize()
             return subtensor
         raise ValueError(f"Unsupported provider type: {provider}")
