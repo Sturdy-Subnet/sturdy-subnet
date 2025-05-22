@@ -205,8 +205,10 @@ docker compose down
 
 The docker compose configuration mounts these volumes:
 
-- `.:/app` - Mounts the current directory to allow database persistence
-- `~/.bittensor/wallets/:/root/.bittensor/wallets` - Mounts your local wallet directory
+- `${DB_DIR:-./validator_database.db}:/app/validator_database.db` - Mounts your local database file for persistence
+- `~/.bittensor/wallets/:/root/.bittensor/wallets` - Mounts wallet directory
+- `~/.bittensor/miners/:/root/.bittensor/miners/` - Mounts miners directory which stores saved weights
+- `.env/:/app/.env` - Mounts your environment configuration file
 
 ### Auto-Updates
 
@@ -220,8 +222,7 @@ Run with custom wallet and ports:
 ```bash
 WALLET_NAME=myvalidator \
 WALLET_HOTKEY=mykey \
-AXON_PORT=9001 \
-API_PORT=9000 \
+API_PORT=3000 \
 docker compose up -d
 ```
 
