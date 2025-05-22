@@ -6,7 +6,7 @@ from async_lru import alru_cache
 
 
 # Create tasks for fetching metagraph data
-@alru_cache(maxsize=512, ttl=60)
+@alru_cache(maxsize=512)
 async def fetch_metagraph(sub: bt.AsyncSubtensor, block: int, netuid: int) -> tuple[int, bt.MetagraphInfo]:
     try:
         metagraph = await sub.get_metagraph_info(netuid=netuid, block=block)
@@ -19,7 +19,7 @@ async def fetch_metagraph(sub: bt.AsyncSubtensor, block: int, netuid: int) -> tu
 
 
 # Create tasks for fetching dynamicinfo for a subnet
-@alru_cache(maxsize=512, ttl=60)
+@alru_cache(maxsize=512)
 async def fetch_dynamic_info(sub: bt.AsyncSubtensor, block: int, netuid: int) -> bt.DynamicInfo:
     try:
         dynamic_info = await sub.subnet(netuid=netuid, block=block)
@@ -32,7 +32,7 @@ async def fetch_dynamic_info(sub: bt.AsyncSubtensor, block: int, netuid: int) ->
 
 
 # Create tasks for fetching dividends of nominator from a validator and timestamps
-@alru_cache(maxsize=512, ttl=60)
+@alru_cache(maxsize=512)
 async def fetch_nominator_dividends(sub: bt.AsyncSubtensor, block: int, hotkey: str, netuid: int) -> tuple[int, int]:
     if netuid is None:
         return block, None, None
@@ -54,7 +54,7 @@ async def fetch_nominator_dividends(sub: bt.AsyncSubtensor, block: int, hotkey: 
         return block, None
 
 
-@alru_cache(maxsize=512, ttl=60)
+@alru_cache(maxsize=512)
 async def fetch_total_alpha_stake(sub: bt.AsyncSubtensor, block: int, hotkey: str, netuid: int) -> tuple[int, float]:
     try:
         uid = await sub.get_uid_for_hotkey_on_subnet(
@@ -72,7 +72,7 @@ async def fetch_total_alpha_stake(sub: bt.AsyncSubtensor, block: int, hotkey: st
         return block, 0
 
 
-@alru_cache(maxsize=512, ttl=60)
+@alru_cache(maxsize=512)
 async def get_vali_avg_apy(
     subtensor: bt.AsyncSubtensor,
     netuid: int,
