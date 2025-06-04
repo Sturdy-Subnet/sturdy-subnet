@@ -328,9 +328,7 @@ def calculate_bin_rewards(
     # TODO: Apply exponential transformation? (disabled for now)
     # rewards = exponentiate_rewards(rewards)  # noqa: ERA001
 
-    # TODO: Fix apply_top_performer_bonus before enabling
-    # Currently, it favors accounts that appear later in the rewards array
-    # rewards = apply_top_performer_bonus(rewards)
+    rewards = apply_top_performer_bonus(rewards)
 
     # Normalize final rewards
     rewards = normalize_rewards(rewards)

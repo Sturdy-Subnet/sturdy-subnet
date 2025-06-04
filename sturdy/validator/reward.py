@@ -36,7 +36,7 @@ from sturdy.validator.sql import get_db_connection, get_miner_responses, get_req
 
 
 @alru_cache(maxsize=512, ttl=60)
-async def get_subtensor_block(subtensor: bt.AsyncSubtensor):
+async def get_subtensor_block(subtensor: bt.AsyncSubtensor) -> int:
     return await subtensor.block
 
 
@@ -127,7 +127,7 @@ async def annualized_yield_pct(
         # assume there is no allocation to that pool if not found
         try:
             allocation = allocations[key]
-        except Exception as e:
+        except Exception:
             bt.logging.trace(f"could not find allocation to {key}, assuming it is 0...")
             allocation = 0
             continue
@@ -169,6 +169,9 @@ async def annualized_yield_pct(
                         )
                         delta = initial_alloc - pool.current_amount
 
+                        # alpha delta (in tao)
+                        alpha_delta_tao = initial_alloc / (last_price / 1e9)
+
                         # consider slippage
                         alpha_lost = 0
                         if delta > 0:
@@ -189,7 +192,7 @@ async def annualized_yield_pct(
                             hotkey=vali_hotkey,
                             block=last_block,
                             end_block=current_block,
-                            delta_tao=delta_tao,
+                            delta_alpha_tao=alpha_delta_tao,
                         )
 
                         initial_amount = int(initial_alloc / (last_price / 1e9) - alpha_lost)

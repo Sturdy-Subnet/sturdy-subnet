@@ -15,7 +15,7 @@ ALLOCATION_SIMILARITY_THRESHOLD = 1e-4  # similarity threshold for plagiarism ch
 
 # Constants for APY-based binning and rewards
 APY_BIN_THRESHOLD_FALLBACK = 1e-5  # Fallback threshold: 0.00001 difference in APY to create new bin
-TOP_PERFORMERS_BONUS = 4.0  # Multiplier for top performing miners
+TOP_PERFORMERS_BONUS = 2.0  # Multiplier for top performing miners
 TOP_PERFORMERS_COUNT = 10  # Number of top performers to receive bonus
 
 NORM_EXP_POW = 16
