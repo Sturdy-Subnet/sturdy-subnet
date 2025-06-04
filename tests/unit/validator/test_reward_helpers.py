@@ -833,7 +833,8 @@ class TestBinRewardHelpers(unittest.IsolatedAsyncioTestCase):
     async def test_apply_top_performer_bonus(self) -> None:
         rewards = np.array([0.5, 0.8, 0.3, 1.0])
 
-        boosted_rewards = apply_top_performer_bonus(rewards)
+        top_indices = [2, 3]  # miner with reward index 2 was faster than 3
+        boosted_rewards = apply_top_performer_bonus(rewards, top_indices)
 
         # Check array type and length
         self.assertIsInstance(boosted_rewards, np.ndarray)
@@ -842,11 +843,8 @@ class TestBinRewardHelpers(unittest.IsolatedAsyncioTestCase):
         # Original array should not be modified
         self.assertFalse(np.array_equal(rewards, boosted_rewards))
 
-        # Get top performers in ascending order
-        top_indices = np.argsort(rewards)[-TOP_PERFORMERS_COUNT:]
-
         # Check that top performers got incrementally larger bonuses
-        for i, idx in enumerate(top_indices):
+        for i, idx in enumerate(top_indices[::-1]):
             expected_bonus = TOP_PERFORMERS_BONUS * (i + 1)
             self.assertEqual(boosted_rewards[idx], rewards[idx] * expected_bonus)
 
