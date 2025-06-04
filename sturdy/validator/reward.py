@@ -31,7 +31,7 @@ from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
-from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins
+from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
 
@@ -86,6 +86,7 @@ def _get_rewards(
 
     # Create APY-based bins
     apy_bins = create_apy_bins(apys)
+    apy_bins = sort_bins_by_processing_time(apy_bins, axon_times)
     bt.logging.debug(f"apy bins: {apy_bins}")
 
     # Calculate rewards based on bins and allocation similarity
