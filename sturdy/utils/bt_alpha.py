@@ -11,11 +11,12 @@ async def fetch_metagraph(sub: bt.AsyncSubtensor, block: int, netuid: int) -> tu
     try:
         metagraph = await sub.get_metagraph_info(netuid=netuid, block=block)
         bt.logging.trace(f"Fetched data for block {block}")
-        return block, metagraph
     except Exception as e:
         bt.logging.error(f"Error fetching data for block {block}")
         bt.logging.exception(e)
         return block, None
+    else:
+        return block, metagraph
 
 
 # Create tasks for fetching dynamicinfo for a subnet
@@ -24,11 +25,12 @@ async def fetch_dynamic_info(sub: bt.AsyncSubtensor, block: int, netuid: int) ->
     try:
         dynamic_info = await sub.subnet(netuid=netuid, block=block)
         bt.logging.trace(f"Fetched data for block {block}")
-        return dynamic_info
     except Exception as e:
         bt.logging.error(f"Error fetching data for block {block}")
         bt.logging.exception(e)
         return None
+    else:
+        return dynamic_info
 
 
 # Create tasks for fetching dividends of nominator from a validator and timestamps
@@ -48,10 +50,11 @@ async def fetch_nominator_dividends(sub: bt.AsyncSubtensor, block: int, hotkey: 
         _, metagraph = await fetch_metagraph(sub=sub, block=block, netuid=netuid)
         dividends = metagraph.alpha_dividends_per_hotkey[uid][1].tao * (1 - take)  # remove validator take
         bt.logging.trace(f"Fetched dividends for block {block}: {dividends}")
-        return block, dividends
     except Exception as e:
         bt.logging.error(f"Error fetching dividends for block {block}: {e}")
         return block, None
+    else:
+        return block, dividends
 
 
 @alru_cache(maxsize=512)

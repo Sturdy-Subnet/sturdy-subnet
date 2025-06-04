@@ -222,7 +222,7 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     if total_assets <= MIN_TOTAL_ASSETS_AMOUNT:
         raise HTTPException(
             status_code=400,
-            detail="Total assets must be greater than 0",
+            detail=f"Total assets must be greater than {MIN_TOTAL_ASSETS_AMOUNT}",
         )
 
     new_pools = {}
@@ -365,8 +365,8 @@ async def allocate_bt(body: BTAlphaPoolRequest) -> AllocateAssetsResponse | None
         AllocateAssetsResponse: The allocations response
     """
     # Return error if total assets is <= 0
-    if body.total_assets <= MIN_TOTAL_ASSETS_AMOUNT:
-        raise HTTPException(status_code=400, detail="Total assets must be greater than 0")
+    if body.total_assets < MIN_TOTAL_ASSETS_AMOUNT:
+        raise HTTPException(status_code=400, detail=f"Total assets must be greater than {MIN_TOTAL_ASSETS_AMOUNT}")
 
     # Construct pools dictionary
     pools = {}
@@ -387,7 +387,7 @@ async def allocate_bt(body: BTAlphaPoolRequest) -> AllocateAssetsResponse | None
         pools[str(netuid)] = pool
 
     # checked that total assets is greater than the sum of current allocations
-    if body.total_assets <= total_amount_alloced:
+    if body.total_assets < total_amount_alloced:
         raise HTTPException(
             status_code=400,
             detail="Total assets must be greater than the sum of current allocations",
