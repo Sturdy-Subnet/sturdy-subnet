@@ -7,6 +7,7 @@ from sturdy.constants import (
     APY_BIN_THRESHOLD_FALLBACK,
     NORM_EXP_POW,
     QUERY_TIMEOUT,
+    SIM_PENALTY_INCREMENT,
     TOP_PERFORMERS_BONUS,
     TOP_PERFORMERS_COUNT,
 )
@@ -188,10 +189,11 @@ def apply_similarity_penalties(
     assets_and_pools: dict,
     miner_uids: list[str],
     similarity_threshold: float = ALLOCATION_SIMILARITY_THRESHOLD,
+    penalty_increment: float = SIM_PENALTY_INCREMENT,
 ) -> np.ndarray:
     """
     Calculate similarity penalties within each bin, considering response times.
-    Penalty increases with each similar allocation found from earlier miners.
+    Uses penalty scaling for more aggressive punishment of similarities.
     """
     penalties = np.zeros(len(miner_uids))
     uid_to_idx = {uid: idx for idx, uid in enumerate(miner_uids)}
@@ -209,7 +211,6 @@ def apply_similarity_penalties(
 
             alloc_a = np.array([gmpy2.mpz(val) for val in allocs[uid_a]["allocations"].values()], dtype=object)
             similar_count = 0
-            max_possible_similarities = i  # Maximum number of possible similar earlier miners
 
             # Compare with miners that responded earlier
             for uid_b in sorted_miners[:i]:
@@ -222,9 +223,14 @@ def apply_similarity_penalties(
                 if distance < similarity_threshold:
                     similar_count += 1
 
-            # Calculate penalty based on proportion of similar allocations found
-            if max_possible_similarities > 0:
-                penalties[uid_to_idx[uid_a]] = similar_count / max_possible_similarities
+            # Apply penalty scaling based on number of penalties
+            if similar_count > 0:
+                # More aggressive penalty formula:
+                # - Grows with more similarities
+                # - Caps at 1.0 (full penalty)
+                penalty = min(1.0, similar_count * penalty_increment)
+                idx = uid_to_idx[uid_a]
+                penalties[idx] = max(penalties[idx], penalty)
 
     return penalties
 

@@ -12,6 +12,7 @@ SCORING_WINDOW = 420  # scoring window
 
 TOTAL_ALLOC_THRESHOLD = 0.98
 ALLOCATION_SIMILARITY_THRESHOLD = 1e-4  # similarity threshold for plagiarism checking
+SIM_PENALTY_INCREMENT = 0.1  # penalty increment for plagiarism
 
 # Constants for APY-based binning and rewards
 APY_BIN_THRESHOLD_FALLBACK = 1e-5  # Fallback threshold: 0.00001 difference in APY to create new bin
