@@ -117,11 +117,13 @@ async def get_vali_avg_apy(
             # TODO: should "7280" be variable? - dependant on tempo (360 on all subnets)?
             # 7280 is approx. seconds per year /avg block time/360
             # TODO: should divs scale proportionally with increasing alpha delta?
-            ((1 + (divs / (alpha_stake_results[block] + delta_alpha_tao))) ** 7280) - 1
-            if alpha_stake_results[block] > 0
-            else 0
-            for block, divs in nominator_earnings.items()
-            if divs is not None
+            [
+                ((1 + (divs / (alpha_stake_results[block] + delta_alpha_tao))) ** 7280) - 1
+                if alpha_stake_results[block] > 0
+                else 0
+                for block, divs in nominator_earnings.items()
+                if divs is not None
+            ]
         )
         # debug log mean
         mean_apy_pct = np.nan_to_num(nominator_apy_pct.mean())
