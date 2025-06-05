@@ -186,7 +186,6 @@ async def annualized_yield_pct(
                             alpha_lost = int(tao_lost_bal.rao * (last_price / 1e9))
 
                         curr_price = pool._price_rao
-                        delta_tao = Balance.from_rao(delta).tao
                         annualized_alpha_apy = await get_vali_avg_apy(
                             subtensor=pool_data_provider,
                             netuid=pool.netuid,
@@ -204,7 +203,7 @@ async def annualized_yield_pct(
                         ## log the info above
                         bt.logging.trace(
                             f"initial amount: {initial_amount}, alpha amount: {alpha_amount}, \
-                            delta_tao: {delta_tao}, annualized alpha apy: {annualized_alpha_apy}, \
+                            alpha_delta_tao: {alpha_delta_tao}, annualized alpha apy: {annualized_alpha_apy}, \
                             tao_pct_return: {tao_pct_return}, initial_alloc: {initial_alloc}, \
                             current_amount: {pool.current_amount}, delta: {delta}, \
                             alpha_lost: {alpha_lost}, last_price: {last_price}, \
