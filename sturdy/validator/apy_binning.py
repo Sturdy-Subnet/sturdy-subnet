@@ -305,11 +305,6 @@ def normalize_bin_rewards(
         # Get indices of miners in current bin
         bin_indices = [miner_uids.index(uid) for uid in bin_miners]
 
-        # Apply performance bonus to the TOP_PERFORMERS_COUNT fastest miners in bin 0
-        if bin_idx == 0:
-            top_miner_indices = bin_indices[:TOP_PERFORMERS_COUNT]  # fastest miner is first
-            rewards_after_penalties = apply_top_performer_bonus(rewards_after_penalties, top_miner_indices)
-
         # Get max score in current bin before penalties
         max_score_bin = np.max(rewards_before[bin_indices])
 
@@ -345,6 +340,10 @@ def calculate_bin_rewards(
 
     # Apply penalties to rewards
     post_penalty_rewards = apply_penalties_to_rewards(rewards, penalties)
+
+    # Apply performance bonus to the TOP_PERFORMERS_COUNT fastest miners in bin 0
+    top_miner_indices = bins[0][:TOP_PERFORMERS_COUNT]  # fastest miner is first
+    post_penalty_rewards = apply_top_performer_bonus(post_penalty_rewards, top_miner_indices)
 
     # Normalize rewards within each bin
     rewards = normalize_bin_rewards(bins, rewards, post_penalty_rewards, miner_uids)
