@@ -218,11 +218,11 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
     pools: Any = synapse.assets_and_pools["pools"]
     total_assets: int = synapse.assets_and_pools["total_assets"]
 
-    # return error if total assets is less <= 0
+    # Validate minimum total assets requirement
     if total_assets <= MIN_TOTAL_ASSETS_AMOUNT:
         raise HTTPException(
             status_code=400,
-            detail="Total assets must be greater than 0",
+            detail=f"Total assets must be greater than {MIN_TOTAL_ASSETS_AMOUNT}",
         )
 
     new_pools = {}
@@ -364,9 +364,9 @@ async def allocate_bt(body: BTAlphaPoolRequest) -> AllocateAssetsResponse | None
     Returns:
         AllocateAssetsResponse: The allocations response
     """
-    # Return error if total assets is <= 0
-    if body.total_assets <= MIN_TOTAL_ASSETS_AMOUNT:
-        raise HTTPException(status_code=400, detail="Total assets must be greater than 0")
+    # Validate minimum total assets requirement
+    if body.total_assets < MIN_TOTAL_ASSETS_AMOUNT:
+        raise HTTPException(status_code=400, detail=f"Total assets must be greater than {MIN_TOTAL_ASSETS_AMOUNT}")
 
     # Construct pools dictionary
     pools = {}
@@ -386,8 +386,8 @@ async def allocate_bt(body: BTAlphaPoolRequest) -> AllocateAssetsResponse | None
         total_amount_alloced += pool.current_amount
         pools[str(netuid)] = pool
 
-    # checked that total assets is greater than the sum of current allocations
-    if body.total_assets <= total_amount_alloced:
+    # Validate total assets can cover all current allocations
+    if body.total_assets < total_amount_alloced:
         raise HTTPException(
             status_code=400,
             detail="Total assets must be greater than the sum of current allocations",

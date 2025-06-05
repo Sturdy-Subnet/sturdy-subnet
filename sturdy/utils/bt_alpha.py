@@ -11,11 +11,12 @@ async def fetch_metagraph(sub: bt.AsyncSubtensor, block: int, netuid: int) -> tu
     try:
         metagraph = await sub.get_metagraph_info(netuid=netuid, block=block)
         bt.logging.trace(f"Fetched data for block {block}")
-        return block, metagraph
     except Exception as e:
         bt.logging.error(f"Error fetching data for block {block}")
         bt.logging.exception(e)
         return block, None
+    else:
+        return block, metagraph
 
 
 # Create tasks for fetching dynamicinfo for a subnet
@@ -24,11 +25,12 @@ async def fetch_dynamic_info(sub: bt.AsyncSubtensor, block: int, netuid: int) ->
     try:
         dynamic_info = await sub.subnet(netuid=netuid, block=block)
         bt.logging.trace(f"Fetched data for block {block}")
-        return dynamic_info
     except Exception as e:
         bt.logging.error(f"Error fetching data for block {block}")
         bt.logging.exception(e)
         return None
+    else:
+        return dynamic_info
 
 
 # Create tasks for fetching dividends of nominator from a validator and timestamps
@@ -48,14 +50,15 @@ async def fetch_nominator_dividends(sub: bt.AsyncSubtensor, block: int, hotkey: 
         _, metagraph = await fetch_metagraph(sub=sub, block=block, netuid=netuid)
         dividends = metagraph.alpha_dividends_per_hotkey[uid][1].tao * (1 - take)  # remove validator take
         bt.logging.trace(f"Fetched dividends for block {block}: {dividends}")
-        return block, dividends
     except Exception as e:
         bt.logging.error(f"Error fetching dividends for block {block}: {e}")
         return block, None
+    else:
+        return block, dividends
 
 
 @alru_cache(maxsize=512)
-async def fetch_total_alpha_stake(sub: bt.AsyncSubtensor, block: int, hotkey: str, netuid: int) -> tuple[int, float]:
+async def fetch_total_nominator_alpha_stake(sub: bt.AsyncSubtensor, block: int, hotkey: str, netuid: int) -> tuple[int, float]:
     try:
         uid = await sub.get_uid_for_hotkey_on_subnet(
             hotkey_ss58=hotkey,
@@ -64,12 +67,14 @@ async def fetch_total_alpha_stake(sub: bt.AsyncSubtensor, block: int, hotkey: st
         )
         if uid is None:
             return block, None
-        _, metagraph = await fetch_metagraph(sub=sub, block=block, netuid=netuid)
-        alpha_staked = metagraph.alpha_stake[uid].tao
-        return block, alpha_staked
+        raw_total_hotkey_alpha = await sub.query_subtensor(name="TotalHotkeyAlpha", params=[hotkey, netuid])
+        total_hotkey_alpha = bt.Balance.from_rao(getattr(raw_total_hotkey_alpha, "value", 0), netuid=netuid)
+        alpha_staked = total_hotkey_alpha.tao
     except Exception as e:
-        bt.logging.error(f"Error fetching total alpha stake for {hotkey} at block {block}: {e}")
+        bt.logging.error(f"Error fetching total nominator alpha stake for {hotkey} at block {block}: {e}")
         return block, 0
+    else:
+        return block, alpha_staked
 
 
 @alru_cache(maxsize=512)
@@ -80,7 +85,7 @@ async def get_vali_avg_apy(
     block: int,
     end_block: int | None,
     interval: int | None = None,
-    delta_tao: int = 0,
+    delta_alpha_tao: float = 0.0,
 ) -> int:
     ending_block = end_block if end_block is not None else await subtensor.block
     if block >= ending_block:
@@ -99,23 +104,31 @@ async def get_vali_avg_apy(
     dividends_tasks = [fetch_nominator_dividends(sub=subtensor, block=block, hotkey=hotkey, netuid=netuid) for block in blocks]
     dividends_results = await asyncio.gather(*dividends_tasks)
 
-    alpha_stake_tasks = [fetch_total_alpha_stake(sub=subtensor, block=block, hotkey=hotkey, netuid=netuid) for block in blocks]
+    alpha_stake_tasks = [
+        fetch_total_nominator_alpha_stake(sub=subtensor, block=block, hotkey=hotkey, netuid=netuid) for block in blocks
+    ]
     alpha_stake_results = dict(await asyncio.gather(*alpha_stake_tasks))
 
     nominator_earnings = {block: (divs) for block, divs in dividends_results if divs is not None}
 
+    mean_apy_pct = 0
     try:
         nominator_apy_pct = np.array(
+            # TODO: should "7280" be variable? - dependant on tempo (360 on all subnets)?
+            # 7280 is approx. seconds per year /avg block time/360
+            # TODO: should divs scale proportionally with increasing alpha delta?
             [
-                # TODO: should "7280" be variable? - dependant on tempo (360 on all subnets)?
-                # 7280 is approx. seconds per year /avg block time/360
-                ((1 + (divs / (alpha_stake_results[block] + delta_tao))) ** 7280) - 1 if alpha_stake_results[block] > 0 else 0
+                ((1 + (divs / (alpha_stake_results[block] + delta_alpha_tao))) ** 7280) - 1
+                if alpha_stake_results[block] > 0
+                else 0
                 for block, divs in nominator_earnings.items()
                 if divs is not None
             ]
         )
-
-        return np.nan_to_num(nominator_apy_pct.mean())
+        # debug log mean
+        mean_apy_pct = np.nan_to_num(nominator_apy_pct.mean())
     except Exception as e:
-        bt.logging.warn(f"Error calculating alpha apy, assuming it to be 0: {e}")
+        bt.logging.debug(f"Error calculating alpha apy, assuming it to be 0: {e}")
         return 0
+    else:
+        return mean_apy_pct

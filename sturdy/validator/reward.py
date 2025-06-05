@@ -31,12 +31,12 @@ from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
-from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins
+from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
 
 @alru_cache(maxsize=512, ttl=60)
-async def get_subtensor_block(subtensor: bt.AsyncSubtensor):
+async def get_subtensor_block(subtensor: bt.AsyncSubtensor) -> int:
     return await subtensor.block
 
 
@@ -86,6 +86,7 @@ def _get_rewards(
 
     # Create APY-based bins
     apy_bins = create_apy_bins(apys)
+    apy_bins = sort_bins_by_processing_time(apy_bins, axon_times)
     bt.logging.debug(f"apy bins: {apy_bins}")
 
     # Calculate rewards based on bins and allocation similarity
@@ -127,7 +128,7 @@ async def annualized_yield_pct(
         # assume there is no allocation to that pool if not found
         try:
             allocation = allocations[key]
-        except Exception as e:
+        except Exception:
             bt.logging.trace(f"could not find allocation to {key}, assuming it is 0...")
             allocation = 0
             continue
@@ -169,6 +170,9 @@ async def annualized_yield_pct(
                         )
                         delta = initial_alloc - pool.current_amount
 
+                        # alpha delta (in tao)
+                        alpha_delta_tao = delta / (last_price + 1)
+
                         # consider slippage
                         alpha_lost = 0
                         if delta > 0:
@@ -182,14 +186,13 @@ async def annualized_yield_pct(
                             alpha_lost = int(tao_lost_bal.rao * (last_price / 1e9))
 
                         curr_price = pool._price_rao
-                        delta_tao = Balance.from_rao(delta).tao
                         annualized_alpha_apy = await get_vali_avg_apy(
                             subtensor=pool_data_provider,
                             netuid=pool.netuid,
                             hotkey=vali_hotkey,
                             block=last_block,
                             end_block=current_block,
-                            delta_tao=delta_tao,
+                            delta_alpha_tao=alpha_delta_tao,
                         )
 
                         initial_amount = int(initial_alloc / (last_price / 1e9) - alpha_lost)
@@ -200,7 +203,7 @@ async def annualized_yield_pct(
                         ## log the info above
                         bt.logging.trace(
                             f"initial amount: {initial_amount}, alpha amount: {alpha_amount}, \
-                            delta_tao: {delta_tao}, annualized alpha apy: {annualized_alpha_apy}, \
+                            alpha_delta_tao: {alpha_delta_tao}, annualized alpha apy: {annualized_alpha_apy}, \
                             tao_pct_return: {tao_pct_return}, initial_alloc: {initial_alloc}, \
                             current_amount: {pool.current_amount}, delta: {delta}, \
                             alpha_lost: {alpha_lost}, last_price: {last_price}, \

@@ -6,6 +6,7 @@ from sturdy.constants import (
     ALLOCATION_SIMILARITY_THRESHOLD,
     APY_BIN_THRESHOLD_FALLBACK,
     NORM_EXP_POW,
+    QUERY_TIMEOUT,
     TOP_PERFORMERS_BONUS,
     TOP_PERFORMERS_COUNT,
 )
@@ -85,6 +86,27 @@ def create_apy_bins(apys: dict[str, int], threshold_func=calculate_cv_threshold)
             bins[current_bin].append(uid)
 
     return bins
+
+
+def sort_bins_by_processing_time(apy_bins: dict[int, list[str]], axon_times: dict[str, float]) -> dict[int, list[str]]:
+    """
+    Sorts UIDs within each APY bin by their processing time (fastest first).
+
+    Args:
+        apy_bins: Output from create_apy_bins - dictionary mapping bin indices to lists of UIDs
+        axon_times: Dictionary mapping UIDs to their processing times in seconds
+
+    Returns:
+        Dictionary with same structure as input, but UIDs within each bin sorted by processing time
+    """
+    sorted_bins = {}
+
+    for bin_index, uids in apy_bins.items():
+        # Sort UIDs in this bin by their processing time (ascending - fastest first)
+        sorted_uids = sorted(uids, key=lambda uid: axon_times.get(uid, QUERY_TIMEOUT))
+        sorted_bins[bin_index] = sorted_uids
+
+    return sorted_bins
 
 
 def calculate_allocation_distance(alloc_a: np.ndarray, alloc_b: np.ndarray, total_assets: int) -> float:
@@ -228,15 +250,12 @@ def apply_penalties_to_rewards(rewards: np.ndarray, penalties: np.ndarray) -> np
     return rewards * penalty_multiplier
 
 
-def apply_top_performer_bonus(rewards: np.ndarray) -> np.ndarray:
+def apply_top_performer_bonus(rewards: np.ndarray, indices: list) -> np.ndarray:
     """Apply bonus multiplier to top performing miners."""
     final_rewards = rewards.copy()
 
-    # Get indices of top performers in ascending order
-    top_indices = np.argsort(rewards)[-TOP_PERFORMERS_COUNT:]
-
     # Apply incrementally larger bonuses to each top performer
-    for i, idx in enumerate(top_indices):
+    for i, idx in enumerate(indices[::-1]):
         # Multiply bonus relative to position (higher position = higher bonus)
         final_rewards[idx] *= TOP_PERFORMERS_BONUS * (i + 1)
 
@@ -322,15 +341,15 @@ def calculate_bin_rewards(
     # Apply penalties to rewards
     post_penalty_rewards = apply_penalties_to_rewards(rewards, penalties)
 
+    # Apply performance bonus to the TOP_PERFORMERS_COUNT fastest miners in bin 0
+    top_miner_indices = bins[0][:TOP_PERFORMERS_COUNT]  # fastest miner is first
+    post_penalty_rewards = apply_top_performer_bonus(post_penalty_rewards, top_miner_indices)
+
     # Normalize rewards within each bin
     rewards = normalize_bin_rewards(bins, rewards, post_penalty_rewards, miner_uids)
 
     # TODO: Apply exponential transformation? (disabled for now)
     # rewards = exponentiate_rewards(rewards)  # noqa: ERA001
-
-    # TODO: Fix apply_top_performer_bonus before enabling
-    # Currently, it favors accounts that appear later in the rewards array
-    # rewards = apply_top_performer_bonus(rewards)
 
     # Normalize final rewards
     rewards = normalize_rewards(rewards)
