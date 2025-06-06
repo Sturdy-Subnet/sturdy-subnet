@@ -752,7 +752,7 @@ class TestBinRewardHelpers(unittest.IsolatedAsyncioTestCase):
 
         # Test with default threshold
         penalties = apply_similarity_penalties(
-            bins, allocations, axon_times, self.assets_and_pools, miner_uids, similarity_threshold=1e-4
+            bins, allocations, axon_times, self.assets_and_pools, miner_uids, similarity_threshold=1e-4, penalty_increment=0.1
         )
 
         # Check array type and length
@@ -761,10 +761,66 @@ class TestBinRewardHelpers(unittest.IsolatedAsyncioTestCase):
 
         # First response should have no penalty
         self.assertEqual(penalties[0], 0.0)
-        # Second response similar to first should be penalized
-        self.assertGreater(penalties[1], 0.0)
+        # Second response similar to first should be penalized with 0.1 (1 similarity * 0.1)
+        self.assertAlmostEqual(penalties[1], 0.1, places=6)
         # Third response different from others should not be penalized
         self.assertEqual(penalties[2], 0.0)
+
+    async def test_apply_similarity_penalties_multiple_similarities(self) -> None:
+        """Test penalty scaling with multiple similar allocations."""
+        bins = {0: ["0", "1", "2", "3"]}
+        allocations = {
+            "0": {"allocations": {"pool1": int(100e18), "pool2": 0}},
+            "1": {"allocations": {"pool1": int(100e18), "pool2": 0}},  # Similar to 0
+            "2": {"allocations": {"pool1": int(100e18), "pool2": 0}},  # Similar to 0 and 1
+            "3": {"allocations": {"pool1": 0, "pool2": int(100e18)}},  # Different
+        }
+        axon_times = {
+            "0": 1.0,  # First response
+            "1": 2.0,  # Second response
+            "2": 3.0,  # Third response
+            "3": 4.0,  # Fourth response
+        }
+        miner_uids = ["0", "1", "2", "3"]
+
+        penalties = apply_similarity_penalties(
+            bins, allocations, axon_times, self.assets_and_pools, miner_uids, similarity_threshold=1e-4, penalty_increment=0.1
+        )
+
+        # First response should have no penalty
+        self.assertEqual(penalties[0], 0.0)
+        # Second response has 1 similarity: 1 * 0.1 = 0.1
+        self.assertAlmostEqual(penalties[1], 0.1, places=6)
+        # Third response has 2 similarities: 2 * 0.1 = 0.2
+        self.assertAlmostEqual(penalties[2], 0.2, places=6)
+        # Fourth response is different, no penalty
+        self.assertEqual(penalties[3], 0.0)
+
+    async def test_apply_similarity_penalties_penalty_capping(self) -> None:
+        """Test that penalties are capped at 1.0."""
+        bins = {0: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]}
+        # Create many similar allocations to test the 1.0 cap
+        allocations = {}
+        axon_times = {}
+        for i in range(12):
+            allocations[str(i)] = {"allocations": {"pool1": int(100e18), "pool2": 0}}
+            axon_times[str(i)] = float(i + 1)
+
+        miner_uids = [str(i) for i in range(12)]
+
+        penalties = apply_similarity_penalties(
+            bins, allocations, axon_times, self.assets_and_pools, miner_uids, similarity_threshold=1e-4, penalty_increment=0.1
+        )
+
+        # First response should have no penalty
+        self.assertEqual(penalties[0], 0.0)
+
+        # Test that penalty caps at 1.0
+        # The 11th miner (index 10) would have 10 similarities: 10 * 0.1 = 1.0 (capped)
+        self.assertAlmostEqual(penalties[10], 1.0, places=6)
+
+        # The 12th miner (index 11) would have 11 similarities: min(1.0, 11 * 0.1) = 1.0
+        self.assertAlmostEqual(penalties[11], 1.0, places=6)
 
     async def test_apply_similarity_penalties_with_missing_pools(self) -> None:
         bins = {0: ["0", "1"]}
@@ -779,7 +835,9 @@ class TestBinRewardHelpers(unittest.IsolatedAsyncioTestCase):
         }
         miner_uids = ["0", "1"]
 
-        penalties = apply_similarity_penalties(bins, allocations, axon_times, self.assets_and_pools, miner_uids)
+        penalties = apply_similarity_penalties(
+            bins, allocations, axon_times, self.assets_and_pools, miner_uids, similarity_threshold=1e-4, penalty_increment=0.1
+        )
 
         # Should still work with missing pools (treated as 0)
         self.assertEqual(len(penalties), 2)
@@ -800,12 +858,15 @@ class TestBinRewardHelpers(unittest.IsolatedAsyncioTestCase):
         }
         miner_uids = ["0", "1", "2"]
 
-        penalties = apply_similarity_penalties(bins, allocations, axon_times, self.assets_and_pools, miner_uids)
+        penalties = apply_similarity_penalties(
+            bins, allocations, axon_times, self.assets_and_pools, miner_uids, similarity_threshold=1e-4, penalty_increment=0.1
+        )
 
         self.assertEqual(len(penalties), 3)
         self.assertEqual(penalties[0], 0.0)  # First response
         self.assertEqual(penalties[1], 0.0)  # None allocation should have no penalty
-        self.assertGreater(penalties[2], 0.0)  # Similar to first response
+        # Third response has 1 similarity with first: 1 * 0.1 = 0.1
+        self.assertAlmostEqual(penalties[2], 0.1, places=6)
 
     async def test_format_allocations(self) -> None:
         # Test with valid allocations
