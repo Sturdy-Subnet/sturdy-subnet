@@ -342,7 +342,8 @@ def calculate_bin_rewards(
     post_penalty_rewards = apply_penalties_to_rewards(rewards, penalties)
 
     # Apply performance bonus to the TOP_PERFORMERS_COUNT fastest miners in bin 0
-    top_miner_indices = bins[0][:TOP_PERFORMERS_COUNT]  # fastest miner is first
+    top_miner_uids = bins[0][:TOP_PERFORMERS_COUNT]  # fastest miner is first
+    top_miner_indices = [miner_uids.index(uid) for uid in top_miner_uids if uid in miner_uids]
     post_penalty_rewards = apply_top_performer_bonus(post_penalty_rewards, top_miner_indices)
 
     # Normalize rewards within each bin
