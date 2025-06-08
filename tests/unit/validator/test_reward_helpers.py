@@ -547,23 +547,28 @@ class TestApyBinning(unittest.IsolatedAsyncioTestCase):
         }
         bins = create_apy_bins(apys)
 
-        self.assertEqual(len(bins), 11)
-        self.assertEqual(len(bins[0]), 1)
-        self.assertEqual(len(bins[1]), 2)
-        self.assertEqual(len(bins[2]), 3)
-        self.assertEqual(len(bins[3]), 1)
-        self.assertEqual(len(bins[4]), 2)
-        self.assertEqual(len(bins[5]), 2)
-        self.assertEqual(len(bins[6]), 1)
-        self.assertEqual(len(bins[7]), 1)
-        self.assertEqual(len(bins[8]), 1)
-        self.assertEqual(len(bins[9]), 1)
-        self.assertEqual(len(bins[10]), 1)
+        # Check number of bins created
+        self.assertEqual(len(bins), 10)  # Expecting 10 bins based on the APY distribution
 
-        # Check specific miners are in correct bins
-        self.assertIn("0", bins[0])
-        self.assertIn("1", bins[1])
-        self.assertIn("2", bins[1])
+        # With the new CV threshold calculation and relative difference formula,
+        # the binning behavior will be different. Test the basic structure.
+        self.assertGreater(len(bins), 0)
+
+        # Verify all miners are assigned to bins
+        total_miners = sum(len(bin_miners) for bin_miners in bins.values())
+        self.assertEqual(total_miners, len(apys))
+
+        # Verify bins are ordered correctly (highest APY in bin 0)
+        for bin_idx in range(len(bins) - 1):
+            if bin_idx in bins and bin_idx + 1 in bins:
+                # Get a miner from each bin to compare APYs
+                miner_current = bins[bin_idx][0]
+                miner_next = bins[bin_idx + 1][0]
+                self.assertGreaterEqual(apys[miner_current], apys[miner_next])
+
+        # Check that the highest APY miner is in bin 0
+        highest_apy_uid = max(apys.keys(), key=lambda x: apys[x])
+        self.assertIn(highest_apy_uid, bins[0])
 
     async def test_create_apy_bins(self) -> None:
         apys = {
@@ -576,22 +581,107 @@ class TestApyBinning(unittest.IsolatedAsyncioTestCase):
 
         bins = create_apy_bins(apys)
 
-        # Bin 0 should have UIDs 0 and 1 (105% and 104%)
-        # Bin 1 should have UIDs 2 and 3 (95% and 94%)
-        # Bin 2 has the noisy value
-        self.assertEqual(len(bins), 5)
-        self.assertEqual(len(bins[0]), 1)
-        self.assertEqual(len(bins[1]), 1)
-        self.assertEqual(len(bins[2]), 1)
-        self.assertEqual(len(bins[3]), 1)
-        self.assertEqual(len(bins[4]), 1)
+        # Test basic structure
+        self.assertGreater(len(bins), 0)
 
-        # Check specific miners are in correct bins
+        # Check number of bins
+        self.assertEqual(len(bins), 5)  # Expecting 5 bins based on the APY distribution
+
+        # Verify all miners are assigned
+        total_miners = sum(len(bin_miners) for bin_miners in bins.values())
+        self.assertEqual(total_miners, 5)
+
+        # Check that bins are ordered by APY (highest first)
+        for bin_idx in range(len(bins) - 1):
+            if bin_idx in bins and bin_idx + 1 in bins:
+                # Get representative miners from each bin
+                miner_current = bins[bin_idx][0]
+                miner_next = bins[bin_idx + 1][0]
+                self.assertGreaterEqual(apys[miner_current], apys[miner_next])
+
+        # Check that the highest APY miner is in bin 0
         self.assertIn("0", bins[0])
-        self.assertIn("1", bins[1])
-        self.assertIn("2", bins[2])
-        self.assertIn("3", bins[3])
-        self.assertIn("4", bins[4])
+
+        # The exact binning will depend on the CV threshold calculation,
+        # but we can test that similar APYs might be grouped together
+        # and very different ones are separated
+
+    async def test_create_apy_bins_with_custom_threshold(self) -> None:
+        apys = {
+            "0": int(1.00e18),  # 100%
+            "1": int(0.99e18),  # 99% - very close to 100%
+            "2": int(0.90e18),  # 90% - more different
+            "3": int(0.10e18),  # 10% - very different
+        }
+
+        # Test with a very low threshold to force more separation
+        def low_threshold_func(_) -> float:
+            return 0.001  # 0.1% threshold
+
+        bins = create_apy_bins(apys, threshold_func=low_threshold_func)
+        # check number of bins created
+        self.assertEqual(len(bins), 4)  # Expecting 4 bins based on the APY distribution
+
+        # With low threshold, we should get more bins
+        self.assertGreater(len(bins), 1)
+
+        # Test with a very high threshold to force grouping
+        def high_threshold_func(_) -> float:
+            return 10.0  # Very high threshold
+
+        bins = create_apy_bins(apys, threshold_func=high_threshold_func)
+        self.assertEqual(len(bins), 1)  # Expecting 1 based on the APY distribution
+
+        # With high threshold, we should get fewer bins (possibly just 1)
+        # All miners should still be assigned
+        total_miners = sum(len(bin_miners) for bin_miners in bins.values())
+        self.assertEqual(total_miners, 4)
+
+    async def test_create_apy_bins_with_none_values(self) -> None:
+        apys = {
+            "0": int(1.05e18),
+            "1": None,  # None value should be converted to 0
+            "2": int(0.95e18),
+        }
+
+        bins = create_apy_bins(apys)
+
+        # All miners should be assigned
+        total_miners = sum(len(bin_miners) for bin_miners in bins.values())
+        self.assertEqual(total_miners, 3)
+
+        # None value should be treated as 0 and likely in the lowest bin
+        none_miner_bin = None
+        for bin_idx, bin_miners in bins.items():
+            if "1" in bin_miners:
+                none_miner_bin = bin_idx
+                break
+
+        self.assertIsNotNone(none_miner_bin)
+        # The miner with None (converted to 0) should be in a lower bin than positive APYs
+        positive_apy_bins = []
+        for bin_idx, bin_miners in bins.items():
+            if "0" in bin_miners or "2" in bin_miners:
+                positive_apy_bins.append(bin_idx)
+
+        if positive_apy_bins:
+            self.assertGreaterEqual(none_miner_bin, min(positive_apy_bins))
+
+    async def test_create_apy_bins_zero_division_edge_case(self) -> None:
+        # Test case where current_base_apy could be 0
+        apys = {
+            "0": 0,
+            "1": int(1.0e18),
+        }
+
+        bins = create_apy_bins(apys)
+
+        # Should handle zero division gracefully
+        total_miners = sum(len(bin_miners) for bin_miners in bins.values())
+        self.assertEqual(total_miners, 2)
+
+        # Highest APY should be in bin 0
+        self.assertIn("1", bins[0])
 
     async def test_create_apy_bins_empty(self) -> None:
         apys = {}

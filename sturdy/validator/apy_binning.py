@@ -14,7 +14,7 @@ from sturdy.pools import ChainBasedPoolModel
 from sturdy.protocol import AllocationsDict
 
 
-def calculate_cv_threshold(apys: list[int]) -> float:
+def calculate_cv_threshold(apys: list[gmpy2.mpz]) -> float:
     """
     Calculate the coefficient of variation (CV) threshold for APYs.
     Filters out lower APYs dynamically by increasing percentile cutoff
@@ -22,10 +22,10 @@ def calculate_cv_threshold(apys: list[int]) -> float:
     """
     # Convert APY values to a NumPy array and clean up bad data
     apy_array = np.nan_to_num(
-        np.array(apys, dtype=np.float64),
-        nan=0.0,  # Replace NaNs with 0
-        posinf=0.0,  # Replace +inf with 0
-        neginf=0.0,  # Replace -inf with 0
+        np.array(apys, dtype=gmpy2.mpz),
+        nan=0.0,
+        posinf=0.0,
+        neginf=0.0,
     )
 
     # Dynamically estimate the threshold using high-percentile APYs
@@ -36,7 +36,8 @@ def calculate_cv_threshold(apys: list[int]) -> float:
         if high_apys.size == 0:
             continue
 
-        std = np.std(high_apys)
+        # manually calculate std to avoid numpy issues with gmpy2.mpz
+        std = (np.sum((high_apys - np.mean(high_apys)) ** 2) / (high_apys.size - 1)) ** 0.5
         mean = np.mean(high_apys)
 
         if mean > 0 and std > 0:
@@ -56,6 +57,8 @@ def create_apy_bins(apys: dict[str, int], threshold_func=calculate_cv_threshold)
     Returns:
         Dictionary mapping bin indices to lists of miner UIDs
     """
+    # convert apys to gmpy2.mpz for precision
+    apys = {uid: gmpy2.mpz(apy) if apy is not None else gmpy2.mpz(0) for uid, apy in apys.items()}
     # Sort APYs in descending order
     sorted_items = sorted(apys.items(), key=lambda x: x[1], reverse=True)
 
@@ -64,6 +67,7 @@ def create_apy_bins(apys: dict[str, int], threshold_func=calculate_cv_threshold)
 
     if not sorted_items:
         return bins
+
     bin_threshold = threshold_func(list(apys.values()))
 
     # Initialize first bin with highest APY miner
@@ -72,9 +76,8 @@ def create_apy_bins(apys: dict[str, int], threshold_func=calculate_cv_threshold)
 
     # Assign miners to bins based on APY differences
     for uid, apy in sorted_items[1:]:
-        # Calculate relative difference from current bin's base APY
-        # Using relative difference: (a - b) / max(|a|, |b|)
-        relative_diff = abs(apy - current_base_apy) / max(abs(current_base_apy), abs(apy), 1)
+        # Calculate relative difference
+        relative_diff = float("inf") if apy == 0 else abs((current_base_apy - apy) / apy)
 
         if relative_diff > bin_threshold:
             # Create new bin
