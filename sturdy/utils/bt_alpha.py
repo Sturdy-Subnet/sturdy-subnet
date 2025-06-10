@@ -4,6 +4,8 @@ import bittensor as bt
 import numpy as np
 from async_lru import alru_cache
 
+from sturdy.constants import MIN_DELEGATE_STAKE
+
 
 # Create tasks for fetching metagraph data
 @alru_cache(maxsize=512)
@@ -119,10 +121,9 @@ async def get_vali_avg_apy(
             # TODO: should divs scale proportionally with increasing alpha delta?
             [
                 ((1 + (divs / (alpha_stake_results[block] + delta_alpha_tao))) ** 7280) - 1
-                if alpha_stake_results[block] > 0
+                if alpha_stake_results[block] > MIN_DELEGATE_STAKE or divs is not None
                 else 0
                 for block, divs in nominator_earnings.items()
-                if divs is not None
             ]
         )
         # debug log mean

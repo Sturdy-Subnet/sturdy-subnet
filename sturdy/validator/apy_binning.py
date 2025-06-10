@@ -257,6 +257,10 @@ def apply_top_performer_bonus(rewards: np.ndarray, indices: list) -> np.ndarray:
     """Apply bonus multiplier to top performing miners."""
     final_rewards = rewards.copy()
 
+    # Check if all top rewards are the same and zero
+    if indices and all(final_rewards[idx] == 0 for idx in indices):
+        return final_rewards
+
     # Apply incrementally larger bonuses to each top performer
     for i, idx in enumerate(indices[::-1]):
         # Multiply bonus relative to position (higher position = higher bonus)
