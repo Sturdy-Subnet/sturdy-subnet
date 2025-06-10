@@ -121,7 +121,7 @@ async def get_vali_avg_apy(
             # TODO: should divs scale proportionally with increasing alpha delta?
             [
                 ((1 + (divs / (alpha_stake_results[block] + delta_alpha_tao))) ** 7280) - 1
-                if alpha_stake_results[block] > MIN_DELEGATE_STAKE or divs is not None
+                if alpha_stake_results[block] > MIN_DELEGATE_STAKE and divs is not None
                 else 0
                 for block, divs in nominator_earnings.items()
             ]
