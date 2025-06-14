@@ -299,7 +299,7 @@ async def query_and_score_miners(
 
         uids_to_delete.append(request_uid)
         # calculate rewards for previous active allocations
-        miner_uids, rewards = await get_rewards(self, active_alloc, data_provider)
+        miner_uids, rewards, should_update_scores = await get_rewards(self, active_alloc, data_provider)
         bt.logging.debug(f"miner rewards: {rewards}")
         bt.logging.debug(f"sim penalities: {self.similarity_penalties}")
 
@@ -309,7 +309,8 @@ async def query_and_score_miners(
 
         # update the moving average scores of the miners
         int_miner_uids = [int(uid) for uid in miner_uids]
-        self.update_scores(rewards, int_miner_uids)
+        if should_update_scores:
+            self.update_scores(rewards, int_miner_uids)
 
     # wipe these allocations from the db after scoring them
     if len(uids_to_delete) > 0:

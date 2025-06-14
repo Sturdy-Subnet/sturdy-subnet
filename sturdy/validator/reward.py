@@ -283,7 +283,7 @@ def filter_allocations(
 
 
 # TODO: we shouldn't need chain_data provider here, use self.pool_data_providers instead
-async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.AsyncSubtensor) -> tuple[list, dict]:
+async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.AsyncSubtensor) -> tuple[list, dict, bool]:
     # a dictionary, miner uids -> apy and allocations
     apys_and_allocations = {}
     miner_uids = []
@@ -380,5 +380,9 @@ async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.As
     if len(miner_uids) < 1:
         return ([], {})
 
+    # if apys_and_allocations empty or apys are all zero, return miner uids, _get_rewards, and False
+    if not apys_and_allocations or all(value["apy"] == 0 for value in apys_and_allocations.values()):
+        bt.logging.warning("APYs are all zero or no APYs found, not updating miner scores")
+        return (miner_uids, _get_rewards(self, apys_and_allocations, assets_and_pools, miner_uids, axon_times), False)
     # get rewards given the apys and allocations(s) with _get_rewards (???)
-    return (miner_uids, _get_rewards(self, apys_and_allocations, assets_and_pools, miner_uids, axon_times))
+    return (miner_uids, _get_rewards(self, apys_and_allocations, assets_and_pools, miner_uids, axon_times), True)
