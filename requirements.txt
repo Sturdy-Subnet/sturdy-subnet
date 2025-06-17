@@ -7,8 +7,8 @@ loguru==0.7.0
 wandb==0.18.7
 annotated-types==0.7.0
 anyio==4.6.2.post1
-bittensor==9.6.0
-bittensor-cli==9.4.1
+bittensor==9.7.0
+bittensor-cli==9.6.0
 colorama==0.4.6
 decorator==5.1.1
 fastapi==0.110.3
