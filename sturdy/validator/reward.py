@@ -222,7 +222,7 @@ async def annualized_yield_pct(
                 total_yield += 0
         
     if tao_lost > 0:
-        total_yield -= yield_loss
+        total_yield -= tao_lost
 
     return wei_div(total_yield, initial_balance)
 
