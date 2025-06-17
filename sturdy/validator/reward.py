@@ -120,8 +120,6 @@ async def annualized_yield_pct(
     
     # if pool type is BT_ALPHA, we need to track tao lost
     tao_lost = 0
-    apy_sum = 0
-    apy_sum_count = 0
 
     seconds_per_year = 31536000
 
@@ -177,23 +175,12 @@ async def annualized_yield_pct(
 
                         # alpha delta (in tao)
                         alpha_delta_tao = delta / (last_price + 1)
-                        
-                        annualized_alpha_apy = await get_vali_avg_apy(
-                            subtensor=pool_data_provider,
-                            netuid=pool.netuid,
-                            hotkey=vali_hotkey,
-                            block=last_block,
-                            end_block=current_block,
-                            delta_alpha_tao=alpha_delta_tao,
-                        )
 
                         # consider slippage
                         alpha_lost = 0
                         if delta > 0:
                             _, alpha_lost_bal = dynamic_info.tao_to_alpha_with_slippage(Balance.from_rao(delta))
                             alpha_lost = alpha_lost_bal.rao
-                            apy_sum += annualized_alpha_apy
-                            apy_sum_count += 1
                         elif delta < 0:
                             alpha_num = int(abs(delta) / dynamic_info.price)
                             _, tao_lost_bal = dynamic_info.alpha_to_tao_with_slippage(
@@ -204,6 +191,14 @@ async def annualized_yield_pct(
                             alpha_lost = alpha_lost_bal.rao
 
                         curr_price = pool._price_rao
+                        annualized_alpha_apy = await get_vali_avg_apy(
+                            subtensor=pool_data_provider,
+                            netuid=pool.netuid,
+                            hotkey=vali_hotkey,
+                            block=last_block,
+                            end_block=current_block,
+                            delta_alpha_tao=alpha_delta_tao,
+                        )
 
                         initial_amount = int(initial_alloc / (last_price / 1e9) - alpha_lost)
                         alpha_amount = int((initial_amount) * (1 + annualized_alpha_apy))
@@ -227,7 +222,6 @@ async def annualized_yield_pct(
                 total_yield += 0
         
     if tao_lost > 0:
-        yield_loss = int(tao_lost * (apy_sum / apy_sum_count if apy_sum_count > 0 else 0))
         total_yield -= yield_loss
 
     return wei_div(total_yield, initial_balance)
