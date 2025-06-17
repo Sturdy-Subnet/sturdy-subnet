@@ -183,7 +183,7 @@ async def annualized_yield_pct(
                             _, tao_lost_bal = dynamic_info.alpha_to_tao_with_slippage(
                                 Balance.from_rao(alpha_num, netuid=pool.netuid)
                             )
-                            alpha_lost = int(tao_lost_bal.rao * (last_price / 1e9))
+                            alpha_lost = int(tao_lost_bal.rao / (last_price / 1e9))
 
                         curr_price = pool._price_rao
                         annualized_alpha_apy = await get_vali_avg_apy(
