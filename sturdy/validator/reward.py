@@ -117,9 +117,6 @@ async def annualized_yield_pct(
     initial_balance = cast(int, assets_and_pools["total_assets"])
     pools = cast(dict[str, ChainBasedPoolModel], assets_and_pools["pools"])
     total_yield = 0
-    
-    # if pool type is BT_ALPHA, we need to track tao lost
-    tao_lost = 0
 
     seconds_per_year = 31536000
 
@@ -174,7 +171,7 @@ async def annualized_yield_pct(
                         delta = initial_alloc - pool.current_amount
 
                         # alpha delta (in tao)
-                        alpha_delta_tao = delta / (last_price + 1)
+                        alpha_delta_tao = delta / last_price
 
                         # consider slippage
                         alpha_lost = 0
@@ -186,9 +183,7 @@ async def annualized_yield_pct(
                             _, tao_lost_bal = dynamic_info.alpha_to_tao_with_slippage(
                                 Balance.from_rao(alpha_num, netuid=pool.netuid)
                             )
-                            tao_lost += tao_lost_bal.rao
-                            _, alpha_lost_bal = dynamic_info.tao_to_alpha_with_slippage(Balance.from_rao(initial_alloc))
-                            alpha_lost = alpha_lost_bal.rao
+                            alpha_lost = int(tao_lost_bal.rao / (last_price / 1e9))
 
                         curr_price = pool._price_rao
                         annualized_alpha_apy = await get_vali_avg_apy(
@@ -199,12 +194,19 @@ async def annualized_yield_pct(
                             end_block=current_block,
                             delta_alpha_tao=alpha_delta_tao,
                         )
+                        
+                        initial_amount_raw = int(initial_alloc / (last_price / 1e9) - alpha_lost)
+                        if initial_amount_raw >= 0:
+                           initial_amount = initial_amount_raw
+                           alpha_amount = int((initial_amount) * (1 + annualized_alpha_apy))
+                           tao_pct_return = ((alpha_amount * (curr_price / 1e9)) - (initial_alloc)) / (initial_alloc)
+                           total_yield += int(tao_pct_return * initial_alloc)
+                        else:
+                           initial_amount = 0 # if initial_amount raw is less than zero than there is no initial amount
+                           alpha_amount = 0 # same can be said for the alpha amount
+                           tao_lost_slippage = alpha_lost * (last_price / 1e9) # but we still want to consider the % loss from slippage - which is done here.
+                           total_yield -= tao_lost_slippage
 
-                        initial_amount = int(initial_alloc / (last_price / 1e9) - alpha_lost)
-                        alpha_amount = int((initial_amount) * (1 + annualized_alpha_apy))
-                        tao_pct_return = ((alpha_amount * (curr_price / 1e9)) - (initial_alloc)) / (initial_alloc)
-
-                        total_yield += int(tao_pct_return * initial_alloc)
                         ## log the info above
                         bt.logging.trace(
                             f"initial amount: {initial_amount}, alpha amount: {alpha_amount}, \
@@ -220,9 +222,6 @@ async def annualized_yield_pct(
                     bt.logging.exception(e)
             case _:
                 total_yield += 0
-        
-    if tao_lost > 0:
-        total_yield -= tao_lost
 
     return wei_div(total_yield, initial_balance)
 
