@@ -194,12 +194,19 @@ async def annualized_yield_pct(
                             end_block=current_block,
                             delta_alpha_tao=alpha_delta_tao,
                         )
+                        
+                        initial_amount_raw = int(initial_alloc / (last_price / 1e9) - alpha_lost)
+                        if initial_amount_raw >= 0:
+                           initial_amount = initial_amount_raw
+                           alpha_amount = int((initial_amount) * (1 + annualized_alpha_apy))
+                           tao_pct_return = ((alpha_amount * (curr_price / 1e9)) - (initial_alloc)) / (initial_alloc)
+                           total_yield += int(tao_pct_return * initial_alloc)
+                        else:
+                           initial_amount = 0 # if initial_amount raw is less than zero than there is no initial amount
+                           alpha_amount = 0 # same can be said for the alpha amount
+                           tao_lost_slippage = alpha_lost * (last_price / 1e9) # but we still want to consider the % loss from slippage - which is done here.
+                           total_yield -= tao_lost_slippage
 
-                        initial_amount = int(initial_alloc / (last_price / 1e9) - alpha_lost)
-                        alpha_amount = int((initial_amount) * (1 + annualized_alpha_apy))
-                        tao_pct_return = ((alpha_amount * (curr_price / 1e9)) - (initial_alloc)) / (initial_alloc)
-
-                        total_yield += int(tao_pct_return * initial_alloc)
                         ## log the info above
                         bt.logging.trace(
                             f"initial amount: {initial_amount}, alpha amount: {alpha_amount}, \
