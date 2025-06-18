@@ -171,7 +171,7 @@ async def annualized_yield_pct(
                         delta = initial_alloc - pool.current_amount
 
                         # alpha delta (in tao)
-                        alpha_delta_tao = delta / (last_price + 1)
+                        alpha_delta_tao = delta / (last_price / 1e9 + 1)
 
                         # consider slippage
                         alpha_lost = 0
