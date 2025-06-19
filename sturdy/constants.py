@@ -4,6 +4,14 @@ QUERY_FREQUENCY = 600  # time in seconds between validator queries
 QUERY_TIMEOUT = 3  # timeout (seconds)
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 
+UNISWAP_V3_LP_QUERY_FREQUENCY = 60  # time in seconds between Uniswap V3 LP queries
+
+# thresholds for the percentage of miners in each gruop before applying penalties to lowest performing miners in each group
+MINER_GROUP_THRESHOLDS = {
+    "alloc": 0.1,  # 10% of miners will be providing lending pool and alpha token pool allocations
+    "uniswap_v3_lp": 0.9,  # 90% of miners will be UniswapV3 liquidity providing miners for TaoFi
+}
+
 MIN_SCORING_PERIOD = 43200  # min. synthetic scoring period in seconds
 MAX_SCORING_PERIOD = 86400  # max. synthetic scoring period in seconds
 SCORING_PERIOD_STEP = 3600  # scoring period increments in seconds

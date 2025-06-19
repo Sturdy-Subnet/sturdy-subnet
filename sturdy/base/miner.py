@@ -19,10 +19,14 @@ import argparse
 import asyncio
 import os
 import traceback
+import typing
 
 import bittensor as bt
 from dotenv import load_dotenv
+from web3 import EthereumTesterProvider, Web3
 
+import sturdy
+from neurons.uniswap_lp import blacklist, priority, uniswap_v3_lp_forward
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import MINER_SYNC_FREQUENCY
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
@@ -71,6 +75,13 @@ class BaseMinerNeuron(BaseNeuron):
             ),
         }
 
+        # init web3 wallet given UNISWAP_POS_OWNER_KEY private key
+        uniswap_pos_owner_key = os.environ.get("UNISWAP_POS_OWNER_KEY")
+        if uniswap_pos_owner_key is None:
+            raise ValueError("You must provide a valid UNISWAP_POS_OWNER_KEY environment variable")
+        self.test_w3 = Web3(EthereumTesterProvider)
+        self.uniswap_pos_owner_key = uniswap_pos_owner_key
+
         # Warn if allowing incoming requests from anyone.
         if not self.config.blacklist.force_validator_permit:
             bt.logging.warning("You are allowing non-validators to send requests to your miner. This is a security risk.")
@@ -89,12 +100,40 @@ class BaseMinerNeuron(BaseNeuron):
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
         )
+        bt.logging.info("Attaching uniswap_v3_lp_forward function to miner axon.")
+        self.axon.attach(
+            forward_fn=self.uniswap_v3_lp_forward,
+            blacklist_fn=self.uniswap_v3_lp_blacklist,
+            priority_fn=self.uniswap_v3_lp_priority,
+        )
         bt.logging.info(f"Axon created: {self.axon}")
 
         # Instantiate runners
         self.should_exit: bool = False
         # Keep the lock if needed for other purposes
         self.lock = asyncio.Lock()
+
+    async def uniswap_v3_lp_forward(
+        self, synapse: sturdy.protocol.UniswapV3PoolLiquidity
+    ) -> sturdy.protocol.UniswapV3PoolLiquidity:
+        """
+        Handles Uniswap V3 pool liquidity requests by setting token IDs and signing the message.
+        """
+        return await uniswap_v3_lp_forward(self, synapse)
+
+    async def uniswap_v3_lp_blacklist(self, synapse: sturdy.protocol.UniswapV3PoolLiquidity) -> typing.Tuple[bool, str]:
+        """
+        Determines whether an incoming Uniswap V3 pool liquidity request should be blacklisted.
+        This method can be customized to implement specific blacklist logic.
+        """
+        return await blacklist(self, synapse)
+
+    async def uniswap_v3_lp_priority(self, synapse: sturdy.protocol.UniswapV3PoolLiquidity) -> float:
+        """
+        Determines the priority of a Uniswap V3 pool liquidity request.
+        This method can be customized to implement specific priority logic.
+        """
+        return await priority(self, synapse)
 
     async def run(self) -> None:
         """

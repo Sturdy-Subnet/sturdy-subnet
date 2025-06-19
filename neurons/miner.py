@@ -21,6 +21,7 @@ import time
 import typing
 
 import bittensor as bt
+from eth_account.datastructures import SignedMessage
 
 # Bittensor Miner Template:
 import sturdy
@@ -64,6 +65,7 @@ class Miner(BaseMinerNeuron):
         """
         bt.logging.debug("forward()")
 
+        bt.logging.debug("Received AllocateAssets synapse.")
         # try use default greedy alloaction algorithm to generate allocations
         try:
             synapse.allocations = await naive_algorithm(self, synapse)
@@ -75,7 +77,7 @@ class Miner(BaseMinerNeuron):
         bt.logging.info(f"sending allocations: {synapse.allocations}")
         return synapse
 
-    async def blacklist(self, synapse: sturdy.protocol.AllocateAssets) -> typing.Tuple[bool, str]:  # noqa: UP006
+    async def blacklist(self, synapse: sturdy.protocol.AllocateAssets) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.

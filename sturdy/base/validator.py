@@ -11,13 +11,14 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import QUERY_FREQUENCY
+from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
 from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
 from sturdy.utils.weight_utils import process_weights_for_netuid
+from sturdy.validator.forward import uniswap_v3_lp_forward
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -41,6 +42,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # set last query time to be 0
         self.last_query_time = 0
+        # Add separate query time for uniswap v3 lp forward
+        self.last_uniswap_v3_lp_query_time = 0
 
         # init wandb
         self.wandb_run_log_count = 0
@@ -64,12 +67,20 @@ class BaseValidatorNeuron(BaseNeuron):
         if bittensor_mainnet_url is None:
             raise ValueError("You must provide a valid subtensor provider url")
 
+        # setup bittensor web3 provider
+        bittensor_web3_url = os.environ.get("BITTENSOR_WEB3_PROVIDER_URL")
+        if bittensor_web3_url is None:
+            raise ValueError("You must provide a valid bittensor web3 provider url")
+
         self.pool_data_providers = {
             POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: await PoolProviderFactory.create_pool_provider(
                 POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, url=eth_provider_url
             ),
             POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: await PoolProviderFactory.create_pool_provider(
                 POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, url=bittensor_mainnet_url
+            ),
+            POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3: await PoolProviderFactory.create_pool_provider(
+                POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3, url=bittensor_web3_url
             ),
         }
 
@@ -105,6 +116,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self._stop_event = asyncio.Event()
         self._tasks = []
         self.last_query_time = 0
+        self.last_uniswap_v3_lp_query_time = 0
         self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.validator.max_workers)
 
     def __del__(self) -> None:
@@ -116,6 +128,8 @@ class BaseValidatorNeuron(BaseNeuron):
     async def start(self) -> None:
         """Start validator tasks"""
         self._tasks.append(asyncio.create_task(self.run_main_loop()))
+        # Add the uniswap v3 lp loop as a separate task
+        self._tasks.append(asyncio.create_task(self.run_uniswap_v3_lp_loop()))
 
     async def stop(self) -> None:
         """Stop all validator tasks"""
@@ -163,6 +177,38 @@ class BaseValidatorNeuron(BaseNeuron):
 
         except Exception as e:
             bt.logging.exception(f"Error in main loop: {e}")
+
+    async def uniswap_v3_lp_forward(self) -> any:
+        """
+        Forward pass for Uniswap V3 LP allocations.
+        This is a placeholder method that can be implemented in the future.
+        """
+        bt.logging.debug("uniswap_v3_lp_forward()")
+        return await uniswap_v3_lp_forward(self)
+
+    async def run_uniswap_v3_lp_loop(self) -> None:
+        """Uniswap V3 LP validator loop running in parallel"""
+        bt.logging.info("Uniswap V3 LP validator starting...")
+
+        try:
+            while not self._stop_event.is_set():
+                current_time = time.time()
+                # Use a different frequency if desired, or make it configurable
+
+                if current_time - self.last_uniswap_v3_lp_query_time > UNISWAP_V3_LP_QUERY_FREQUENCY:
+                    bt.logging.info("Running uniswap_v3_lp_forward")
+
+                    try:
+                        await self.uniswap_v3_lp_forward()
+                    except Exception as e:
+                        bt.logging.exception(f"Error in uniswap_v3_lp_forward: {e}")
+
+                    self.last_uniswap_v3_lp_query_time = current_time
+
+                await asyncio.sleep(1)
+
+        except Exception as e:
+            bt.logging.exception(f"Error in uniswap v3 lp loop: {e}")
 
     def log_metrics(self) -> None:
         """Log metrics to wandb"""

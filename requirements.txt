@@ -12,6 +12,7 @@ bittensor-cli==9.6.0
 colorama==0.4.6
 decorator==5.1.1
 fastapi==0.110.3
+gql==3.5.3
 h11==0.14.0
 msgpack==1.1.0
 msgpack-numpy-opentensor==0.5.0
