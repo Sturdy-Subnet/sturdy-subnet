@@ -315,7 +315,6 @@ async def query_and_score_miners_allocs(
         uids_to_delete.append(request_uid)
         # calculate rewards for previous active allocations
         miner_uids, rewards, should_update_scores = await get_rewards_allocs(self, active_alloc, data_provider)
-        bt.logging.debug(f"miner rewards: {rewards}")
         bt.logging.debug(f"sim penalities: {self.similarity_penalties}")
 
         # TODO: there may be a better way to go about this
@@ -325,6 +324,13 @@ async def query_and_score_miners_allocs(
         # update the moving average scores of the miners
         int_miner_uids = [int(uid) for uid in miner_uids]
         if should_update_scores:
+            # Apply penalties to the lowest performing miners
+            # note that "rewards" is a numpy array of floats
+            sorted_rewards = sorted(zip(int_miner_uids, rewards, strict=False), key=lambda x: x, reverse=True)
+            if len(sorted_rewards) > MINER_GROUP_THRESHOLDS["alloc"]:
+                for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["alloc"] :]:
+                    rewards[int_miner_uids.index(uid)] = 0.0
+            bt.logging.debug(f"miner rewards: {rewards}")
             self.update_scores(rewards, int_miner_uids)
 
     # wipe these allocations from the db after scoring them
@@ -351,7 +357,7 @@ async def query_and_score_miners_allocs(
     return axon_times, sorted_allocs
 
 
-async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[str, float]]:
+async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, float]]:
     """
     Query the network for Uniswap V3 LP positions and score the responses.
     Args:
@@ -365,6 +371,10 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[str, fl
     uids_to_query = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.UNISWAP_V3_LP]
     np.random.shuffle(uids_to_query)
     bt.logging.debug(f"Miners to query for Uniswap V3 LP positions: {uids_to_query}")
+
+    if uids_to_query is None or len(uids_to_query) < 1:
+        bt.logging.error("No miners available to query for allocations.")
+        return [], {}
 
     # much like the pool registry for evm-based pools
     synapse = UniswapV3PoolLiquidity(
@@ -391,16 +401,21 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[str, fl
         web3_provider=self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3],
     )
 
-    # np rewards array
-    rewards = np.array([rewards_dict[uid] for uid in miner_uids], dtype=np.float64)
-    sorted_indices = np.argsort(rewards)[::-1]  # sort in descending order
+    # Sort rewards dict by value in descending order
+    sorted_rewards = sorted(rewards_dict.items(), key=lambda x: x[1], reverse=True)
     if len(rewards_dict) > MINER_GROUP_THRESHOLDS["uniswap_v3_lp"]:
-        # apply penalties to the lowest performing miners
-        penalized_indices = sorted_indices[MINER_GROUP_THRESHOLDS["uniswap_v3_lp"] :]
-        for idx in penalized_indices:
-            rewards[idx] = 0
+        # Apply penalties to the lowest performing miners
+        for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["uniswap_v3_lp"] :]:
+            rewards_dict[uid] = 0
+
+    # Create rewards array for update_scores
+    rewards = np.array([rewards_dict[uid] for uid in miner_uids], dtype=np.float64)
+
+    bt.logging.debug(f"miner rewards: {rewards_dict}")
 
     self.update_scores(rewards, miner_uids)
+
+    return rewards, rewards_dict
 
 
 async def query_top_n_miners(

@@ -36,7 +36,6 @@ from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
 from sturdy.utils.taofi_subgraph import get_uniswap_v3_pool_swaps
-from sturdy.utils.uniswap_pool import get_amounts_for_liquidity
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
@@ -46,7 +45,7 @@ async def get_subtensor_block(subtensor: bt.AsyncSubtensor) -> int:
     return await subtensor.block
 
 
-def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, float]:
+def get_response_times(uids: list[int], responses, timeout: float) -> dict[str, float]:
     """
     Returns a list of axons based on their response times.
 
@@ -279,6 +278,8 @@ def filter_allocations(
         # used to filter out miners who timed out
         # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
+        bt.logging.debug("TIMES:")
+        bt.logging.debug(axon_times)
         if response.allocations is not None and axon_times[uids[response_idx]] < query_timeout:
             filtered_allocs[uids[response_idx]] = {
                 "allocations": response.allocations,
@@ -302,7 +303,7 @@ def filter_allocations(
 # TODO: we shouldn't need chain_data provider here, use self.pool_data_providers instead
 async def get_rewards_allocs(
     self, active_allocation, chain_data_provider: Web3 | bt.AsyncSubtensor
-) -> tuple[list, dict, bool]:
+) -> tuple[list, list, bool]:
     # a dictionary, miner uids -> apy and allocations
     apys_and_allocations = {}
     miner_uids = []
@@ -423,6 +424,7 @@ async def get_rewards_uniswap_v3_lp(
     miner_uids = []
     rewards = {}
     total_fees = 0
+    bt.logging.debug(f"UIDS: {uids}")
     for idx, response in enumerate(responses):
         miner_uid = uids[idx]
         if not isinstance(response, UniswapV3PoolLiquidity):
@@ -470,7 +472,7 @@ async def get_rewards_uniswap_v3_lp(
 
             # signature is valid, get swaps since the last 24 hours - timestamp is in utc
             # Get swaps from the last 24 hours
-            one_day_ago = datetime.utcnow() - timedelta(days=1)
+            one_day_ago = datetime.utcnow() - timedelta(days=8)
             swaps = await get_uniswap_v3_pool_swaps(since=one_day_ago, pool_address=request.pool_address)
 
             # calculate the fees earned by the miner for each swap
