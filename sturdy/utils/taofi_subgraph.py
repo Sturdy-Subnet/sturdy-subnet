@@ -12,6 +12,7 @@ GQL_CLIENT = Client(transport=TRANSPORT, fetch_schema_from_transport=True)
 async def get_uniswap_v3_pool_swaps(since: datetime, pool_address: str, client=GQL_CLIENT) -> dict:
     # Convert datetime to UNIX timestamp (integer)
     timestamp_unix = int(since.timestamp())
+    print(f"Fetching Uniswap V3 pool swaps since {since} (UNIX: {timestamp_unix}) for pool {pool_address}")
 
     # Create the GraphQL query string with the dynamic timestamp
     query = gql(

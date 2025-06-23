@@ -34,6 +34,11 @@ class REQUEST_TYPES(IntEnum):
     SYNTHETIC = 1
 
 
+class MINER_TYPE(IntEnum):
+    ALLOC = 0  # miner that provides lending pool and alpha token pool allocations
+    UNISWAP_V3_LP = 1  # miner that provides Uniswap V3 liquidity providing pools for TaoFi
+
+
 class AlphaTokenPoolAllocation(BaseModel):
     delegate_ss58: str  # hotkey address of validator to delegate to
     amount: int  # amount in rao, 1 tao = 1e9 rao
@@ -207,6 +212,22 @@ class UniswapV3PoolLiquidity(bt.Synapse, UniswapV3PoolLiquidityBase):
             f"token0={self.token0}, token1={self.token1}, token_id={self.token_id}, "
             f"message={self.message}, signature={self.signature})"
         )
+
+
+class QueryMinerTypeBase(BaseModel):
+    """Request model for querying miner type."""
+
+    miner_type: MINER_TYPE | int | str = Field(
+        default=MINER_TYPE.ALLOC,
+        description="Type of miner to query. Defaults to ALLOC.",
+    )
+
+
+class QueryMinerType(bt.Synapse, QueryMinerTypeBase):
+    """Synapse for querying miner type."""
+
+    def __str__(self) -> str:
+        return f"QueryMinerType(miner_type={self.miner_type})"
 
 
 class GetAllocationResponse(BaseModel):

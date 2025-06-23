@@ -11,8 +11,9 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
+from sturdy.constants import QUERY_FREQUENCY, QUERY_TIMEOUT, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
+from sturdy.protocol import MINER_TYPE, QueryMinerType
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
@@ -98,6 +99,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.similarity_penalties = {}
         self.sorted_apys = {}
         self.sorted_axon_times = {}
+        self.miner_types = {}
 
         # Load state
         bt.logging.info("load_state()")
@@ -329,6 +331,30 @@ class BaseValidatorNeuron(BaseNeuron):
         # Sync the metagraph.
         await self.metagraph.sync(subtensor=self.subtensor)
 
+        # Query miners to check what kind of miners they are
+        synapse = QueryMinerType()
+        responses = [
+            await self.dendrite.call(
+                target_axon=axon,
+                synapse=synapse,
+                timeout=QUERY_TIMEOUT,
+                deserialize=False,
+            )
+            for axon in self.metagraph.axons
+        ]
+
+        bt.logging.debug(f"Responses from miners: {responses}")
+
+        # update self.miner_types based on responses
+        for uid, response in enumerate(responses):
+            if response is not None and isinstance(response, QueryMinerType):
+                self.miner_types[uid] = response.miner_type
+            else:
+                # TODO(uniswap_v3_lp): is this necessary?
+                self.miner_types[uid] = MINER_TYPE.ALLOC  # Default to ALLOC if no response
+
+        bt.logging.debug(f"Updated miner types: {self.miner_types}")
+
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
             return
@@ -375,11 +401,16 @@ class BaseValidatorNeuron(BaseNeuron):
         np.put_along_axis(scattered_rewards, uids_tensor, rewards, axis=0)
         bt.logging.debug(f"Scattered rewards: {rewards}")
 
-        # Update scores with rewards produced by this step. shape: [ metagraph.n ]
+        # Only update scores for UIDs that received rewards in this step
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: npt.NDArray = np.clip(
-            np.nan_to_num(alpha * scattered_rewards + (1 - alpha) * self.scores), a_min=0, a_max=1
-        )
+        # mask = scattered_rewards > 0  # Create mask for UIDs with rewards
+        # create mask for the uids that we want to update scores for
+        mask = np.isin(np.arange(len(self.scores)), uids_tensor)
+        if not np.any(mask):
+            bt.logging.debug("No valid UIDs to update scores for.")
+            return
+        bt.logging.debug(f"Mask for updating scores: {mask}")
+        self.scores[mask] = np.clip(alpha * scattered_rewards[mask] + (1 - alpha) * self.scores[mask], a_min=0, a_max=1)
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
     async def save_state(self) -> None:

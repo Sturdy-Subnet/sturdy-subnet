@@ -8,8 +8,8 @@ UNISWAP_V3_LP_QUERY_FREQUENCY = 60  # time in seconds between Uniswap V3 LP quer
 
 # thresholds for the percentage of miners in each gruop before applying penalties to lowest performing miners in each group
 MINER_GROUP_THRESHOLDS = {
-    "alloc": 0.1,  # 10% of miners will be providing lending pool and alpha token pool allocations
-    "uniswap_v3_lp": 0.9,  # 90% of miners will be UniswapV3 liquidity providing miners for TaoFi
+    "alloc": 20,  # 20 of the miners will be providing lending pool and alpha token pool allocations
+    "uniswap_v3_lp": 220,  # 220 of the miners will be UniswapV3 liquidity providing miners for TaoFi
 }
 
 MIN_SCORING_PERIOD = 43200  # min. synthetic scoring period in seconds

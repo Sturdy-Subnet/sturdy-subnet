@@ -30,10 +30,11 @@ from sturdy.constants import (
     MAX_SCORING_PERIOD,
     MIN_SCORING_PERIOD,
     MIN_TOTAL_ASSETS_AMOUNT,
+    MINER_GROUP_THRESHOLDS,
     SCORING_PERIOD_STEP,
 )
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
-from sturdy.protocol import REQUEST_TYPES, AllocateAssets, AllocInfo, UniswapV3PoolLiquidity
+from sturdy.protocol import MINER_TYPE, REQUEST_TYPES, AllocateAssets, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.validator.request import Request
 from sturdy.validator.reward import filter_allocations, get_rewards_allocs, get_rewards_uniswap_v3_lp
@@ -101,6 +102,10 @@ async def forward(self) -> Any:
         request_type=REQUEST_TYPES.SYNTHETIC,
         user_address=user_address if user_address is not None else ADDRESS_ZERO,
     )
+
+    if not allocations:
+        bt.logging.warning("No allocations received from miners, skipping forward step.")
+        return
 
     assets_and_pools = challenge_data["assets_and_pools"]
     pools = assets_and_pools["pools"]
@@ -246,11 +251,15 @@ async def query_and_score_miners_allocs(
 ) -> tuple[list, dict[str, AllocInfo]]:
     # The dendrite client queries the network.
     # TODO: write custom availability function later down the road
-    active_uids = [str(uid) for uid in range(self.metagraph.n.item()) if self.metagraph.axons[uid].is_serving]
+    uids_to_query = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.ALLOC]
 
-    np.random.shuffle(active_uids)
+    if uids_to_query is None or len(uids_to_query) < 1:
+        bt.logging.error("No miners available to query for allocations.")
+        return [], {}
 
-    bt.logging.debug(f"active_uids: {active_uids}")
+    np.random.shuffle(uids_to_query)
+
+    bt.logging.debug(f"active_uids: {uids_to_query}")
 
     # TODO: see TODO(provider)
     pools = assets_and_pools["pools"]
@@ -268,12 +277,12 @@ async def query_and_score_miners_allocs(
     responses = await query_multiple_miners(
         self,
         synapse,
-        active_uids,
+        uids_to_query,
     )
 
     bt.logging.trace(f"Received responses: {responses}")
 
-    allocations = {uid: responses[idx].allocations for idx, uid in enumerate(active_uids)}  # type: ignore[]
+    allocations = {uid: responses[idx].allocations for idx, uid in enumerate(uids_to_query)}  # type: ignore[]
 
     # Log the results for monitoring purposes.
     bt.logging.info(f"Assets and pools: {synapse.assets_and_pools}")
@@ -329,7 +338,7 @@ async def query_and_score_miners_allocs(
     axon_times, filtered_allocs = filter_allocations(
         self,
         query=self.step,
-        uids=active_uids,
+        uids=uids_to_query,
         responses=responses,
         assets_and_pools=assets_and_pools,
         query_timeout=self.config.neuron.timeout,
@@ -352,15 +361,11 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[str, fl
     """
     bt.logging.info("Querying miners for Uniswap V3 LP positions...")
 
-    # TODO(uniswap_v3_lp): this is a temporary solution to query all miners for their LP positions
-    # in the final iteration of this update, we will have a pre-determined set of miners that are
-    # Uniswap V3 LP miners and we will query them directly.
-    active_uids = [str(uid) for uid in range(self.metagraph.n.item()) if self.metagraph.axons[uid].is_serving]
-    np.random.shuffle(active_uids)
+    # filter out uids to query
+    uids_to_query = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.UNISWAP_V3_LP]
+    np.random.shuffle(uids_to_query)
+    bt.logging.debug(f"Miners to query for Uniswap V3 LP positions: {uids_to_query}")
 
-    bt.logging.debug(f"active_uids: {active_uids}")
-
-    # TODO(uniswap_v3_lp): make the pool address, token addresses constants or store it in a registry json file
     # much like the pool registry for evm-based pools
     synapse = UniswapV3PoolLiquidity(
         pool_address="0x6647dcbeb030dc8E227D8B1A2Cb6A49F3C887E3c",
@@ -374,7 +379,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[str, fl
     responses = await query_multiple_miners(
         self,
         synapse,
-        active_uids,
+        uids_to_query,
     )
     bt.logging.debug(f"Received responses: {responses}")
 
@@ -382,9 +387,20 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[str, fl
     miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
         request=synapse,
         responses=responses,
-        uids=active_uids,
+        uids=uids_to_query,
         web3_provider=self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3],
     )
+
+    # np rewards array
+    rewards = np.array([rewards_dict[uid] for uid in miner_uids], dtype=np.float64)
+    sorted_indices = np.argsort(rewards)[::-1]  # sort in descending order
+    if len(rewards_dict) > MINER_GROUP_THRESHOLDS["uniswap_v3_lp"]:
+        # apply penalties to the lowest performing miners
+        penalized_indices = sorted_indices[MINER_GROUP_THRESHOLDS["uniswap_v3_lp"] :]
+        for idx in penalized_indices:
+            rewards[idx] = 0
+
+    self.update_scores(rewards, miner_uids)
 
 
 async def query_top_n_miners(

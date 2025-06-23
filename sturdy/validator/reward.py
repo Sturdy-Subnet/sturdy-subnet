@@ -323,7 +323,7 @@ async def get_rewards_allocs(
             request_info = get_request_info(conn, request_uid=request_uid)[0]
             assets_and_pools = json.loads(request_info["assets_and_pools"])
         except Exception:
-            return ([], {})
+            return ([], {}, False)
 
         # obtain the miner responses for each request
         miners = get_miner_responses(conn, request_uid=request_uid)
@@ -397,7 +397,7 @@ async def get_rewards_allocs(
 
     # TODO: there may be a better way to go about this
     if len(miner_uids) < 1:
-        return ([], {})
+        return ([], {}, False)
 
     # if apys_and_allocations empty or apys are all zero, return miner uids, _get_rewards, and False
     if not apys_and_allocations or all(value["apy"] == 0 for value in apys_and_allocations.values()):
@@ -450,8 +450,7 @@ async def get_rewards_uniswap_v3_lp(
         for token_id in response.token_ids:
             # get the position info from the contract
             position_info = await position_manager_contract.functions.positions(token_id).call()
-            lower_tick = position_info.tickLower
-            upper_tick = position_info.tickUpper
+            bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
             pos_liquidity = position_info.liquidity
 
             # get the owner of the position
@@ -476,13 +475,12 @@ async def get_rewards_uniswap_v3_lp(
 
             # calculate the fees earned by the miner for each swap
             for swap in swaps["swaps"]:
-                amount0, amount1 = get_amounts_for_liquidity(swap["tick"], lower_tick, upper_tick, pos_liquidity)
-
                 amount_usd = float(swap["amountUSD"])
 
                 miner_fees += amount_usd * pos_liquidity / 1e18
                 total_fees += miner_fees
             bt.logging.debug(f"Miner {miner_uid} earned {miner_fees} in fees")
+            bt.logging.debug(f"Total fees earned by all miners so far: {total_fees}")
 
         # store the miner's fees in the rewards dictionary
         rewards[miner_uid] = miner_fees

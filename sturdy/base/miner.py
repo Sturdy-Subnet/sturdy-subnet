@@ -29,6 +29,7 @@ import sturdy
 from neurons.uniswap_lp import blacklist, priority, uniswap_v3_lp_forward
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import MINER_SYNC_FREQUENCY
+from sturdy.protocol import MINER_TYPE, QueryMinerType
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_miner_args
 from sturdy.utils.wandb import init_wandb_miner
@@ -106,12 +107,40 @@ class BaseMinerNeuron(BaseNeuron):
             blacklist_fn=self.uniswap_v3_lp_blacklist,
             priority_fn=self.uniswap_v3_lp_priority,
         )
+        bt.logging.info("Attaching miner_type function to miner axon.")
+        self.axon.attach(
+            forward_fn=self.miner_type,
+            blacklist_fn=self.miner_type_blacklist,
+            priority_fn=self.miner_type_priority,
+        )
         bt.logging.info(f"Axon created: {self.axon}")
 
         # Instantiate runners
         self.should_exit: bool = False
         # Keep the lock if needed for other purposes
         self.lock = asyncio.Lock()
+
+    async def miner_type(self, synapse: QueryMinerType) -> QueryMinerType:
+        """
+        Handles the QueryMinerType synapse by returning the type of miner.
+        This is used to identify the type of miner in the network.
+        """
+        synapse.miner_type = MINER_TYPE.ALLOC
+        return synapse
+
+    async def miner_type_blacklist(self, synapse: QueryMinerType) -> typing.Tuple[bool, str]:
+        """
+        Determines whether an incoming QueryMinerType request should be blacklisted.
+        This method can be customized to implement specific blacklist logic.
+        """
+        return await blacklist(self, synapse)
+
+    async def miner_type_priority(self, synapse: QueryMinerType) -> float:
+        """
+        Determines the priority of a QueryMinerType request.
+        This method can be customized to implement specific priority logic.
+        """
+        return await priority(self, synapse)
 
     async def uniswap_v3_lp_forward(
         self, synapse: sturdy.protocol.UniswapV3PoolLiquidity
