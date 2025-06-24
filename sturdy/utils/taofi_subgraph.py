@@ -3,9 +3,9 @@ from datetime import datetime
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
 
-# TODO(uniswap_v3_lp): Make the url a constant or a configuration parameter
-# This is the Uniswap V3 subgraph URL on Taofi
-TRANSPORT = AIOHTTPTransport(url="https://subgraph.taofi.com/subgraphs/name/uniswap/v3")
+from sturdy.constants import TAOFI_GQL_URL
+
+TRANSPORT = AIOHTTPTransport(url=TAOFI_GQL_URL)
 GQL_CLIENT = Client(transport=TRANSPORT, fetch_schema_from_transport=True)
 
 
