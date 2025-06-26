@@ -484,21 +484,21 @@ async def get_rewards_uniswap_v3_lp(
 
             # signature is valid, get swaps since the last 24 hours - timestamp is in utc
             # Get swaps from the last 24 hours
-            one_day_ago = datetime.utcnow() - timedelta(days=8)
+            one_day_ago = datetime.utcnow() - timedelta(days=1)
             swaps = await get_uniswap_v3_pool_swaps(since=one_day_ago, pool_address=request.pool_address)
 
             # calculate the fees earned by the miner for each swap
             for swap in swaps["swaps"]:
                 amount_usd = float(swap["amountUSD"])
-
                 miner_fees += amount_usd * pos_liquidity / 1e18
-                total_fees += miner_fees
+
             bt.logging.debug(f"Miner {miner_uid} earned {miner_fees} in fees")
-            bt.logging.debug(f"Total fees earned by all miners so far: {total_fees}")
 
         # store the miner's fees in the rewards dictionary
         rewards[miner_uid] = miner_fees
+        total_fees += miner_fees
 
+    bt.logging.debug(f"Total fees earned by all miners: {total_fees}")
     # normalize the rewards by the total fees earned by all miners
     if total_fees > 0:
         for uid, reward in rewards.items():

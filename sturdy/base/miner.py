@@ -125,7 +125,7 @@ class BaseMinerNeuron(BaseNeuron):
         Handles the QueryMinerType synapse by returning the type of miner.
         This is used to identify the type of miner in the network.
         """
-        synapse.miner_type = MINER_TYPE.UNISWAP_V3_LP
+        synapse.miner_type = MINER_TYPE.ALLOC
         return synapse
 
     async def miner_type_blacklist(self, synapse: QueryMinerType) -> typing.Tuple[bool, str]:

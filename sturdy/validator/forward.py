@@ -30,6 +30,7 @@ from sturdy.constants import (
     MAX_SCORING_PERIOD,
     MIN_SCORING_PERIOD,
     MIN_TOTAL_ASSETS_AMOUNT,
+    MINER_GROUP_EMISSIONS,
     MINER_GROUP_THRESHOLDS,
     SCORING_PERIOD_STEP,
 )
@@ -327,9 +328,11 @@ async def query_and_score_miners_allocs(
             # Apply penalties to the lowest performing miners
             # note that "rewards" is a numpy array of floats
             sorted_rewards = sorted(zip(int_miner_uids, rewards, strict=False), key=lambda x: x, reverse=True)
-            if len(sorted_rewards) > MINER_GROUP_THRESHOLDS["alloc"]:
-                for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["alloc"] :]:
+            if len(sorted_rewards) > MINER_GROUP_THRESHOLDS["ALLOC"]:
+                for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["ALLOC"] :]:
                     rewards[int_miner_uids.index(uid)] = 0.0
+            # scale emissions by the miner group emissions
+            rewards *= MINER_GROUP_EMISSIONS["ALLOC"]
             bt.logging.debug(f"miner rewards: {rewards}")
             self.update_scores(rewards, int_miner_uids)
 
@@ -403,13 +406,13 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
 
     # Sort rewards dict by value in descending order
     sorted_rewards = sorted(rewards_dict.items(), key=lambda x: x[1], reverse=True)
-    if len(rewards_dict) > MINER_GROUP_THRESHOLDS["uniswap_v3_lp"]:
+    if len(rewards_dict) > MINER_GROUP_THRESHOLDS["UNISWAP_V3_LP"]:
         # Apply penalties to the lowest performing miners
-        for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["uniswap_v3_lp"] :]:
+        for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["UNISWAP_V3_LP"] :]:
             rewards_dict[uid] = 0
 
-    # Create rewards array for update_scores
-    rewards = np.array([rewards_dict[uid] for uid in miner_uids], dtype=np.float64)
+    # Create rewards array for update_scores, and scale it by the miner group emissions
+    rewards = MINER_GROUP_EMISSIONS["UNISWAP_V3_LP"] * np.array([rewards_dict[uid] for uid in miner_uids], dtype=np.float64)
 
     bt.logging.debug(f"miner rewards: {rewards_dict}")
 
