@@ -387,6 +387,11 @@ class BaseValidatorNeuron(BaseNeuron):
     def update_scores(self, rewards: npt.NDArray, uids: list[int]) -> None:
         """Performs exponential moving average on the scores based on the rewards received from the miners."""
 
+        # log the params
+        bt.logging.debug(f"update_scores() called with rewards: {rewards}, uids: {uids}")
+        # log self.scores
+        bt.logging.debug(f"Current scores: {self.scores}")
+
         # Check if rewards contains NaN values.
         if np.isnan(rewards).any():
             bt.logging.warning(f"NaN values detected in rewards: {rewards}")

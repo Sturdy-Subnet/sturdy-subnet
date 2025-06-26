@@ -425,8 +425,13 @@ async def get_rewards_uniswap_v3_lp(
     rewards = {}
     total_fees = 0
     bt.logging.debug(f"UIDS: {uids}")
+
+    # set to keep track of token ids from miners
+    claimed_token_ids = set()
     for idx, response in enumerate(responses):
         miner_uid = uids[idx]
+        rewards[miner_uid] = 0  # initialize rewards for each miner
+
         if not isinstance(response, UniswapV3PoolLiquidity):
             raise TypeError(f"Expected UniswapV3PoolLiquidity, got {type(response)}")
         # check if token_id is not None
@@ -448,8 +453,14 @@ async def get_rewards_uniswap_v3_lp(
 
         # calculate the fees the miner has earned
         miner_fees = 0
+
         # inspect each position specified by the token_ids in the response
         for token_id in response.token_ids:
+            # if token id is already claimed, skip it
+            if token_id in claimed_token_ids:
+                bt.logging.debug(f"Miner {miner_uid} has already claimed token_id {token_id}, skipping...")
+                continue
+
             # get the position info from the contract
             position_info = await position_manager_contract.functions.positions(token_id).call()
             bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
@@ -460,15 +471,16 @@ async def get_rewards_uniswap_v3_lp(
 
             # check the owner of the position, and verify that the signature is valid with web3
             if not Web3.is_checksum_address(owner):
-                rewards[miner_uid] = 0
+                continue
 
             sig = HexBytes(response.signature)
             msg = encode_defunct(text=request.message)
             sig_addr = web3_provider.eth.account.recover_message(signable_message=msg, signature=sig)
             if sig_addr != owner:
-                rewards[miner_uid] = 0
+                continue
 
             bt.logging.debug(f"Miner {miner_uid} has position with token_id {token_id} owned by {owner}")
+            claimed_token_ids.add(token_id)
 
             # signature is valid, get swaps since the last 24 hours - timestamp is in utc
             # Get swaps from the last 24 hours
