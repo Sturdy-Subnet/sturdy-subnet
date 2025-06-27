@@ -336,7 +336,7 @@ class BaseValidatorNeuron(BaseNeuron):
         responses = [
             await self.dendrite.call(
                 target_axon=axon,
-                synapse=synapse,
+                synapse=synapse.model_copy(),
                 timeout=QUERY_TIMEOUT,
                 deserialize=False,
             )
