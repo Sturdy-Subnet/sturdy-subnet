@@ -1,10 +1,10 @@
 SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
-QUERY_FREQUENCY = 30  # time in seconds between validator queries
+QUERY_FREQUENCY = 600  # time in seconds between validator queries
 QUERY_TIMEOUT = 3  # timeout (seconds)
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 
-UNISWAP_V3_LP_QUERY_FREQUENCY = 60  # time in seconds between Uniswap V3 LP queries
+UNISWAP_V3_LP_QUERY_FREQUENCY = 3600  # time in seconds between Uniswap V3 LP queries
 
 # thresholds for the percentage of miners in each gruop before applying penalties to lowest performing miners in each group
 MINER_GROUP_THRESHOLDS = {
@@ -18,9 +18,9 @@ MINER_GROUP_EMISSIONS = {
     "UNISWAP_V3_LP": 0.9,  # 200 of the miners will be UniswapV3 liquidity providing miners for TaoFi
 }
 
-MIN_SCORING_PERIOD = 300  # min. synthetic scoring period in seconds
-MAX_SCORING_PERIOD = 600  # max. synthetic scoring period in seconds
-SCORING_PERIOD_STEP = 60  # scoring period increments in seconds
+MIN_SCORING_PERIOD = 43200  # min. synthetic scoring period in seconds
+MAX_SCORING_PERIOD = 86400  # max. synthetic scoring period in seconds
+SCORING_PERIOD_STEP = 3600  # scoring period increments in seconds
 
 SCORING_WINDOW = 420  # scoring window
 
@@ -51,9 +51,9 @@ APR_ORACLE = (
 
 # bittensor alpha token pools
 MIN_BT_POOLS = 2  # minimum number of alpha token pools to generate per query per epoch - for scoring miners
-MAX_BT_POOLS = 20  # maximum number of alpha token pools to generate per query per epoch - for scoring miners
+MAX_BT_POOLS = 100  # maximum number of alpha token pools to generate per query per epoch - for scoring miners
 
-MIN_TAO_IN_POOL = 5000.0  # minimum amount of TAO a pool must have to consider it to be "valid"
+MIN_TAO_IN_POOL = 1000.0  # minimum amount of TAO a pool must have to consider it to be "valid"
 TOTAL_RAO = int(1000e9)  # total amount of rao to distribute across alpha token pools
 
 # Uniswap V3 LP subgraph URL for Taofi

@@ -280,8 +280,8 @@ def filter_allocations(
         # TODO: cleaner way to do this?
         bt.logging.debug("TIMES:")
         bt.logging.debug(axon_times)
-        if response.allocations is not None and axon_times[uids[response_idx]] < query_timeout:
-            filtered_allocs[uids[response_idx]] = {
+        if response.allocations is not None and axon_times[str(uids[response_idx])] < query_timeout:
+            filtered_allocs[str(uids[response_idx])] = {
                 "allocations": response.allocations,
             }
 
