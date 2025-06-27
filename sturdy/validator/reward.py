@@ -17,20 +17,25 @@
 # DEALINGS IN THE SOFTWARE.
 
 import json
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import cast
 
 import bittensor as bt
 import numpy.typing as npt
 from async_lru import alru_cache
 from bittensor import Balance
+from eth_account.messages import encode_defunct
+from hexbytes import HexBytes
 from web3 import Web3
 
 from sturdy.constants import QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
-from sturdy.protocol import AllocationsDict, AllocInfo
+from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
+from sturdy.utils.taofi_subgraph import get_uniswap_v3_pool_swaps
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
@@ -40,7 +45,7 @@ async def get_subtensor_block(subtensor: bt.AsyncSubtensor) -> int:
     return await subtensor.block
 
 
-def get_response_times(uids: list[str], responses, timeout: float) -> dict[str, float]:
+def get_response_times(uids: list[int], responses, timeout: float) -> dict[str, float]:
     """
     Returns a list of axons based on their response times.
 
@@ -273,8 +278,10 @@ def filter_allocations(
         # used to filter out miners who timed out
         # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
-        if response.allocations is not None and axon_times[uids[response_idx]] < query_timeout:
-            filtered_allocs[uids[response_idx]] = {
+        bt.logging.debug("TIMES:")
+        bt.logging.debug(axon_times)
+        if response.allocations is not None and axon_times[str(uids[response_idx])] < query_timeout:
+            filtered_allocs[str(uids[response_idx])] = {
                 "allocations": response.allocations,
             }
 
@@ -294,7 +301,9 @@ def filter_allocations(
 
 
 # TODO: we shouldn't need chain_data provider here, use self.pool_data_providers instead
-async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.AsyncSubtensor) -> tuple[list, dict, bool]:
+async def get_rewards_allocs(
+    self, active_allocation, chain_data_provider: Web3 | bt.AsyncSubtensor
+) -> tuple[list, list, bool]:
     # a dictionary, miner uids -> apy and allocations
     apys_and_allocations = {}
     miner_uids = []
@@ -315,7 +324,7 @@ async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.As
             request_info = get_request_info(conn, request_uid=request_uid)[0]
             assets_and_pools = json.loads(request_info["assets_and_pools"])
         except Exception:
-            return ([], {})
+            return ([], {}, False)
 
         # obtain the miner responses for each request
         miners = get_miner_responses(conn, request_uid=request_uid)
@@ -389,7 +398,7 @@ async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.As
 
     # TODO: there may be a better way to go about this
     if len(miner_uids) < 1:
-        return ([], {})
+        return ([], {}, False)
 
     # if apys_and_allocations empty or apys are all zero, return miner uids, _get_rewards, and False
     if not apys_and_allocations or all(value["apy"] == 0 for value in apys_and_allocations.values()):
@@ -397,3 +406,107 @@ async def get_rewards(self, active_allocation, chain_data_provider: Web3 | bt.As
         return (miner_uids, _get_rewards(self, apys_and_allocations, assets_and_pools, miner_uids, axon_times), False)
     # get rewards given the apys and allocations(s) with _get_rewards (???)
     return (miner_uids, _get_rewards(self, apys_and_allocations, assets_and_pools, miner_uids, axon_times), True)
+
+
+async def get_rewards_uniswap_v3_lp(
+    request: UniswapV3PoolLiquidity, responses: list[UniswapV3PoolLiquidity], uids: list[int], web3_provider: Web3
+) -> tuple[list, dict]:
+    """
+    Returns rewards for Uniswap V3 LP miners based on their responses.
+
+    Args:
+        responses (list): List of miner responses.
+
+    Returns:
+        tuple: A tuple containing a list of miner UIDs and a dictionary mappping uids to rewards.
+    """
+
+    miner_uids = []
+    rewards = {}
+    total_fees = 0
+    bt.logging.debug(f"UIDS: {uids}")
+
+    # set to keep track of token ids from miners
+    claimed_token_ids = set()
+    for idx, response in enumerate(responses):
+        miner_uid = uids[idx]
+        rewards[miner_uid] = 0  # initialize rewards for each miner
+
+        if not isinstance(response, UniswapV3PoolLiquidity):
+            raise TypeError(f"Expected UniswapV3PoolLiquidity, got {type(response)}")
+        # check if token_id is not None
+        if response.token_ids is None:
+            bt.logging.warning(f"Miner {miner_uid} has no token_ids, skipping...")
+            continue
+
+        miner_uids.append(miner_uid)
+
+        # get the uniswapv3 lp position from the chain given the token_id in the response
+        nft_abi_file_path = Path(__file__).parent.parent / "abi" / "NonfungiblePositionManager.json"
+        nft_abi_file = nft_abi_file_path.open()
+        nft_abi = json.load(nft_abi_file)
+        position_manager_contract = web3_provider.eth.contract(
+            address=request.nft_position_manager,
+            abi=nft_abi,
+            decode_tuples=True,
+        )
+
+        # calculate the fees the miner has earned
+        miner_fees = 0
+
+        # inspect each position specified by the token_ids in the response
+        for token_id in response.token_ids:
+            # if token id is already claimed, skip it
+            if token_id in claimed_token_ids:
+                bt.logging.debug(f"Miner {miner_uid} has already claimed token_id {token_id}, skipping...")
+                continue
+
+            # get the position info from the contract
+            position_info = await position_manager_contract.functions.positions(token_id).call()
+            bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
+            pos_liquidity = position_info.liquidity
+
+            # get the owner of the position
+            owner = await position_manager_contract.functions.ownerOf(token_id).call()
+
+            # check the owner of the position, and verify that the signature is valid with web3
+            if not Web3.is_checksum_address(owner):
+                continue
+
+            sig = HexBytes(response.signature)
+            msg = encode_defunct(text=request.message)
+            sig_addr = web3_provider.eth.account.recover_message(signable_message=msg, signature=sig)
+            if sig_addr != owner:
+                continue
+
+            bt.logging.debug(f"Miner {miner_uid} has position with token_id {token_id} owned by {owner}")
+            claimed_token_ids.add(token_id)
+
+            # signature is valid, get swaps since the last 24 hours - timestamp is in utc
+            # Get swaps from the last 24 hours
+            one_day_ago = datetime.utcnow() - timedelta(days=1)
+            swaps = await get_uniswap_v3_pool_swaps(since=one_day_ago, pool_address=request.pool_address)
+
+            # calculate the fees earned by the miner for each swap
+            for swap in swaps["swaps"]:
+                amount_usd = float(swap["amountUSD"])
+                miner_fees += amount_usd * pos_liquidity / 1e18
+
+            bt.logging.debug(f"Miner {miner_uid} earned {miner_fees} in fees")
+
+        # store the miner's fees in the rewards dictionary
+        rewards[miner_uid] = miner_fees
+        total_fees += miner_fees
+
+    bt.logging.debug(f"Total fees earned by all miners: {total_fees}")
+    # normalize the rewards by the total fees earned by all miners
+    if total_fees > 0:
+        for uid, reward in rewards.items():
+            rewards[uid] = reward / total_fees
+    else:
+        bt.logging.warning("Total fees earned by all miners is zero, not normalizing rewards")
+        for uid in rewards:
+            rewards[uid] = 0
+    bt.logging.debug(f"Miner rewards: {rewards}")
+
+    return (miner_uids, rewards)

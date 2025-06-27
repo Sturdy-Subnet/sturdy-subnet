@@ -11,13 +11,15 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import QUERY_FREQUENCY
+from sturdy.constants import QUERY_FREQUENCY, QUERY_TIMEOUT, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
+from sturdy.protocol import MINER_TYPE, QueryMinerType
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
 from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
 from sturdy.utils.weight_utils import process_weights_for_netuid
+from sturdy.validator.forward import uniswap_v3_lp_forward
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -41,6 +43,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # set last query time to be 0
         self.last_query_time = 0
+        # Add separate query time for uniswap v3 lp forward
+        self.last_uniswap_v3_lp_query_time = 0
 
         # init wandb
         self.wandb_run_log_count = 0
@@ -64,12 +68,20 @@ class BaseValidatorNeuron(BaseNeuron):
         if bittensor_mainnet_url is None:
             raise ValueError("You must provide a valid subtensor provider url")
 
+        # setup bittensor web3 provider
+        bittensor_web3_url = os.environ.get("BITTENSOR_WEB3_PROVIDER_URL")
+        if bittensor_web3_url is None:
+            raise ValueError("You must provide a valid bittensor web3 provider url")
+
         self.pool_data_providers = {
             POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: await PoolProviderFactory.create_pool_provider(
                 POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, url=eth_provider_url
             ),
             POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: await PoolProviderFactory.create_pool_provider(
                 POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, url=bittensor_mainnet_url
+            ),
+            POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3: await PoolProviderFactory.create_pool_provider(
+                POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3, url=bittensor_web3_url
             ),
         }
 
@@ -87,6 +99,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.similarity_penalties = {}
         self.sorted_apys = {}
         self.sorted_axon_times = {}
+        self.miner_types = {}
 
         # Load state
         bt.logging.info("load_state()")
@@ -105,6 +118,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self._stop_event = asyncio.Event()
         self._tasks = []
         self.last_query_time = 0
+        self.last_uniswap_v3_lp_query_time = 0
         self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.validator.max_workers)
 
     def __del__(self) -> None:
@@ -116,6 +130,8 @@ class BaseValidatorNeuron(BaseNeuron):
     async def start(self) -> None:
         """Start validator tasks"""
         self._tasks.append(asyncio.create_task(self.run_main_loop()))
+        # Add the uniswap v3 lp loop as a separate task
+        self._tasks.append(asyncio.create_task(self.run_uniswap_v3_lp_loop()))
 
     async def stop(self) -> None:
         """Stop all validator tasks"""
@@ -163,6 +179,38 @@ class BaseValidatorNeuron(BaseNeuron):
 
         except Exception as e:
             bt.logging.exception(f"Error in main loop: {e}")
+
+    async def uniswap_v3_lp_forward(self) -> any:
+        """
+        Forward pass for Uniswap V3 LP allocations.
+        This is a placeholder method that can be implemented in the future.
+        """
+        bt.logging.debug("uniswap_v3_lp_forward()")
+        return await uniswap_v3_lp_forward(self)
+
+    async def run_uniswap_v3_lp_loop(self) -> None:
+        """Uniswap V3 LP validator loop running in parallel"""
+        bt.logging.info("Uniswap V3 LP validator starting...")
+
+        try:
+            while not self._stop_event.is_set():
+                current_time = time.time()
+                # Use a different frequency if desired, or make it configurable
+
+                if current_time - self.last_uniswap_v3_lp_query_time > UNISWAP_V3_LP_QUERY_FREQUENCY:
+                    bt.logging.info("Running uniswap_v3_lp_forward")
+
+                    try:
+                        await self.uniswap_v3_lp_forward()
+                    except Exception as e:
+                        bt.logging.exception(f"Error in uniswap_v3_lp_forward: {e}")
+
+                    self.last_uniswap_v3_lp_query_time = current_time
+
+                await asyncio.sleep(1)
+
+        except Exception as e:
+            bt.logging.exception(f"Error in uniswap v3 lp loop: {e}")
 
     def log_metrics(self) -> None:
         """Log metrics to wandb"""
@@ -283,6 +331,30 @@ class BaseValidatorNeuron(BaseNeuron):
         # Sync the metagraph.
         await self.metagraph.sync(subtensor=self.subtensor)
 
+        # Query miners to check what kind of miners they are
+        synapse = QueryMinerType()
+        responses = [
+            await self.dendrite.call(
+                target_axon=axon,
+                synapse=synapse,
+                timeout=QUERY_TIMEOUT,
+                deserialize=False,
+            )
+            for axon in self.metagraph.axons
+        ]
+
+        bt.logging.debug(f"Responses from miners: {responses}")
+
+        # update self.miner_types based on responses
+        for uid, response in enumerate(responses):
+            if response is not None and isinstance(response, QueryMinerType):
+                self.miner_types[uid] = response.miner_type
+            else:
+                # TODO(uniswap_v3_lp): is this necessary?
+                self.miner_types[uid] = MINER_TYPE.ALLOC  # Default to ALLOC if no response
+
+        bt.logging.debug(f"Updated miner types: {self.miner_types}")
+
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
             return
@@ -315,6 +387,11 @@ class BaseValidatorNeuron(BaseNeuron):
     def update_scores(self, rewards: npt.NDArray, uids: list[int]) -> None:
         """Performs exponential moving average on the scores based on the rewards received from the miners."""
 
+        # log the params
+        bt.logging.debug(f"update_scores() called with rewards: {rewards}, uids: {uids}")
+        # log self.scores
+        bt.logging.debug(f"Current scores: {self.scores}")
+
         # Check if rewards contains NaN values.
         if np.isnan(rewards).any():
             bt.logging.warning(f"NaN values detected in rewards: {rewards}")
@@ -329,11 +406,16 @@ class BaseValidatorNeuron(BaseNeuron):
         np.put_along_axis(scattered_rewards, uids_tensor, rewards, axis=0)
         bt.logging.debug(f"Scattered rewards: {rewards}")
 
-        # Update scores with rewards produced by this step. shape: [ metagraph.n ]
+        # Only update scores for UIDs that received rewards in this step
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: npt.NDArray = np.clip(
-            np.nan_to_num(alpha * scattered_rewards + (1 - alpha) * self.scores), a_min=0, a_max=1
-        )
+        # mask = scattered_rewards > 0  # Create mask for UIDs with rewards
+        # create mask for the uids that we want to update scores for
+        mask = np.isin(np.arange(len(self.scores)), uids_tensor)
+        if not np.any(mask):
+            bt.logging.debug("No valid UIDs to update scores for.")
+            return
+        bt.logging.debug(f"Mask for updating scores: {mask}")
+        self.scores[mask] = np.clip(alpha * scattered_rewards[mask] + (1 - alpha) * self.scores[mask], a_min=0, a_max=1)
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
     async def save_state(self) -> None:

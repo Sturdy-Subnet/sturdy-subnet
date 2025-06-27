@@ -7,6 +7,7 @@ from web3 import AsyncWeb3
 class POOL_DATA_PROVIDER_TYPE(str, Enum):
     ETHEREUM_MAINNET = "ETHEREUM_MAINNET"
     BITTENSOR_MAINNET = "BITTENSOR_MAINNET"
+    BITTENSOR_WEB3 = "BITTENSOR_WEB3"
 
 
 class PoolProviderFactory:
@@ -26,4 +27,6 @@ class PoolProviderFactory:
             subtensor = bt.AsyncSubtensor(url)
             await subtensor.initialize()
             return subtensor
+        if provider == POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3:
+            return AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url, **kwargs))
         raise ValueError(f"Unsupported provider type: {provider}")

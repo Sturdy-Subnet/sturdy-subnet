@@ -34,6 +34,11 @@ class REQUEST_TYPES(IntEnum):
     SYNTHETIC = 1
 
 
+class MINER_TYPE(IntEnum):
+    ALLOC = 0  # miner that provides lending pool and alpha token pool allocations
+    UNISWAP_V3_LP = 1  # miner that provides Uniswap V3 liquidity providing pools for TaoFi
+
+
 class AlphaTokenPoolAllocation(BaseModel):
     delegate_ss58: str  # hotkey address of validator to delegate to
     amount: int  # amount in rao, 1 tao = 1e9 rao
@@ -181,6 +186,48 @@ class AllocateAssets(bt.Synapse, AllocateAssetsBase):
     def __str__(self) -> str:
         return f"""AllocateAssets(request_type={self.request_type}, assets_and_pools={self.assets_and_pools},
             user_address={self.user_address}, allocations={self.allocations})"""
+
+
+class UniswapV3PoolLiquidityBase(BaseModel):
+    """Request model for Uniswap V3 pool liquidity checks"""
+
+    pool_address: str = Field(..., description="Uniswap V3 pool address to check liquidity for")
+    nft_position_manager: str = Field(..., description="Address of the NFT position manager contract for TaoFi positions")
+    token_0: str = Field(..., description="Address of the first token in the pool")
+    token_1: str = Field(..., description="Address of the second token in the pool")
+    message: str = Field(..., description="Message to be signed and used for user identification in the request")
+    token_ids: list[int] | None = Field(None, description="Token IDs for the Uniswap V3 positions")
+    signature: str | None = Field(None, description="Signature of the request, used for user identity verification")
+
+
+class UniswapV3PoolLiquidity(bt.Synapse, UniswapV3PoolLiquidityBase):
+    """
+    Synapse for checking liquidity in a Uniswap V3 pool.
+    This synapse is used to verify if a user has sufficient liquidity in a specific Uniswap V3 pool.
+    """
+
+    def __str__(self) -> str:
+        return (
+            f"UniswapV3PoolLiquidity(pool_address={self.pool_address}, "
+            f"token0={self.token0}, token1={self.token1}, token_id={self.token_id}, "
+            f"message={self.message}, signature={self.signature})"
+        )
+
+
+class QueryMinerTypeBase(BaseModel):
+    """Request model for querying miner type."""
+
+    miner_type: MINER_TYPE | int | str = Field(
+        default=MINER_TYPE.ALLOC,
+        description="Type of miner to query. Defaults to ALLOC.",
+    )
+
+
+class QueryMinerType(bt.Synapse, QueryMinerTypeBase):
+    """Synapse for querying miner type."""
+
+    def __str__(self) -> str:
+        return f"QueryMinerType(miner_type={self.miner_type})"
 
 
 class GetAllocationResponse(BaseModel):

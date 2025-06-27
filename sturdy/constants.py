@@ -4,6 +4,20 @@ QUERY_FREQUENCY = 600  # time in seconds between validator queries
 QUERY_TIMEOUT = 3  # timeout (seconds)
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 
+UNISWAP_V3_LP_QUERY_FREQUENCY = 3600  # time in seconds between Uniswap V3 LP queries
+
+# thresholds for the percentage of miners in each gruop before applying penalties to lowest performing miners in each group
+MINER_GROUP_THRESHOLDS = {
+    "ALLOC": 20,  # 20 of the miners will be providing lending pool and alpha token pool allocations
+    "UNISWAP_V3_LP": 200,  # 200 of the miners will be UniswapV3 liquidity providing miners for TaoFi
+}
+
+# Emissions split
+MINER_GROUP_EMISSIONS = {
+    "ALLOC": 0.1,  # 20 of the miners will be providing lending pool and alpha token pool allocations
+    "UNISWAP_V3_LP": 0.9,  # 200 of the miners will be UniswapV3 liquidity providing miners for TaoFi
+}
+
 MIN_SCORING_PERIOD = 43200  # min. synthetic scoring period in seconds
 MAX_SCORING_PERIOD = 86400  # max. synthetic scoring period in seconds
 SCORING_PERIOD_STEP = 3600  # scoring period increments in seconds
@@ -16,7 +30,7 @@ MIN_DELEGATE_STAKE = 10000.0  # minimum amount of nominator alpha stake to be co
 
 # Constants for APY-based binning and rewards
 APY_BIN_THRESHOLD_FALLBACK = 1e-5  # Fallback threshold: 0.00001 difference in APY to create new bin
-TOP_PERFORMERS_BONUS = 2.0  # Multiplier for top performing miners
+TOP_PERFORMERS_BONUS = 8.0  # Multiplier for top performing miners
 TOP_PERFORMERS_COUNT = 10  # Number of top performers to receive bonus
 
 NORM_EXP_POW = 16
@@ -41,3 +55,6 @@ MAX_BT_POOLS = 100  # maximum number of alpha token pools to generate per query 
 
 MIN_TAO_IN_POOL = 1000.0  # minimum amount of TAO a pool must have to consider it to be "valid"
 TOTAL_RAO = int(1000e9)  # total amount of rao to distribute across alpha token pools
+
+# Uniswap V3 LP subgraph URL for Taofi
+TAOFI_GQL_URL = "https://subgraph.taofi.com/subgraphs/name/uniswap/v3"
