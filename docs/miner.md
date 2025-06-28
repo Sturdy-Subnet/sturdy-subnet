@@ -35,8 +35,19 @@ The next step involves interacting with an API. We've provided an [.env.example]
 #### Connecting to a Web3 Provider
 We recommend using a third party service to connect to an RPC to perform on-chain calls to evm-based chains (e.g. Ethereum) such as [Infura](https://docs.infura.io/dashboard/create-api) and [Alchemy](https://docs.alchemy.com/docs/alchemy-quickstart-guide#1key-create-an-alchemy-api-key) (click on hyperlinks links for documentation) by obtaining there API key and adding their URL to the `.env` file under the `ETHEREUM_MAINNET_PROVIDER_URL` alias.
 
+
 We also support bittensor alpha token pools, so you may want access to an archive subtensor node for historical data. The environment variable for this is `BITTENSOR_MAINNET_PROVIDER_URL`. Thankfully, there is already a public one that can be used (see `.env.example`).
 
+### Miner Types
+
+There are two different types of miners that can be run on the Sturdy Subnet:
+1. **Pool allocator**: This type of miner is responsible for allocating the pools and yields for the subnet. 
+2. **TaoFi liquidity provider**: This type of miner is responsible for providing liquidity to the TaoFi TAO<>USDC pool on TaoFi.
+
+There can only be a certain number of miners in each group, and emissions are split amongst them as defined in [constants.py](../sturdy/constants.py) by `MINER_GROUP_THRESHOLDS` and `MINER_GROUP_EMISSIONS` respectively.
+
+Miners can only be one type at a time. Miners can advertise themselves as either a pool allocator or a TaoFi liquidity provider by setting defining the response to the `QueryMinerType` synapse.
+An example of this is provided in the `miner_type` function in [miner.py](../sturdy/base/miner.py). For more information on how to run a TaoFi liquidity provider miner, see the [TaoFi Liquidity Provider Miner Setup](taofi_lp.md) documentation.
 
 #### Starting a miner
 
@@ -54,4 +65,4 @@ python3 neurons/miner.py --netuid 104 --subtensor.network test --wallet.name NAM
 ```
 
 ## Succeeding as a miner
-As mentioned in [here](../README.md#subnet-overview), a miner should aim to obtain the highest yield possible whilst responding very quickly to validators with unique responses. While a default allocation generation script has been provided in [algo.py](../sturdy/algo.py), there is lots of room for optimization. Miners who want to excel in the Sturdy Subnet should try to improve on this algorithm using the information shared above and by taking a close look at how pools (as well as their yields) are defined (e.g. in [pools.py](../sturdy/pools.py)).
+As mentioned in [here](../README.md#subnet-overview), a pool allocation miner should aim to obtain the highest yield possible whilst responding very quickly to validators with unique responses. While a default allocation generation script has been provided in [algo.py](../sturdy/algo.py), there is lots of room for optimization. Miners who want to excel in the Sturdy Subnet should try to improve on this algorithm using the information shared above and by taking a close look at how pools (as well as their yields) are defined (e.g. in [pools.py](../sturdy/pools.py)). On the other hand, a TaoFi liquidity provider miner should aim to provide liquidity to the TAO<>USDC pool on TaoFi and respond to requests from validators.

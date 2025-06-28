@@ -22,18 +22,20 @@ MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.or
 ## Introduction
 
 The Sturdy Subnet is a Bittensor subnetwork that enables the creation of decentralized, autonomous
-yield optimizers. A yield optimizer is a smart contract that seeks to provide users with the best
+yield optimizers and liquidity providers. 
+
+A yield optimizer is a smart contract that seeks to provide users with the best
 possible yields by depositing assets to a variety of strategies. On the Sturdy Subnet, every yield
 optimizer has a fixed set of strategies (or 'pools') that it can deposit to. In turn, each pool has
 its own interest rate curve, described in more detail below. The goal for each miner is to create
 an algorithm that computes the allocation of assets among pools that results in the highest yield
-possible. Validators then evaluate miners based on how much yield their allocation produces. 
-
-The outputs of the subnet will be used by third-party applications to move real assets on the
+possible. Validators then evaluate miners based on how much yield their allocation produces.  The outputs of the subnet will be used by third-party applications to move real assets on the
 Ethereum network. The first application using the Sturdy Subnet is the [Sturdy
 protocol](https://sturdy.finance/), with more to come.
 
 Currently, Sturdy Subnet supports various types of pools active on the Ethereum network, as well as alpha token poola on Bittensor.
+
+The subnet also incentivizes miners to provide liquidity to the TAO<>USDC pool on [TaoFi](https://www.taofi.com/), which is a decentralized exchange (DEX) that allows users to trade TAO and USDC tokens. 
 
 ### Codebase
 
@@ -78,7 +80,10 @@ There are three core files.
  <div align="center"> 
     <img src="./assets/subnet_architecture.png" />
 </div> 
- 
+
+- A similar process is repeated every hour for TaoFi liquidity provider miners, who are
+  responsible for providing liquidity to the TAO<>USDC pool on TaoFi. These miners are scored based
+  on how much fees their positions received in the past 24 hours. For more information on how to run a TaoFi liquidity provider miner, see the [TaoFi Liquidity Provider Miner Setup](taofi_lp.md) documentation.
 ---
 
 ## Installation
