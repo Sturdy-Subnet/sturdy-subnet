@@ -462,9 +462,13 @@ async def get_rewards_uniswap_v3_lp(
                 continue
 
             # get the position info from the contract
-            position_info = await position_manager_contract.functions.positions(token_id).call()
-            bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
-            pos_liquidity = position_info.liquidity
+            try:
+                position_info = await position_manager_contract.functions.positions(token_id).call()
+                bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
+                pos_liquidity = position_info.liquidity
+            except Exception as e:
+                bt.logging.error(f"Error getting position info for token_id {token_id}: {e}")
+                continue
 
             # get the owner of the position
             owner = await position_manager_contract.functions.ownerOf(token_id).call()
