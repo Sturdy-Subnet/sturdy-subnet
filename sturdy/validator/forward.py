@@ -327,7 +327,7 @@ async def query_and_score_miners_allocs(
         if should_update_scores:
             # Apply penalties to the lowest performing miners
             # note that "rewards" is a numpy array of floats
-            sorted_rewards = sorted(zip(int_miner_uids, rewards, strict=False), key=lambda x: x, reverse=True)
+            sorted_rewards = sorted(zip(int_miner_uids, rewards, strict=False), key=lambda x: x[1], reverse=True)
             if len(sorted_rewards) > MINER_GROUP_THRESHOLDS["ALLOC"]:
                 for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["ALLOC"] :]:
                     rewards[int_miner_uids.index(uid)] = 0.0
