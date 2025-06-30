@@ -278,8 +278,6 @@ def filter_allocations(
         # used to filter out miners who timed out
         # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
-        bt.logging.debug("TIMES:")
-        bt.logging.debug(axon_times)
         if response.allocations is not None and axon_times[str(uids[response_idx])] < query_timeout:
             filtered_allocs[str(uids[response_idx])] = {
                 "allocations": response.allocations,
