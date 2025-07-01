@@ -441,9 +441,9 @@ async def query_top_n_miners(
     """
 
     # get the top n miners by their scores (self.scores). the index of each score is the uid of the miner
-    top_n_uids = np.argsort(self.scores)[-n:]
-    top_n_uids = [str(uid) for uid in top_n_uids]
-    bt.logging.debug(f"top_n_uids: {top_n_uids}")
+    # make sure that the miner type is the correct one (they must be MINER_TYPE.ALLOC)
+    top_n_uids = [str(uid) for uid in np.argsort(self.scores)[-n:] if self.miner_types[uid] == MINER_TYPE.ALLOC]
+    bt.logging.debug(f"Top {n} allocation miners to query: {top_n_uids}")
 
     # TODO: see TODO(provider)
     pools = assets_and_pools["pools"]
