@@ -337,7 +337,7 @@ class BaseValidatorNeuron(BaseNeuron):
             await self.dendrite.call(
                 target_axon=axon,
                 synapse=synapse.model_copy(),
-                timeout=QUERY_TIMEOUT,
+                timeout=5,
                 deserialize=False,
             )
             for axon in self.metagraph.axons
@@ -347,7 +347,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # update self.miner_types based on responses
         for uid, response in enumerate(responses):
-            if response is not None and isinstance(response, QueryMinerType):
+            if response is not None:
                 self.miner_types[uid] = response.miner_type
             else:
                 # TODO(uniswap_v3_lp): is this necessary?
