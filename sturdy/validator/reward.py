@@ -424,6 +424,9 @@ async def get_rewards_uniswap_v3_lp(
     total_fees = 0
     bt.logging.debug(f"UIDS: {uids}")
 
+    # track highest miner fee
+    highest_miner_fee = 0
+
     # set to keep track of token ids from miners
     claimed_token_ids = set()
     for idx, response in enumerate(responses):
@@ -502,13 +505,14 @@ async def get_rewards_uniswap_v3_lp(
 
         # store the miner's fees in the rewards dictionary
         rewards[miner_uid] = miner_fees
+        highest_miner_fee = max(highest_miner_fee, miner_fees)
         total_fees += miner_fees
 
     bt.logging.debug(f"Total fees earned by all miners: {total_fees}")
     # normalize the rewards by the total fees earned by all miners
     if total_fees > 0:
         for uid, reward in rewards.items():
-            rewards[uid] = reward / total_fees
+            rewards[uid] = reward / highest_miner_fee
     else:
         bt.logging.warning("Total fees earned by all miners is zero, not normalizing rewards")
         for uid in rewards:
