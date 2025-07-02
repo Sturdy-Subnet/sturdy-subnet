@@ -464,6 +464,8 @@ async def get_rewards_uniswap_v3_lp(
                 position_info = await position_manager_contract.functions.positions(token_id).call()
                 bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
                 pos_liquidity = position_info.liquidity
+                tickLower = position_info.tickLower
+                tickUpper = position_info.tickUpper
             except Exception as e:
                 bt.logging.error(f"Error getting position info for token_id {token_id}: {e}")
                 continue
@@ -491,8 +493,10 @@ async def get_rewards_uniswap_v3_lp(
 
             # calculate the fees earned by the miner for each swap
             for swap in swaps["swaps"]:
-                amount_usd = float(swap["amountUSD"])
-                miner_fees += amount_usd * pos_liquidity / 1e18
+                # check if the swap's tick is within the position's tick range
+                if tickLower <= int(swap["tick"]) <= tickUpper:
+                    amount_usd = float(swap["amountUSD"])
+                    miner_fees += amount_usd * pos_liquidity / 1e18
 
             bt.logging.debug(f"Miner {miner_uid} earned {miner_fees} in fees")
 
