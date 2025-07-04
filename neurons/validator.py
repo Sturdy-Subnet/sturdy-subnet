@@ -402,7 +402,7 @@ async def allocate_bt(body: BTAlphaPoolRequest) -> AllocateAssetsResponse | None
         core_validator,
         n=body.num_allocs,
         assets_and_pools=assets_and_pools,
-        request_type=REQUEST_TYPES.ORGANIC,
+        request_type=REQUEST_TYPES.SYNTHETIC,
         user_address=ADDRESS_ZERO,
     )
 
