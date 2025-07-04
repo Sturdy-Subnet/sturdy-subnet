@@ -491,7 +491,7 @@ async def get_rewards_uniswap_v3_lp(
 
             # signature is valid, get swaps since the last 24 hours - timestamp is in utc
             # Get swaps from the last 24 hours
-            one_day_ago = datetime.utcnow() - timedelta(days=1)
+            one_day_ago = int(datetime.now().timestamp() - 24 * 60 * 60)
             swaps = await get_uniswap_v3_pool_swaps(since=one_day_ago, pool_address=request.pool_address)
 
             # calculate the fees earned by the miner for each swap

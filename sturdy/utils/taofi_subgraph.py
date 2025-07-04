@@ -9,10 +9,10 @@ TRANSPORT = AIOHTTPTransport(url=TAOFI_GQL_URL)
 GQL_CLIENT = Client(transport=TRANSPORT, fetch_schema_from_transport=True)
 
 
-async def get_uniswap_v3_pool_swaps(since: datetime, pool_address: str, client=GQL_CLIENT) -> dict:
+async def get_uniswap_v3_pool_swaps(since: int, pool_address: str, client=GQL_CLIENT) -> dict:
     # Convert datetime to UNIX timestamp (integer)
-    timestamp_unix = int(since.timestamp())
-    print(f"Fetching Uniswap V3 pool swaps since {since} (UNIX: {timestamp_unix}) for pool {pool_address}")
+    # timestamp_unix = int(since.timestamp())
+    print(f"Fetching Uniswap V3 pool swaps since (UNIX: {since}) for pool {pool_address}")
 
     # Create the GraphQL query string with the dynamic timestamp
     query = gql(
@@ -21,7 +21,7 @@ async def get_uniswap_v3_pool_swaps(since: datetime, pool_address: str, client=G
           swaps(
             where: {{
               pool: "{pool_address}",
-              timestamp_gt: {timestamp_unix}
+              timestamp_gt: {since}
             }},
             orderBy: timestamp,
             orderDirection: desc
