@@ -250,8 +250,6 @@ async def allocate(body: AllocateAssetsRequest) -> AllocateAssetsResponse | None
 
     bt.logging.info("Querying miners...")
 
-    chain_data_provider = core_validator.pool_data_providers[synapse.pool_data_provider]
-
     axon_times, result = await query_top_n_miners(
         core_validator,
         n=body.num_allocs,
