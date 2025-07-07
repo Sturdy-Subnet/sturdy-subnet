@@ -170,7 +170,7 @@ class TestAavePool(unittest.IsolatedAsyncioTestCase):
         signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
 
         # Send the transaction
-        tx_hash = await self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        tx_hash = await self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         print(f"weth deposit tx hash: {tx_hash}")
 
         # check if we received some weth
@@ -192,7 +192,7 @@ class TestAavePool(unittest.IsolatedAsyncioTestCase):
         signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
 
         # Send the transaction
-        tx_hash = await self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        tx_hash = await self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         print(f"pool approve weth tx hash: {tx_hash}")
 
         # deposit tokens into the pool
@@ -213,7 +213,7 @@ class TestAavePool(unittest.IsolatedAsyncioTestCase):
         signed_tx = self.w3.eth.account.sign_transaction(transaction_dict=tx, private_key=self.account.key)
 
         # Send the transaction
-        tx_hash = await async_retry_with_backoff(self.w3.eth.send_raw_transaction, signed_tx.rawTransaction)
+        tx_hash = await async_retry_with_backoff(self.w3.eth.send_raw_transaction, signed_tx.raw_transaction)
         print(f"supply weth tx hash: {tx_hash}")
 
         reserve_data = await async_retry_with_backoff(
