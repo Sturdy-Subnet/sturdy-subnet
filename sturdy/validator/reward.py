@@ -18,7 +18,6 @@
 
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import cast
 
 import bittensor as bt
@@ -27,7 +26,7 @@ from async_lru import alru_cache
 from bittensor import Balance
 from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
-from web3 import Web3
+from web3 import EthereumTesterProvider, Web3
 
 from sturdy.constants import QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
@@ -35,7 +34,7 @@ from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
-from sturdy.utils.taofi_subgraph import get_uniswap_v3_pool_swaps
+from sturdy.utils.taofi_subgraph import fetch_uniswap_pos_and_swaps
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
@@ -412,7 +411,7 @@ async def get_rewards_allocs(
 
 
 async def get_rewards_uniswap_v3_lp(
-    request: UniswapV3PoolLiquidity, responses: list[UniswapV3PoolLiquidity], uids: list[int], web3_provider: Web3
+    request: UniswapV3PoolLiquidity, responses: list[UniswapV3PoolLiquidity], uids: list[int]
 ) -> tuple[list, dict]:
     """
     Returns rewards for Uniswap V3 LP miners based on their responses.
@@ -426,36 +425,27 @@ async def get_rewards_uniswap_v3_lp(
 
     miner_uids = []
     rewards = {}
-    total_fees = 0
+    total_lp_scores = 0
+    w3 = Web3(EthereumTesterProvider())
     bt.logging.debug(f"UIDS: {uids}")
 
-    # track highest miner fee
-    highest_miner_fee = 0
-
-    # get the uniswapv3 lp position from the chain given the token_id in the response
-    nft_abi_file_path = Path(__file__).parent.parent / "abi" / "NonfungiblePositionManager.json"
-    nft_abi_file = nft_abi_file_path.open()
-    nft_abi = json.load(nft_abi_file)
-    position_manager_contract = web3_provider.eth.contract(
-        address=request.nft_position_manager,
-        abi=nft_abi,
-        decode_tuples=True,
-    )
-
-    pool_abi_file_path = Path(__file__).parent.parent / "abi" / "UniswapV3Pool.json"
-    pool_abi_file = pool_abi_file_path.open()
-    pool_abi = json.load(pool_abi_file)
-    pool = web3_provider.eth.contract(address=request.pool_address, abi=pool_abi, decode_tuples=True)
+    # track highest miner lp_score
+    highest_miner_lp_score = 0
 
     try:
-        slot_0 = await pool.functions.slot0().call()
-        current_tick = slot_0[1]  # slot0 returns (sqrtPriceX96, tick, observationIndex, observationCardinality, ...)
+        # signature is valid, get swaps since the last 24 hours - timestamp is in utc
+        # Get swaps from the last 24 hours
+        one_day_ago = int(datetime.now().timestamp() - 24 * 60 * 60)
+        positions, swaps, current_tick = await fetch_uniswap_pos_and_swaps(
+            since=one_day_ago, pool_address=request.pool_address
+        )
         bt.logging.debug(f"Current tick for pool {request.pool_address}: {current_tick}")
     except Exception as e:
-        bt.logging.error(f"Error getting current tick for pool {request.pool_address}: {e}")
+        bt.logging.error(f"Error fetching information from Taofi subgraph: {e}")
 
     # set to keep track of token ids from miners
     claimed_token_ids = set()
+
     for idx, response in enumerate(responses):
         miner_uid = uids[idx]
         rewards[miner_uid] = 0  # initialize rewards for each miner
@@ -468,8 +458,10 @@ async def get_rewards_uniswap_v3_lp(
             bt.logging.warning(f"Miner {miner_uid} has no token_ids, skipping...")
             continue
 
-        # calculate the fees the miner has earned
-        miner_fees = 0
+        miner_uids.append(miner_uid)
+
+        # track the lp score for the miner
+        miner_lp_score = 0
 
         # inspect each position specified by the token_ids in the response
         for token_id in response.token_ids:
@@ -480,60 +472,54 @@ async def get_rewards_uniswap_v3_lp(
 
             # get the position info from the contract
             try:
-                position_info = await position_manager_contract.functions.positions(token_id).call()
+                position_info = positions[int(token_id)]
                 bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
-                pos_liquidity = position_info.liquidity
-                tickLower = position_info.tickLower
-                tickUpper = position_info.tickUpper
+                pos_liquidity = int(position_info["liquidity"])
+                upper_tick = int(position_info["tickUpper"]["tickIdx"])
+                lower_tick = int(position_info["tickLower"]["tickIdx"])
+                # TODO(uniswap_v3_lp): why is this in all caps, not a valid checksum by default?
+                owner = Web3.to_checksum_address(position_info["owner"])
             except Exception as e:
-                bt.logging.error(f"Error getting position info for token_id {token_id}: {e}")
+                bt.logging.warning(f"Failed to get position info for token_id {token_id}: {e}")
                 continue
 
-            # get the owner of the position
-            owner = await position_manager_contract.functions.ownerOf(token_id).call()
-
-            # check the owner of the position, and verify that the signature is valid with web3
-            if not Web3.is_checksum_address(owner):
-                continue
-
+            # verify that the signature is valid with web3
             sig = HexBytes(response.signature)
             msg = encode_defunct(text=request.message)
-            sig_addr = web3_provider.eth.account.recover_message(signable_message=msg, signature=sig)
+            sig_addr = w3.eth.account.recover_message(signable_message=msg, signature=sig)
             if sig_addr != owner:
+                bt.logging.warning(
+                    f"Miner {miner_uid} has invalid signature for token_id {token_id}, expected owner {owner}, got {sig_addr}"
+                )
                 continue
 
             bt.logging.debug(f"Miner {miner_uid} has position with token_id {token_id} owned by {owner}")
             claimed_token_ids.add(token_id)
 
-            # signature is valid, get swaps since the last 24 hours - timestamp is in utc
-            # Get swaps from the last 24 hours
-            one_day_ago = int(datetime.now().timestamp() - 24 * 60 * 60)
-            swaps = await get_uniswap_v3_pool_swaps(since=one_day_ago, pool_address=request.pool_address)
-
             # check that the position is in range and has liquidity
-            if pos_liquidity < 0 or not (tickLower <= current_tick < tickUpper):
+            if pos_liquidity < 0 or not (lower_tick <= current_tick < upper_tick):
                 bt.logging.warning(
                     f"Miner {miner_uid} has position with token_id {token_id} that is out of range or has no liquidity"
                 )
                 continue
 
-            # calculate the fees earned by the miner for each swap within the tick range
-            for swap in swaps["swaps"]:
+            # calculate the lp score for the miner for each swap
+            for swap in swaps:
                 # check if the swap's tick is within the position's tick range
-                if tickLower <= int(swap["tick"]) <= tickUpper:
+                if lower_tick <= int(swap["tick"]) <= upper_tick:
                     amount_usd = float(swap["amountUSD"])
-                    miner_fees += amount_usd * pos_liquidity / 1e18
+                    miner_lp_score += amount_usd * pos_liquidity / 1e18
 
-            bt.logging.debug(f"Miner {miner_uid} earned {miner_fees} in fees")
+            bt.logging.debug(f"Miner {miner_uid} has LP score of {miner_lp_score} for token_id {token_id}")
 
-        # store the miner's fees in the rewards dictionary
-        rewards[miner_uid] = miner_fees
-        highest_miner_fee = max(highest_miner_fee, miner_fees)
-        total_fees += miner_fees
+        # store the miner's scores in the rewards dictionary
+        rewards[miner_uid] = miner_lp_score
+        highest_miner_fee = max(highest_miner_lp_score, miner_lp_score)
+        total_lp_scores += miner_lp_score
 
-    bt.logging.debug(f"Total fees earned by all miners: {total_fees}")
-    # normalize the rewards by the total fees earned by all miners
-    if total_fees > 0:
+    bt.logging.debug(f"Sum of all miner LP scores: {total_lp_scores}")
+    # normalize the rewards
+    if total_lp_scores > 0:
         for uid, reward in rewards.items():
             rewards[uid] = reward / highest_miner_fee
     else:

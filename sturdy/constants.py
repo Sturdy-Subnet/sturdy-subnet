@@ -58,4 +58,4 @@ MIN_TAO_IN_POOL = 1000.0  # minimum amount of TAO a pool must have to consider i
 TOTAL_RAO = int(1000e9)  # total amount of rao to distribute across alpha token pools
 
 # Uniswap V3 LP subgraph URL for Taofi
-TAOFI_GQL_URL = "https://subgraph.taofi.com/subgraphs/name/uniswap/v3"
+TAOFI_GQL_URL = "https://subgraph.taofi.com/subgraphs/name/uniswap/v3-older"

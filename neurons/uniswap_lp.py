@@ -12,7 +12,8 @@ async def uniswap_v3_lp_forward(
 ) -> sturdy.protocol.UniswapV3PoolLiquidity:
     bt.logging.warning("Received UniswapV3PoolLiquidity synapse")
     # set the token ids of your position
-    synapse.token_ids = [36]
+    synapse.token_ids = [33, 36, 49, 164]
+
     # sign the message with your wallet that owns the position(s)
     message = encode_defunct(text=synapse.message)
     signed_msg: SignedMessage = self.test_w3.eth.account.sign_message(message, private_key=self.uniswap_pos_owner_key)

@@ -387,6 +387,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         return [], {}
 
     # much like the pool registry for evm-based pools
+    # TODO(uniswap_v3_lp): Move these constants to a config file or constants module
     synapse = UniswapV3PoolLiquidity(
         pool_address="0x6647dcbeb030dc8E227D8B1A2Cb6A49F3C887E3c",
         nft_position_manager="0x61EeA4770d7E15e7036f8632f4bcB33AF1Af1e25",
@@ -408,8 +409,11 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         request=synapse,
         responses=responses,
         uids=uids_to_query,
-        web3_provider=self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3],
     )
+
+    if not rewards_dict:
+        bt.logging.warning("No rewards received from miners, skipping scoring for LP miners...")
+        return [], {}
 
     # Sort rewards dict by value in descending order
     sorted_rewards = sorted(rewards_dict.items(), key=lambda x: x[1], reverse=True)
