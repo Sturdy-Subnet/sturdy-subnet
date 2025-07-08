@@ -380,8 +380,10 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         return [], {}
 
     # much like the pool registry for evm-based pools
+    # TODO(uniswap_v3_lp): Move these constants to a config file or constants module
     synapse = UniswapV3PoolLiquidity(
         pool_address="0x6647dcbeb030dc8E227D8B1A2Cb6A49F3C887E3c",
+        # TODO(uniswap_v3_lp): This is the NFT position manager for TaoFi's Uniswap V3 pool - do we need to send this anymore?
         nft_position_manager="0x61EeA4770d7E15e7036f8632f4bcB33AF1Af1e25",
         token_0="0x9Dc08C6e2BF0F1eeD1E00670f80Df39145529F81",
         token_1="0xB833E8137FEDf80de7E908dc6fea43a029142F20",
@@ -400,8 +402,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
     miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
         request=synapse,
         responses=responses,
-        uids=uids_to_query,
-        web3_provider=self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3],
+        lp_miner_uids=uids_to_query,
     )
 
     # Sort rewards dict by value in descending order
