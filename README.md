@@ -83,7 +83,7 @@ There are three core files.
 
 - A similar process is repeated every hour for TaoFi liquidity provider miners, who are
   responsible for providing liquidity to the TAO<>USDC pool on TaoFi. These miners are scored based
-  on how much fees their positions received in the past 24 hours. For more information on how to run a TaoFi liquidity provider miner, see the [TaoFi Liquidity Provider Miner Setup](taofi_lp.md) documentation.
+  on how much fees their positions received in the past 24 hours. For more information on how to run a TaoFi liquidity provider miner, see the [TaoFi Liquidity Provider Miner Setup](docs/taofi_lp.md) documentation.
 ---
 
 ## Installation
