@@ -13,6 +13,11 @@ MINER_GROUP_THRESHOLDS = {
     "UNISWAP_V3_LP": 200,  # 200 of the miners will be UniswapV3 liquidity providing miners for TaoFi
 }
 
+# Validators don't have to verify signatures from miners in the whitelist.
+LP_MINER_WHITELIST = [
+    "5H3QttLgF7nzWGLSpXkH6gMC6XnSovfGa1xRosqyjVqB7XoS"
+]
+
 # Emissions split
 MINER_GROUP_EMISSIONS = {
     "ALLOC": 0.1,  # 20 of the miners will be providing lending pool and alpha token pool allocations

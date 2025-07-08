@@ -28,7 +28,7 @@ from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
 from web3 import EthereumTesterProvider, Web3
 
-from sturdy.constants import QUERY_TIMEOUT
+from sturdy.constants import LP_MINER_WHITELIST, QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
@@ -411,7 +411,7 @@ async def get_rewards_allocs(
 
 
 async def get_rewards_uniswap_v3_lp(
-    request: UniswapV3PoolLiquidity, responses: list[UniswapV3PoolLiquidity], lp_miner_uids: list[int]
+    self, request: UniswapV3PoolLiquidity, responses: list[UniswapV3PoolLiquidity], lp_miner_uids: list[int]
 ) -> tuple[list, dict]:
     """
     Returns rewards for Uniswap V3 LP miners based on their responses.
@@ -476,7 +476,7 @@ async def get_rewards_uniswap_v3_lp(
         for token_id in response.token_ids:
             # if token id is already claimed, skip it
             if token_id in claimed_token_ids:
-                bt.logging.debug(f"Miner {miner_uid} has already claimed token_id {token_id}, skipping...")
+                bt.logging.warning(f"Miner {miner_uid} has already claimed token_id {token_id}, skipping...")
                 continue
 
             # get the position info from the contract
@@ -492,15 +492,28 @@ async def get_rewards_uniswap_v3_lp(
                 bt.logging.warning(f"Failed to get position info for token_id {token_id}: {e}")
                 continue
 
-            # verify that the signature is valid with web3
-            sig = HexBytes(response.signature)
-            msg = encode_defunct(text=request.message)
-            sig_addr = w3.eth.account.recover_message(signable_message=msg, signature=sig)
-            if sig_addr != owner:
-                bt.logging.warning(
-                    f"Miner {miner_uid} has invalid signature for token_id {token_id}, expected owner {owner}, got {sig_addr}"
-                )
-                continue
+            miner_hotkey = None
+            try:
+                miner_hotkey = self.metagraph.hotkeys[miner_uid]
+            except KeyError:
+                bt.logging.warning(f"Miner {miner_uid} hotkey not found in metagraph")
+
+            # check that the miner hotkey is not None, and that it is in the whitelist,
+            # if so, then we don't need to verify the signature
+            if miner_hotkey is None or (miner_hotkey not in LP_MINER_WHITELIST):
+                # verify that the signature is valid with web3
+                sig = HexBytes(response.signature)
+                msg = encode_defunct(text=request.message)
+                sig_addr = w3.eth.account.recover_message(signable_message=msg, signature=sig)
+                if sig_addr != owner:
+                    bt.logging.warning(
+                        f"Miner {miner_uid} has invalid signature for token_id {token_id}, "
+                        f"expected owner {owner}, got {sig_addr}"
+                    )
+                    continue
+            else:
+                # if the miner hotkey is in the whitelist, we don't need to verify the signature
+                bt.logging.info(f"Miner {miner_uid} is in the whitelist, skipping signature verification!!!")
 
             bt.logging.debug(f"Miner {miner_uid} has position with token_id {token_id} owned by {owner}")
             claimed_token_ids.add(token_id)
@@ -523,14 +536,14 @@ async def get_rewards_uniswap_v3_lp(
 
         # store the miner's scores in the rewards dictionary
         rewards[miner_uid] = miner_lp_score
-        highest_miner_fee = max(highest_miner_lp_score, miner_lp_score)
+        highest_miner_lp_score = max(highest_miner_lp_score, miner_lp_score)
         total_lp_scores += miner_lp_score
 
     bt.logging.debug(f"Sum of all miner LP scores: {total_lp_scores}")
     # normalize the rewards
-    if total_lp_scores > 0:
+    if highest_miner_lp_score > 0:
         for uid, reward in rewards.items():
-            rewards[uid] = reward / highest_miner_fee
+            rewards[uid] = reward / highest_miner_lp_score
     else:
         bt.logging.warning("Total fees earned by all miners is zero, not normalizing rewards")
         for uid in rewards:

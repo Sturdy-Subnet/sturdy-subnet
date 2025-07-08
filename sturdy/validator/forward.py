@@ -407,6 +407,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
 
     # score the responses
     miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
+        self,
         request=synapse,
         responses=responses,
         lp_miner_uids=uids_to_query,
