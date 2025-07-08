@@ -406,7 +406,7 @@ async def get_rewards_allocs(
 
 
 async def get_rewards_uniswap_v3_lp(
-    request: UniswapV3PoolLiquidity, responses: list[UniswapV3PoolLiquidity], uids: list[int]
+    request: UniswapV3PoolLiquidity, responses: list[UniswapV3PoolLiquidity], lp_miner_uids: list[int]
 ) -> tuple[list, dict]:
     """
     Returns rewards for Uniswap V3 LP miners based on their responses.
@@ -422,7 +422,7 @@ async def get_rewards_uniswap_v3_lp(
     rewards = {}
     total_lp_scores = 0
     w3 = Web3(EthereumTesterProvider())
-    bt.logging.debug(f"UIDS: {uids}")
+    bt.logging.debug(f"UIDS: {lp_miner_uids}")
 
     # track highest miner lp_score
     highest_miner_lp_score = 0
@@ -434,11 +434,16 @@ async def get_rewards_uniswap_v3_lp(
     one_day_ago = int(datetime.now().timestamp() - 24 * 60 * 60)
     positions, swaps = await fetch_uniswap_pos_and_swaps(since=one_day_ago, pool_address=request.pool_address)
     if not swaps:
-        bt.logging.warning("No swaps found in the last 24 hours, skipping scoring for LP miners...")
-        return ([], {})
+        # TODO(uniswap_v3_lp): should we handle this differently?
+        bt.logging.warning("No swaps found in the last 24 hours, setting rewards to zero...")
+        # zero rewards for all LP miners
+        for uid in lp_miner_uids:
+            rewards[uid] = 0
+            miner_uids.append(uid)
+        return (miner_uids, rewards)
 
     for idx, response in enumerate(responses):
-        miner_uid = uids[idx]
+        miner_uid = lp_miner_uids[idx]
         rewards[miner_uid] = 0  # initialize rewards for each miner
 
         if not isinstance(response, UniswapV3PoolLiquidity):
