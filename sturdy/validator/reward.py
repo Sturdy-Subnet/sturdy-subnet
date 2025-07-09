@@ -432,6 +432,7 @@ async def get_rewards_uniswap_v3_lp(
     for idx, response in enumerate(responses):
         miner_uid = uids[idx]
         rewards[miner_uid] = 0  # initialize rewards for each miner
+        miner_uids.append(miner_uid)
 
         if not isinstance(response, UniswapV3PoolLiquidity):
             raise TypeError(f"Expected UniswapV3PoolLiquidity, got {type(response)}")
@@ -439,8 +440,6 @@ async def get_rewards_uniswap_v3_lp(
         if response.token_ids is None:
             bt.logging.warning(f"Miner {miner_uid} has no token_ids, skipping...")
             continue
-
-        miner_uids.append(miner_uid)
 
         # get the uniswapv3 lp position from the chain given the token_id in the response
         nft_abi_file_path = Path(__file__).parent.parent / "abi" / "NonfungiblePositionManager.json"
