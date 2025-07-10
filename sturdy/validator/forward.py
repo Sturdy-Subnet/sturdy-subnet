@@ -334,7 +334,7 @@ async def query_and_score_miners_allocs(
             # scale emissions by the miner group emissions
             rewards *= MINER_GROUP_EMISSIONS["ALLOC"]
             bt.logging.debug(f"miner rewards: {rewards}")
-            self.update_scores(rewards, int_miner_uids)
+            self.update_scores(rewards, int_miner_uids, self.config.neuron.alloc_moving_average_alpha)
 
     # wipe these allocations from the db after scoring them
     if len(uids_to_delete) > 0:
@@ -425,7 +425,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
 
     bt.logging.debug(f"miner rewards: {rewards_dict}")
 
-    self.update_scores(rewards, miner_uids)
+    self.update_scores(rewards, miner_uids, self.config.neuron.lp_moving_average_alpha)
 
     return rewards, rewards_dict
 

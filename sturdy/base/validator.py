@@ -349,11 +349,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # update self.miner_types based on responses
         for uid, response in enumerate(responses):
-            if response is not None:
-                self.miner_types[uid] = response.miner_type
-            else:
-                # TODO(uniswap_v3_lp): is this necessary?
-                self.miner_types[uid] = MINER_TYPE.ALLOC  # Default to ALLOC if no response
+            self.miner_types[uid] = response.miner_type
 
         bt.logging.debug(f"Updated miner types: {self.miner_types}")
 
@@ -394,11 +390,11 @@ class BaseValidatorNeuron(BaseNeuron):
         # Update the hotkeys.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-    def update_scores(self, rewards: npt.NDArray, uids: list[int]) -> None:
+    def update_scores(self, rewards: npt.NDArray, uids: list[int], alpha: float) -> None:
         """Performs exponential moving average on the scores based on the rewards received from the miners."""
 
         # log the params
-        bt.logging.debug(f"update_scores() called with rewards: {rewards}, uids: {uids}")
+        bt.logging.debug(f"update_scores() called with rewards: {rewards}, uids: {uids}, alpha: {alpha}")
         # log self.scores
         bt.logging.debug(f"Current scores: {self.scores}")
 
@@ -417,7 +413,6 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.debug(f"Scattered rewards: {rewards}")
 
         # Only update scores for UIDs that received rewards in this step
-        alpha: float = self.config.neuron.moving_average_alpha
         # mask = scattered_rewards > 0  # Create mask for UIDs with rewards
         # create mask for the uids that we want to update scores for
         mask = np.isin(np.arange(len(self.scores)), uids_tensor)

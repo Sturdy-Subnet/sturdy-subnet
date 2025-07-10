@@ -467,8 +467,6 @@ async def get_rewards_uniswap_v3_lp(
             bt.logging.warning(f"Miner {miner_uid} has no token_ids, skipping...")
             continue
 
-        miner_uids.append(miner_uid)
-
         # track the lp score for the miner
         miner_lp_score = 0
 

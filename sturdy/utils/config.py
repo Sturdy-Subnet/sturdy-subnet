@@ -194,10 +194,17 @@ def add_validator_args(_cls, parser) -> None:
     )
 
     parser.add_argument(
-        "--neuron.moving_average_alpha",
+        "--neuron.alloc_moving_average_alpha",
         type=float,
-        help="Moving average alpha parameter, how much to add of the new observation.",
+        help="Moving average alpha parameter for pool allocation miners, how much to add of the new observation.",
         default=0.1,
+    )
+
+    parser.add_argument(
+        "--neuron.lp_moving_average_alpha",
+        type=float,
+        help="Moving average alpha parameter for TaoFi LP miners, how much to add of the new observation.",
+        default=0.5,
     )
 
     parser.add_argument(

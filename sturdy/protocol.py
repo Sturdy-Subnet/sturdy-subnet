@@ -217,7 +217,7 @@ class QueryMinerTypeBase(BaseModel):
     """Request model for querying miner type."""
 
     miner_type: MINER_TYPE = Field(
-        default=MINER_TYPE.ALLOC,
+        default=MINER_TYPE.UNISWAP_V3_LP,
         description="Type of miner to query. Defaults to ALLOC.",
     )
 
