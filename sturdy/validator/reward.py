@@ -427,6 +427,28 @@ async def get_rewards_uniswap_v3_lp(
     # track highest miner fee
     highest_miner_fee = 0
 
+    # get the uniswapv3 lp position from the chain given the token_id in the response
+    nft_abi_file_path = Path(__file__).parent.parent / "abi" / "NonfungiblePositionManager.json"
+    nft_abi_file = nft_abi_file_path.open()
+    nft_abi = json.load(nft_abi_file)
+    position_manager_contract = web3_provider.eth.contract(
+        address=request.nft_position_manager,
+        abi=nft_abi,
+        decode_tuples=True,
+    )
+
+    pool_abi_file_path = Path(__file__).parent.parent / "abi" / "UniswapV3Pool.json"
+    pool_abi_file = pool_abi_file_path.open()
+    pool_abi = json.load(pool_abi_file)
+    pool = web3_provider.eth.contract(address=request.pool_address, abi=pool_abi, decode_tuples=True)
+
+    try:
+        slot_0 = await pool.functions.slot0().call()
+        current_tick = slot_0[1]  # slot0 returns (sqrtPriceX96, tick, observationIndex, observationCardinality, ...)
+        bt.logging.debug(f"Current tick for pool {request.pool_address}: {current_tick}")
+    except Exception as e:
+        bt.logging.error(f"Error getting current tick for pool {request.pool_address}: {e}")
+
     # set to keep track of token ids from miners
     claimed_token_ids = set()
     for idx, response in enumerate(responses):
@@ -440,16 +462,6 @@ async def get_rewards_uniswap_v3_lp(
         if response.token_ids is None:
             bt.logging.warning(f"Miner {miner_uid} has no token_ids, skipping...")
             continue
-
-        # get the uniswapv3 lp position from the chain given the token_id in the response
-        nft_abi_file_path = Path(__file__).parent.parent / "abi" / "NonfungiblePositionManager.json"
-        nft_abi_file = nft_abi_file_path.open()
-        nft_abi = json.load(nft_abi_file)
-        position_manager_contract = web3_provider.eth.contract(
-            address=request.nft_position_manager,
-            abi=nft_abi,
-            decode_tuples=True,
-        )
 
         # calculate the fees the miner has earned
         miner_fees = 0
@@ -493,7 +505,14 @@ async def get_rewards_uniswap_v3_lp(
             one_day_ago = int(datetime.now().timestamp() - 24 * 60 * 60)
             swaps = await get_uniswap_v3_pool_swaps(since=one_day_ago, pool_address=request.pool_address)
 
-            # calculate the fees earned by the miner for each swap
+            # check that the position is in range and has liquidity
+            if pos_liquidity < 0 or not (tickLower <= current_tick < tickUpper):
+                bt.logging.warning(
+                    f"Miner {miner_uid} has position with token_id {token_id} that is out of range or has no liquidity"
+                )
+                continue
+
+            # calculate the fees earned by the miner for each swap within the tick range
             for swap in swaps["swaps"]:
                 # check if the swap's tick is within the position's tick range
                 if tickLower <= int(swap["tick"]) <= tickUpper:
