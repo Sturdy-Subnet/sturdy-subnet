@@ -343,6 +343,8 @@ class BaseValidatorNeuron(BaseNeuron):
             for axon in self.metagraph.axons
         ]
 
+        old_miner_types = copy.deepcopy(self.miner_types)
+
         bt.logging.debug(f"Responses from miners: {responses}")
 
         # update self.miner_types based on responses
@@ -354,6 +356,14 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.miner_types[uid] = MINER_TYPE.ALLOC  # Default to ALLOC if no response
 
         bt.logging.debug(f"Updated miner types: {self.miner_types}")
+
+        # Check if a miner changed their miner_type since last time
+        for uid in self.miner_types:
+            if uid in old_miner_types and old_miner_types[uid] != self.miner_types[uid]:
+                bt.logging.warning(
+                    f"Miner {uid} changed type from {old_miner_types[uid]} to {self.miner_types[uid]}, resetting score!!!"
+                )
+                self.scores[uid] = 0
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
@@ -430,6 +440,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 step=self.step,
                 scores=self.scores,
                 hotkeys=self.hotkeys,
+                miner_types=self.miner_types,
             ),
         )
 
@@ -443,11 +454,13 @@ class BaseValidatorNeuron(BaseNeuron):
 
         try:
             # Load state in executor
-            state = await asyncio.get_event_loop().run_in_executor(None, lambda: np.load(state_path))
+            state = await asyncio.get_event_loop().run_in_executor(None, lambda: np.load(state_path, allow_pickle=True))
 
             self.step = state["step"]
             self.scores = state["scores"]
             self.hotkeys = state["hotkeys"]
+            miner_types = state.get("miner_types", {})
+            self.miner_types = miner_types.item() if isinstance(miner_types, np.ndarray) else miner_types
 
             bt.logging.info(f"Loaded state with {len(self.hotkeys)} hotkeys")
 
