@@ -242,7 +242,7 @@ def filter_allocations(
     responses: list,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
     query_timeout: int = QUERY_TIMEOUT,
-) -> tuple[dict[str, float], dict[str, AllocInfo]]:
+) -> tuple[dict[str, float], dict[str, AllocInfo], list[str]]:
     """
     Returns filtered allocations based on the query and responses from the miner.
 
@@ -253,14 +253,17 @@ def filter_allocations(
     Returns:
     - dict[str, float]: A dictionary containing the axon times for each uid.
     - dict[str, AllocInfo]: A dictionary containing the filtered allocations.
+    - list[str]: A list of UIDs of miners that were filtered out.
     """
 
     filtered_allocs = {}
     axon_times = get_response_times(uids=uids, responses=responses, timeout=query_timeout)
+    filtered_out_uids = []
 
     cheaters = []
     for response_idx, response in enumerate(responses):
         allocations = response.allocations
+        miner_uid = uids[response_idx]
 
         # is the miner cheating w.r.t allocations?
         cheating = True
@@ -271,17 +274,19 @@ def filter_allocations(
 
         # score response very low if miner is cheating somehow or returns allocations with incorrect format
         if cheating:
-            miner_uid = uids[response_idx]
             cheaters.append(miner_uid)
+            filtered_out_uids.append(miner_uid)
             continue
 
         # used to filter out miners who timed out
         # TODO: should probably move some things around later down the road
         # TODO: cleaner way to do this?
-        if response.allocations is not None and axon_times[str(uids[response_idx])] < query_timeout:
-            filtered_allocs[str(uids[response_idx])] = {
+        if response.allocations is not None and axon_times[str(miner_uid)] < query_timeout:
+            filtered_allocs[str(miner_uid)] = {
                 "allocations": response.allocations,
             }
+        else:
+            filtered_out_uids.append(miner_uid)
 
     bt.logging.warning(f"CHEATERS DETECTED: {cheaters}")
 
@@ -295,7 +300,7 @@ def filter_allocations(
     self.sorted_axon_times = sorted_axon_times
 
     # Get all the reward results by iteratively calling your reward() function.
-    return axon_times, curr_filtered_allocs
+    return axon_times, curr_filtered_allocs, filtered_out_uids
 
 
 # TODO: we shouldn't need chain_data provider here, use self.pool_data_providers instead
