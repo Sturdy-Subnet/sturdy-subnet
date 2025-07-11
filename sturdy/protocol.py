@@ -192,7 +192,6 @@ class UniswapV3PoolLiquidityBase(BaseModel):
     """Request model for Uniswap V3 pool liquidity checks"""
 
     pool_address: str = Field(..., description="Uniswap V3 pool address to check liquidity for")
-    nft_position_manager: str = Field(..., description="Address of the NFT position manager contract for TaoFi positions")
     token_0: str = Field(..., description="Address of the first token in the pool")
     token_1: str = Field(..., description="Address of the second token in the pool")
     message: str = Field(..., description="Message to be signed and used for user identification in the request")
@@ -218,7 +217,7 @@ class QueryMinerTypeBase(BaseModel):
     """Request model for querying miner type."""
 
     miner_type: MINER_TYPE = Field(
-        default=MINER_TYPE.ALLOC,
+        default=MINER_TYPE.UNISWAP_V3_LP,
         description="Type of miner to query. Defaults to ALLOC.",
     )
 

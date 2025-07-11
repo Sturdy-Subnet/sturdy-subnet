@@ -27,6 +27,7 @@ class PoolProviderFactory:
             subtensor = bt.AsyncSubtensor(url)
             await subtensor.initialize()
             return subtensor
+        # TODO(uniwap_v3_lp): remove this if we believe that the bittensor web3 provider is not needed
         if provider == POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3:
             return AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url, **kwargs))
         raise ValueError(f"Unsupported provider type: {provider}")

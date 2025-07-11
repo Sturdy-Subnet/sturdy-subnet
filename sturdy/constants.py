@@ -13,6 +13,9 @@ MINER_GROUP_THRESHOLDS = {
     "UNISWAP_V3_LP": 200,  # 200 of the miners will be UniswapV3 liquidity providing miners for TaoFi
 }
 
+# Validators don't have to verify signatures from miners in the whitelist.
+LP_MINER_WHITELIST = ["5H3QttLgF7nzWGLSpXkH6gMC6XnSovfGa1xRosqyjVqB7XoS"]
+
 # Emissions split
 MINER_GROUP_EMISSIONS = {
     "ALLOC": 0.1,  # 20 of the miners will be providing lending pool and alpha token pool allocations
@@ -58,4 +61,4 @@ MIN_TAO_IN_POOL = 1000.0  # minimum amount of TAO a pool must have to consider i
 TOTAL_RAO = int(1000e9)  # total amount of rao to distribute across alpha token pools
 
 # Uniswap V3 LP subgraph URL for Taofi
-TAOFI_GQL_URL = "https://subgraph.taofi.com/subgraphs/name/uniswap/v3"
+TAOFI_GQL_URL = "https://subgraph.taofi.com/subgraphs/name/uniswap/v3-older"
