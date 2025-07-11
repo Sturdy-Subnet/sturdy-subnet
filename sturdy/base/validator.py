@@ -11,9 +11,9 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import QUERY_FREQUENCY, QUERY_TIMEOUT, UNISWAP_V3_LP_QUERY_FREQUENCY
+from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
-from sturdy.protocol import MINER_TYPE, QueryMinerType
+from sturdy.protocol import QueryMinerType
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy

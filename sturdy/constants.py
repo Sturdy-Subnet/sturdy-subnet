@@ -14,9 +14,7 @@ MINER_GROUP_THRESHOLDS = {
 }
 
 # Validators don't have to verify signatures from miners in the whitelist.
-LP_MINER_WHITELIST = [
-    "5H3QttLgF7nzWGLSpXkH6gMC6XnSovfGa1xRosqyjVqB7XoS"
-]
+LP_MINER_WHITELIST = ["5H3QttLgF7nzWGLSpXkH6gMC6XnSovfGa1xRosqyjVqB7XoS"]
 
 # Emissions split
 MINER_GROUP_EMISSIONS = {

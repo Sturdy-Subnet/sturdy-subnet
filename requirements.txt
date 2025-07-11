@@ -5,6 +5,7 @@ loguru==0.7.0
 wandb==0.18.7
 annotated-types==0.7.0
 anyio==4.6.2.post1
+beautifultable==1.1.0
 bittensor==9.7.0
 bittensor-cli==9.6.0
 decorator==5.1.1

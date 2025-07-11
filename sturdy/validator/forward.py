@@ -406,11 +406,14 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
     bt.logging.debug(f"Received responses: {responses}")
 
     # score the responses
+    # get the bittensor mainnet provider
+    bt_mainnet_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET]
     miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
         self,
         request=synapse,
         responses=responses,
         lp_miner_uids=uids_to_query,
+        subtensor=bt_mainnet_provider,
     )
 
     # Sort rewards dict by value in descending order

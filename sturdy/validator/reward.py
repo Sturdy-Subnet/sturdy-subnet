@@ -17,7 +17,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 import json
-from datetime import datetime
 from typing import cast
 
 import bittensor as bt
@@ -34,7 +33,7 @@ from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
-from sturdy.utils.taofi_subgraph import fetch_uniswap_pos_and_swaps
+from sturdy.utils.taofi_subgraph import PositionFees, calculate_fee_growth, get_pool_tick
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
@@ -411,7 +410,11 @@ async def get_rewards_allocs(
 
 
 async def get_rewards_uniswap_v3_lp(
-    self, request: UniswapV3PoolLiquidity, responses: list[UniswapV3PoolLiquidity], lp_miner_uids: list[int]
+    self,
+    request: UniswapV3PoolLiquidity,
+    responses: list[UniswapV3PoolLiquidity],
+    lp_miner_uids: list[int],
+    subtensor: bt.AsyncSubtensor,
 ) -> tuple[list, dict]:
     """
     Returns rewards for Uniswap V3 LP miners based on their responses.
@@ -425,35 +428,24 @@ async def get_rewards_uniswap_v3_lp(
 
     miner_uids = []
     rewards = {}
-    total_lp_scores = 0
+    total_miners_fees = 0
     w3 = Web3(EthereumTesterProvider())
     bt.logging.debug(f"UIDS: {lp_miner_uids}")
 
     # track highest miner lp_score
-    highest_miner_lp_score = 0
+    highest_miner_fees = 0
 
     try:
-        # signature is valid, get swaps since the last 24 hours - timestamp is in utc
-        # Get swaps from the last 24 hours
-        one_day_ago = int(datetime.now().timestamp() - 24 * 60 * 60)
-        positions, swaps, current_tick = await fetch_uniswap_pos_and_swaps(
-            since=one_day_ago, pool_address=request.pool_address
-        )
+        current_block = await subtensor.get_current_block()
+        one_day_ago = max(1, current_block - 7200)
+        _, _, positions_growth = await calculate_fee_growth(block_start=one_day_ago, block_end=current_block)
+        current_tick = await get_pool_tick(pool_id=request.pool_address, block_number=current_block)
         bt.logging.debug(f"Current tick for pool {request.pool_address}: {current_tick}")
     except Exception as e:
         bt.logging.error(f"Error fetching information from Taofi subgraph: {e}")
 
     # set to keep track of token ids from miners
     claimed_token_ids = set()
-
-    if not swaps:
-        # TODO(uniswap_v3_lp): should we handle this differently?
-        bt.logging.warning("No swaps found in the last 24 hours, setting rewards to zero...")
-        # zero rewards for all LP miners
-        for uid in lp_miner_uids:
-            rewards[uid] = 0
-            miner_uids.append(uid)
-        return (miner_uids, rewards)
 
     for idx, response in enumerate(responses):
         miner_uid = lp_miner_uids[idx]
@@ -467,8 +459,8 @@ async def get_rewards_uniswap_v3_lp(
             bt.logging.warning(f"Miner {miner_uid} has no token_ids, skipping...")
             continue
 
-        # track the lp score for the miner
-        miner_lp_score = 0
+        # track the fees for the miners' positions
+        miner_fees = 0.0
 
         # inspect each position specified by the token_ids in the response
         for token_id in response.token_ids:
@@ -479,15 +471,12 @@ async def get_rewards_uniswap_v3_lp(
 
             # get the position info from the contract
             try:
-                position_info = positions[int(token_id)]
+                position_info: PositionFees = positions_growth[int(token_id)]
                 bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
-                pos_liquidity = int(position_info["liquidity"])
-                upper_tick = int(position_info["tickUpper"]["tickIdx"])
-                lower_tick = int(position_info["tickLower"]["tickIdx"])
                 # TODO(uniswap_v3_lp): why is this in all caps, not a valid checksum by default?
-                owner = Web3.to_checksum_address(position_info["owner"])
+                owner = Web3.to_checksum_address(position_info.owner)
             except Exception as e:
-                bt.logging.warning(f"Failed to get position info for token_id {token_id}: {e}")
+                bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
                 continue
 
             miner_hotkey = None
@@ -516,32 +505,21 @@ async def get_rewards_uniswap_v3_lp(
             bt.logging.debug(f"Miner {miner_uid} has position with token_id {token_id} owned by {owner}")
             claimed_token_ids.add(token_id)
 
-            # check that the position is in range and has liquidity
-            if pos_liquidity < 0 or not (lower_tick <= current_tick < upper_tick):
-                bt.logging.warning(
-                    f"Miner {miner_uid} has position with token_id {token_id} that is out of range or has no liquidity"
-                )
-                continue
+            fees_pos = position_info.total_fees_token1_equivalent
+            miner_fees += fees_pos
 
-            # calculate the lp score for the miner for each swap
-            for swap in swaps:
-                # check if the swap's tick is within the position's tick range
-                if lower_tick <= int(swap["tick"]) <= upper_tick:
-                    amount_usd = float(swap["amountUSD"])
-                    miner_lp_score += amount_usd * pos_liquidity / 1e18
-
-            bt.logging.debug(f"Miner {miner_uid} has LP score of {miner_lp_score} for token_id {token_id}")
+            bt.logging.debug(f"Miner {miner_uid} has made {fees_pos} in fees for token_id {token_id} in the past 7200 blocks")
 
         # store the miner's scores in the rewards dictionary
-        rewards[miner_uid] = miner_lp_score
-        highest_miner_lp_score = max(highest_miner_lp_score, miner_lp_score)
-        total_lp_scores += miner_lp_score
+        rewards[miner_uid] = miner_fees
+        highest_miner_fees = max(highest_miner_fees, miner_fees)
+        total_miners_fees += miner_fees
 
-    bt.logging.debug(f"Sum of all miner LP scores: {total_lp_scores}")
+    bt.logging.debug(f"Sum of all miners' fees: {total_miners_fees}")
     # normalize the rewards
-    if highest_miner_lp_score > 0:
+    if highest_miner_fees > 0:
         for uid, reward in rewards.items():
-            rewards[uid] = reward / highest_miner_lp_score
+            rewards[uid] = reward / highest_miner_fees
     else:
         bt.logging.warning("Total fees earned by all miners is zero, not normalizing rewards")
         for uid in rewards:
