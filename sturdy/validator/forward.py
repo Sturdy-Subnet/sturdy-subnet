@@ -344,7 +344,7 @@ async def query_and_score_miners_allocs(
 
     # before logging latest allocations
     # filter them
-    axon_times, filtered_allocs = filter_allocations(
+    axon_times, filtered_allocs, filtered_out_uids = filter_allocations(
         self,
         query=self.step,
         uids=uids_to_query,
@@ -352,6 +352,13 @@ async def query_and_score_miners_allocs(
         assets_and_pools=assets_and_pools,
         query_timeout=self.config.neuron.timeout,
     )
+
+    # array of zeros the length of the filtered out uids
+    bt.logging.warning("Scoring filtered out miners with zero scores.")
+    bt.logging.warning(f"Filtered out uids: {filtered_out_uids}")
+    unresponsive_miner_scores = np.zeros(len(filtered_out_uids), dtype=np.float64)
+    # update the scores of the filtered out uids
+    self.update_scores(unresponsive_miner_scores, filtered_out_uids)
 
     sorted_allocs = sort_allocation_by_score(filtered_allocs, self.scores)
 
@@ -478,7 +485,7 @@ async def query_top_n_miners(
         await pool.sync(chain_data_provider)
 
     # filter the allocations
-    axon_times, filtered_allocs = filter_allocations(
+    axon_times, filtered_allocs, _ = filter_allocations(
         self,
         query=self.step,
         uids=top_n_uids,
