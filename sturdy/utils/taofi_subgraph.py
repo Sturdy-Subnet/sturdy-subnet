@@ -194,11 +194,10 @@ async def calculate_fee_growth(
     positions_fees_end = await get_all_positions_fees(block_end, client)
 
     positions_growth = {}
-    for position_id in positions_fees_start:
-        if position_id not in positions_fees_end:
-            # Use owner from start position since end position doesn't exist
-            start_fees = positions_fees_start[position_id]
-            positions_growth[position_id] = PositionFees(0, 0, 0, 0, 0, start_fees.owner, 0.0, 0.0, 0.0)
+    for position_id in positions_fees_end:
+        if position_id not in positions_fees_start:
+            # Just consider the growth to be the end fees if the position was not present at the start
+            positions_growth[position_id] = positions_fees_end[position_id]
             continue
 
         # Calculate the growth in fees and liquidity
