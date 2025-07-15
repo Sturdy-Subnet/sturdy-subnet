@@ -32,6 +32,7 @@ from sturdy.constants import (
     MIN_TOTAL_ASSETS_AMOUNT,
     MINER_GROUP_EMISSIONS,
     MINER_GROUP_THRESHOLDS,
+    QUERY_TIMEOUT,
     SCORING_PERIOD_STEP,
 )
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
@@ -386,23 +387,30 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         bt.logging.error("No miners available to query for allocations.")
         return [], {}
 
-    # much like the pool registry for evm-based pools
-    # TODO(uniswap_v3_lp): Move these constants to a config file or constants module
-    synapse = UniswapV3PoolLiquidity(
-        pool_address="0x6647dcbeb030dc8E227D8B1A2Cb6A49F3C887E3c",
-        # TODO(uniswap_v3_lp): This is the NFT position manager for TaoFi's Uniswap V3 pool - do we need to send this anymore?
-        nft_position_manager="0x61EeA4770d7E15e7036f8632f4bcB33AF1Af1e25",
-        token_0="0x9Dc08C6e2BF0F1eeD1E00670f80Df39145529F81",
-        token_1="0xB833E8137FEDf80de7E908dc6fea43a029142F20",
-        message=str(uuid.uuid4()).replace("-", ""),
-    )
-
     # query all miners
-    responses = await query_multiple_miners(
-        self,
-        synapse,
-        uids_to_query,
-    )
+    query_tasks = []
+    for uid in uids_to_query:
+        # much like the pool registry for evm-based pools
+        # TODO(uniswap_v3_lp): Move these constants to a config file or constants module
+        synapse = UniswapV3PoolLiquidity(
+            pool_address="0x6647dcbeb030dc8E227D8B1A2Cb6A49F3C887E3c",
+            # TODO(uniswap_v3_lp): This is the NFT position manager for TaoFi's Uniswap V3 pool - do we need to send this anymore?
+            nft_position_manager="0x61EeA4770d7E15e7036f8632f4bcB33AF1Af1e25",
+            token_0="0x9Dc08C6e2BF0F1eeD1E00670f80Df39145529F81",
+            token_1="0xB833E8137FEDf80de7E908dc6fea43a029142F20",
+            message=str(uuid.uuid4()).replace("-", ""),
+        )
+
+        axon = self.metagraph.axons[uid]
+        query_task = self.dendrite.call(
+            target_axon=axon,
+            synapse=synapse,
+            timeout=QUERY_TIMEOUT,
+            deserialize=False,
+        )
+        query_tasks.append(query_task)
+
+    responses = await asyncio.gather(*query_tasks)
     bt.logging.debug(f"Received responses: {responses}")
 
     # score the responses
