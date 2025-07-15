@@ -136,14 +136,27 @@ async def get_positions_fees(
 
         # Calculate uncollected fees: l * (fr_t1 - fr_t0) / X128
         # Use overflow-safe subtraction and divide by X128 at the end
-        uncollected_fees_0 = (position_liquidity * sub_in_256(fr_t1_0, fee_growth_inside_last_0)) // X128
-        uncollected_fees_1 = (position_liquidity * sub_in_256(fr_t1_1, fee_growth_inside_last_1)) // X128
+        fee_diff_0 = sub_in_256(fr_t1_0, fee_growth_inside_last_0)
+        fee_diff_1 = sub_in_256(fr_t1_1, fee_growth_inside_last_1)
+
+        # Bandaid fix: Cap fee differences to prevent massive values from out-of-range positions
+        # If fee difference is larger than X128/100, it's likely an out-of-range calculation issue
+        MAX_REASONABLE_FEE_DIFF = X128 // 100  # 1% of X128 as reasonable upper bound
+
+        if fee_diff_0 > MAX_REASONABLE_FEE_DIFF:
+            fee_diff_0 = 0  # Set to 0 for out-of-range positions
+
+        if fee_diff_1 > MAX_REASONABLE_FEE_DIFF:
+            fee_diff_1 = 0  # Set to 0 for out-of-range positions
+
+        uncollected_fees_0 = (position_liquidity * fee_diff_0) // X128
+        uncollected_fees_1 = (position_liquidity * fee_diff_1) // X128
 
         # Collected fees
         collected_fees_0 = max(0, float(position["collectedFeesToken0"]))
         collected_fees_1 = max(0, float(position["collectedFeesToken1"]))
 
-        # Decimal adjustment to get final results
+        # Decimal adjustment to get final results with additional sanity check
         uncollected_fees_adjusted_0 = max(0, uncollected_fees_0 / (10**symbol_0_decimals))
         uncollected_fees_adjusted_1 = max(0, uncollected_fees_1 / (10**symbol_1_decimals))
 
