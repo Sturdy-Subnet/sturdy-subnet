@@ -358,7 +358,7 @@ async def query_and_score_miners_allocs(
     bt.logging.warning(f"Filtered out uids: {filtered_out_uids}")
     unresponsive_miner_scores = np.zeros(len(filtered_out_uids), dtype=np.float64)
     # update the scores of the filtered out uids
-    self.update_scores(unresponsive_miner_scores, filtered_out_uids)
+    self.update_scores(unresponsive_miner_scores, filtered_out_uids, self.config.neuron.alloc_moving_average_alpha)
 
     sorted_allocs = sort_allocation_by_score(filtered_allocs, self.scores)
 
