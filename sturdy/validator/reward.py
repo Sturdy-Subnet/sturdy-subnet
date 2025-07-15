@@ -434,10 +434,14 @@ async def get_rewards_uniswap_v3_lp(
 
     # track highest miner lp_score
     highest_miner_fees = 0
+    # a day in blocktime
+    BLOCK_ONE_DAY_AGO = 7200  # 2 hours in blocks, assuming 1 block per second
+    # we use this as a buffer in case the subgraph is not updated in time
+    BLOCK_BUFFER = 1
 
     try:
-        current_block = await subtensor.get_current_block()
-        one_day_ago = max(1, current_block - 7200)
+        current_block = await subtensor.get_current_block() - BLOCK_BUFFER
+        one_day_ago = max(1, current_block - BLOCK_ONE_DAY_AGO)
         _, _, positions_growth = await calculate_fee_growth(block_start=one_day_ago, block_end=current_block)
         current_tick = await get_pool_tick(pool_id=request.pool_address, block_number=current_block)
         bt.logging.debug(f"Current tick for pool {request.pool_address}: {current_tick}")

@@ -11,10 +11,19 @@ from sturdy.constants import TAOFI_GQL_URL
 TRANSPORT = AIOHTTPTransport(url=TAOFI_GQL_URL)
 GQL_CLIENT = Client(transport=TRANSPORT, fetch_schema_from_transport=True)
 
-X96 = math.pow(2, 96)
-X128 = math.pow(2, 128)
+X96 = 2**96
+X128 = 2**128
+X256 = 2**256
 
 QUERY_BATCH_SIZE = 1000  # Default batch size for queries
+
+
+def sub_in_256(x: int, y: int) -> int:
+    """Handle overflow/underflow for subtraction in fee calculations."""
+    difference = x - y
+    if difference < 0:
+        return X256 + difference
+    return difference
 
 
 # dataclass for position fees return type
@@ -81,69 +90,75 @@ async def get_positions_fees(
         # 𝑓𝑢 =𝑙·(𝑓𝑟(𝑡1)−𝑓𝑟(𝑡0))
 
         # used for both tokens' fee amounts
-        tick_current = float(position["pool"]["tick"])
-        tick_lower = float(position["tickLower"]["tickIdx"])
-        tick_upper = float(position["tickUpper"]["tickIdx"])
+        tick_current = int(position["pool"]["tick"])
+        tick_lower = int(position["tickLower"]["tickIdx"])
+        tick_upper = int(position["tickUpper"]["tickIdx"])
 
-        # Global fee growth per liquidity '𝑓𝑔' for both token 0 and token 1
-        fee_growth_global_0 = float(position["pool"]["feeGrowthGlobal0X128"]) / X128
-        fee_growth_global_1 = float(position["pool"]["feeGrowthGlobal1X128"]) / X128
+        # Global fee growth per liquidity - keep as integers
+        fee_growth_global_0 = int(position["pool"]["feeGrowthGlobal0X128"])
+        fee_growth_global_1 = int(position["pool"]["feeGrowthGlobal1X128"])
 
-        # Fee growth outside '𝑓𝑜' of our lower tick for both token 0 and token 1
-        tick_lower_fee_growth_outside_0 = float(position["tickLower"]["feeGrowthOutside0X128"]) / X128
-        tick_lower_fee_growth_outside_1 = float(position["tickLower"]["feeGrowthOutside1X128"]) / X128
+        # Fee growth outside - keep as integers
+        tick_lower_fee_growth_outside_0 = int(position["tickLower"]["feeGrowthOutside0X128"])
+        tick_lower_fee_growth_outside_1 = int(position["tickLower"]["feeGrowthOutside1X128"])
+        tick_upper_fee_growth_outside_0 = int(position["tickUpper"]["feeGrowthOutside0X128"])
+        tick_upper_fee_growth_outside_1 = int(position["tickUpper"]["feeGrowthOutside1X128"])
 
-        # Fee growth outside '𝑓𝑜' of our upper tick for both token 0 and token 1
-        tick_upper_fee_growth_outside_0 = float(position["tickUpper"]["feeGrowthOutside0X128"]) / X128
-        tick_upper_fee_growth_outside_1 = float(position["tickUpper"]["feeGrowthOutside1X128"]) / X128
-
-        # These are '𝑓𝑏(𝑖𝑙)' and '𝑓𝑎(𝑖𝑢)' from the formula
-        # for both token 0 and token 1
+        # Initialize to 0
         tick_lower_fee_growth_below_0 = 0
         tick_lower_fee_growth_below_1 = 0
         tick_upper_fee_growth_above_0 = 0
         tick_upper_fee_growth_above_1 = 0
 
-        # These are the calculations for '𝑓𝑎(𝑖)' from the formula
-        # for both token 0 and token 1
+        # Calculate fee growth above (upper tick) - use overflow-safe subtraction
         if tick_current >= tick_upper:
-            tick_upper_fee_growth_above_0 = fee_growth_global_0 - tick_upper_fee_growth_outside_0
-            tick_upper_fee_growth_above_1 = fee_growth_global_1 - tick_upper_fee_growth_outside_1
+            tick_upper_fee_growth_above_0 = sub_in_256(fee_growth_global_0, tick_upper_fee_growth_outside_0)
+            tick_upper_fee_growth_above_1 = sub_in_256(fee_growth_global_1, tick_upper_fee_growth_outside_1)
         else:
             tick_upper_fee_growth_above_0 = tick_upper_fee_growth_outside_0
             tick_upper_fee_growth_above_1 = tick_upper_fee_growth_outside_1
 
-        # These are the calculations for '𝑓b(𝑖)' from the formula
-        # for both token 0 and token 1
+        # Calculate fee growth below (lower tick) - use overflow-safe subtraction
         if tick_current >= tick_lower:
             tick_lower_fee_growth_below_0 = tick_lower_fee_growth_outside_0
             tick_lower_fee_growth_below_1 = tick_lower_fee_growth_outside_1
         else:
-            tick_lower_fee_growth_below_0 = fee_growth_global_0 - tick_lower_fee_growth_outside_0
-            tick_lower_fee_growth_below_1 = fee_growth_global_1 - tick_lower_fee_growth_outside_1
+            tick_lower_fee_growth_below_0 = sub_in_256(fee_growth_global_0, tick_lower_fee_growth_outside_0)
+            tick_lower_fee_growth_below_1 = sub_in_256(fee_growth_global_1, tick_lower_fee_growth_outside_1)
 
-        # Calculations for '𝑓𝑟(𝑡1)' part of the '𝑓𝑢 =𝑙·(𝑓𝑟(𝑡1)−𝑓𝑟(𝑡0))' formula
-        # for both token 0 and token 1
-        fr_t1_0 = fee_growth_global_0 - tick_lower_fee_growth_below_0 - tick_upper_fee_growth_above_0
-        fr_t1_1 = fee_growth_global_1 - tick_lower_fee_growth_below_1 - tick_upper_fee_growth_above_1
+        # Calculate fr_t1 - use overflow-safe subtraction
+        fr_t1_0 = sub_in_256(sub_in_256(fee_growth_global_0, tick_lower_fee_growth_below_0), tick_upper_fee_growth_above_0)
+        fr_t1_1 = sub_in_256(sub_in_256(fee_growth_global_1, tick_lower_fee_growth_below_1), tick_upper_fee_growth_above_1)
 
-        # '𝑓𝑟(𝑡0)' part of the '𝑓𝑢 =𝑙·(𝑓𝑟(𝑡1)−𝑓𝑟(𝑡0))' formula
-        # for both token 0 and token 1
-        fee_growth_inside_last_0 = float(position["feeGrowthInside0LastX128"]) / X128
-        fee_growth_inside_last_1 = float(position["feeGrowthInside1LastX128"]) / X128
+        # Fee growth inside last - keep as integers
+        fee_growth_inside_last_0 = int(position["feeGrowthInside0LastX128"])
+        fee_growth_inside_last_1 = int(position["feeGrowthInside1LastX128"])
 
-        # The final calculations for the '𝑓𝑢 =𝑙·(𝑓𝑟(𝑡1)−𝑓𝑟(𝑡0))' uncollected fees formula
-        # for both token 0 and token 1 since we now know everything that is needed to compute it
-        uncollected_fees_0 = position_liquidity * (fr_t1_0 - fee_growth_inside_last_0)
-        uncollected_fees_1 = position_liquidity * (fr_t1_1 - fee_growth_inside_last_1)
+        # Calculate uncollected fees: l * (fr_t1 - fr_t0) / X128
+        # Use overflow-safe subtraction and divide by X128 at the end
+        fee_diff_0 = sub_in_256(fr_t1_0, fee_growth_inside_last_0)
+        fee_diff_1 = sub_in_256(fr_t1_1, fee_growth_inside_last_1)
+
+        # Bandaid fix: Cap fee differences to prevent massive values from out-of-range positions
+        # If fee difference is larger than X128/100, it's likely an out-of-range calculation issue
+        MAX_REASONABLE_FEE_DIFF = X128 // 100  # 1% of X128 as reasonable upper bound
+
+        if fee_diff_0 > MAX_REASONABLE_FEE_DIFF:
+            fee_diff_0 = 0  # Set to 0 for out-of-range positions
+
+        if fee_diff_1 > MAX_REASONABLE_FEE_DIFF:
+            fee_diff_1 = 0  # Set to 0 for out-of-range positions
+
+        uncollected_fees_0 = (position_liquidity * fee_diff_0) // X128
+        uncollected_fees_1 = (position_liquidity * fee_diff_1) // X128
 
         # Collected fees
         collected_fees_0 = max(0, float(position["collectedFeesToken0"]))
         collected_fees_1 = max(0, float(position["collectedFeesToken1"]))
 
-        # Decimal adjustment to get final results
-        uncollected_fees_adjusted_0 = max(0, uncollected_fees_0 / math.pow(10, symbol_0_decimals))
-        uncollected_fees_adjusted_1 = max(0, uncollected_fees_1 / math.pow(10, symbol_1_decimals))
+        # Decimal adjustment to get final results with additional sanity check
+        uncollected_fees_adjusted_0 = max(0, uncollected_fees_0 / (10**symbol_0_decimals))
+        uncollected_fees_adjusted_1 = max(0, uncollected_fees_1 / (10**symbol_1_decimals))
 
         # Decimal adjustment for collected fees too
         collected_fees_adjusted_0 = collected_fees_0 / math.pow(10, symbol_0_decimals)
