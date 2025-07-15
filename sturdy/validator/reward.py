@@ -411,7 +411,7 @@ async def get_rewards_allocs(
 
 async def get_rewards_uniswap_v3_lp(
     self,
-    request: UniswapV3PoolLiquidity,
+    requests: list[UniswapV3PoolLiquidity],
     responses: list[UniswapV3PoolLiquidity],
     lp_miner_uids: list[int],
     subtensor: bt.AsyncSubtensor,
@@ -452,6 +452,7 @@ async def get_rewards_uniswap_v3_lp(
     claimed_token_ids = set()
 
     for idx, response in enumerate(responses):
+        request = requests[idx]
         miner_uid = lp_miner_uids[idx]
         rewards[miner_uid] = 0  # initialize rewards for each miner
         miner_uids.append(miner_uid)

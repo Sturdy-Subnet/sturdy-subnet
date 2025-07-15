@@ -389,11 +389,8 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         return [], {}
 
     # query all miners
-    query_tasks = []
-    for uid in uids_to_query:
-        # much like the pool registry for evm-based pools
-        # TODO(uniswap_v3_lp): Move these constants to a config file or constants module
-        synapse = UniswapV3PoolLiquidity(
+    synapses = [
+        UniswapV3PoolLiquidity(
             pool_address="0x6647dcbeb030dc8E227D8B1A2Cb6A49F3C887E3c",
             # TODO(uniswap_v3_lp): This is the NFT position manager for TaoFi's Uniswap V3 pool - do we need to send this anymore?
             nft_position_manager="0x61EeA4770d7E15e7036f8632f4bcB33AF1Af1e25",
@@ -401,11 +398,18 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
             token_1="0xB833E8137FEDf80de7E908dc6fea43a029142F20",
             message=str(uuid.uuid4()).replace("-", ""),
         )
+        for uid in uids_to_query
+    ]
+
+    query_tasks = []
+    for idx, uid in enumerate(uids_to_query):
+        # much like the pool registry for evm-based pools
+        # TODO(uniswap_v3_lp): Move these constants to a config file or constants module
 
         axon = self.metagraph.axons[uid]
         query_task = self.dendrite.call(
             target_axon=axon,
-            synapse=synapse,
+            synapse=synapses[idx],
             timeout=LP_QUERY_TIMEOUT,
             deserialize=False,
         )
@@ -419,7 +423,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
     bt_mainnet_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET]
     miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
         self,
-        request=synapse,
+        requests=synapses,
         responses=responses,
         lp_miner_uids=uids_to_query,
         subtensor=bt_mainnet_provider,
