@@ -27,7 +27,7 @@ from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
 from web3 import EthereumTesterProvider, Web3
 
-from sturdy.constants import LP_MINER_WHITELIST, QUERY_TIMEOUT
+from sturdy.constants import LP_MINER_WHITELIST, ALLOC_QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
@@ -239,7 +239,7 @@ def filter_allocations(
     uids: list[str],
     responses: list,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
-    query_timeout: int = QUERY_TIMEOUT,
+    query_timeout: int = ALLOC_QUERY_TIMEOUT,
 ) -> tuple[dict[str, float], dict[str, AllocInfo], list[str]]:
     """
     Returns filtered allocations based on the query and responses from the miner.

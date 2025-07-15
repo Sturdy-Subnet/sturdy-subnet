@@ -27,12 +27,13 @@ from web3 import AsyncWeb3, Web3
 from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import (
+    LP_QUERY_TIMEOUT,
     MAX_SCORING_PERIOD,
     MIN_SCORING_PERIOD,
     MIN_TOTAL_ASSETS_AMOUNT,
     MINER_GROUP_EMISSIONS,
     MINER_GROUP_THRESHOLDS,
-    QUERY_TIMEOUT,
+    ALLOC_QUERY_TIMEOUT,
     SCORING_PERIOD_STEP,
 )
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
@@ -405,7 +406,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         query_task = self.dendrite.call(
             target_axon=axon,
             synapse=synapse,
-            timeout=QUERY_TIMEOUT,
+            timeout=LP_QUERY_TIMEOUT,
             deserialize=False,
         )
         query_tasks.append(query_task)

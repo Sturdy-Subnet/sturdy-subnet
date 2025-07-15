@@ -6,7 +6,7 @@ from sturdy.constants import (
     ALLOCATION_SIMILARITY_THRESHOLD,
     APY_BIN_THRESHOLD_FALLBACK,
     NORM_EXP_POW,
-    QUERY_TIMEOUT,
+    ALLOC_QUERY_TIMEOUT,
     TOP_PERFORMERS_BONUS,
     TOP_PERFORMERS_COUNT,
 )
@@ -106,7 +106,7 @@ def sort_bins_by_processing_time(apy_bins: dict[int, list[str]], axon_times: dic
 
     for bin_index, uids in apy_bins.items():
         # Sort UIDs in this bin by their processing time (ascending - fastest first)
-        sorted_uids = sorted(uids, key=lambda uid: axon_times.get(uid, QUERY_TIMEOUT))
+        sorted_uids = sorted(uids, key=lambda uid: axon_times.get(uid, ALLOC_QUERY_TIMEOUT))
         sorted_bins[bin_index] = sorted_uids
 
     return sorted_bins

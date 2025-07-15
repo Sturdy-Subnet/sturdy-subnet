@@ -1,7 +1,8 @@
 SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
 QUERY_FREQUENCY = 600  # time in seconds between validator queries
-QUERY_TIMEOUT = 3  # timeout for challenge requests to miners (seconds)
+ALLOC_QUERY_TIMEOUT = 3  # timeout for challenge requests to miners (seconds)
+LP_QUERY_TIMEOUT = 5  # timeout for lp miners
 MINER_TYPE_QUERY_TIMEOUT = 5  # timeout for miner type queries (seconds)
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 

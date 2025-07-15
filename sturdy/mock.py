@@ -8,7 +8,7 @@ import bittensor as bt
 import numpy as np
 from bittensor.utils.balance import Balance
 
-from sturdy.constants import QUERY_TIMEOUT
+from sturdy.constants import ALLOC_QUERY_TIMEOUT
 from sturdy.pools import get_minimum_allocation
 
 
@@ -236,7 +236,7 @@ class MockDendrite(bt.dendrite):
         self,
         axons: list[bt.axon],
         synapse: bt.Synapse = bt.Synapse(),  # noqa: B008
-        timeout: float = QUERY_TIMEOUT,  # noqa: ASYNC109
+        timeout: float = ALLOC_QUERY_TIMEOUT,  # noqa: ASYNC109
         deserialize: bool = True,
         run_async: bool = True,  # noqa: ARG002
         streaming: bool = False,
