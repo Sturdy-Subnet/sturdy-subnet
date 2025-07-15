@@ -11,7 +11,7 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
+from sturdy.constants import MINER_TYPE_QUERY_TIMEOUT, QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
 from sturdy.protocol import QueryMinerType
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
@@ -337,7 +337,7 @@ class BaseValidatorNeuron(BaseNeuron):
             await self.dendrite.call(
                 target_axon=axon,
                 synapse=synapse.model_copy(),
-                timeout=5,
+                timeout=MINER_TYPE_QUERY_TIMEOUT,
                 deserialize=False,
             )
             for axon in self.metagraph.axons

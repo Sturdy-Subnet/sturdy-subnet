@@ -9,7 +9,9 @@ from sturdy.constants import (
 from sturdy.validator.request import Request
 
 
-async def query_single_axon(dendrite: bt.dendrite, request: Request, query_timeout: int = ALLOC_QUERY_TIMEOUT) -> Request | None:
+async def query_single_axon(
+    dendrite: bt.dendrite, request: Request, query_timeout: int = ALLOC_QUERY_TIMEOUT
+) -> Request | None:
     """
     Query a single axon with a request.
 
