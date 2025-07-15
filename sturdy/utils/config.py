@@ -23,7 +23,7 @@ import bittensor as bt
 from loguru import logger
 
 from sturdy import __spec_version__ as spec_version
-from sturdy.constants import DB_DIR, QUERY_TIMEOUT
+from sturdy.constants import DB_DIR, ALLOC_QUERY_TIMEOUT
 
 
 def check_config(_cls, config: "bt.Config") -> None:
@@ -176,7 +176,7 @@ def add_validator_args(_cls, parser) -> None:
         "--neuron.timeout",
         type=float,
         help="The timeout for each forward call in seconds.",
-        default=QUERY_TIMEOUT,
+        default=ALLOC_QUERY_TIMEOUT,
     )
 
     parser.add_argument(

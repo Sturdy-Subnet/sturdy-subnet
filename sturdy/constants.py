@@ -1,8 +1,9 @@
 SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
 QUERY_FREQUENCY = 600  # time in seconds between validator queries
-QUERY_TIMEOUT = 3  # timeout for challenge requests to miners (seconds)
-MINER_TYPE_QUERY_TIMEOUT = 5  # timeout for miner type queries (seconds)
+ALLOC_QUERY_TIMEOUT = 3  # timeout for challenge requests to miners (seconds)
+LP_QUERY_TIMEOUT = 10  # timeout for lp miners
+MINER_TYPE_QUERY_TIMEOUT = 3  # timeout for miner type queries (seconds)
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 
 UNISWAP_V3_LP_QUERY_FREQUENCY = 3600  # time in seconds between Uniswap V3 LP queries

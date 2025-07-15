@@ -27,7 +27,7 @@ from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
 from web3 import EthereumTesterProvider, Web3
 
-from sturdy.constants import LP_MINER_WHITELIST, QUERY_TIMEOUT
+from sturdy.constants import LP_MINER_WHITELIST, ALLOC_QUERY_TIMEOUT
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
@@ -239,7 +239,7 @@ def filter_allocations(
     uids: list[str],
     responses: list,
     assets_and_pools: dict[str, dict[str, ChainBasedPoolModel] | int],
-    query_timeout: int = QUERY_TIMEOUT,
+    query_timeout: int = ALLOC_QUERY_TIMEOUT,
 ) -> tuple[dict[str, float], dict[str, AllocInfo], list[str]]:
     """
     Returns filtered allocations based on the query and responses from the miner.
@@ -411,7 +411,7 @@ async def get_rewards_allocs(
 
 async def get_rewards_uniswap_v3_lp(
     self,
-    request: UniswapV3PoolLiquidity,
+    requests: list[UniswapV3PoolLiquidity],
     responses: list[UniswapV3PoolLiquidity],
     lp_miner_uids: list[int],
     subtensor: bt.AsyncSubtensor,
@@ -452,6 +452,7 @@ async def get_rewards_uniswap_v3_lp(
     claimed_token_ids = set()
 
     for idx, response in enumerate(responses):
+        request = requests[idx]
         miner_uid = lp_miner_uids[idx]
         rewards[miner_uid] = 0  # initialize rewards for each miner
         miner_uids.append(miner_uid)
