@@ -26,7 +26,7 @@ async def query_single_axon(
     try:
         result = await dendrite.call(
             target_axon=request.axon,
-            synapse=request.synapse,
+            synapse=request.synapse.model_copy(),
             timeout=query_timeout,
             deserialize=False,
         )
