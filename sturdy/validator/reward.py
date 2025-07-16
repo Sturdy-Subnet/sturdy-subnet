@@ -27,7 +27,7 @@ from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
 from web3 import EthereumTesterProvider, Web3
 
-from sturdy.constants import LP_MINER_WHITELIST, ALLOC_QUERY_TIMEOUT
+from sturdy.constants import ALLOC_QUERY_TIMEOUT, LP_MINER_WHITELIST
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
 from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
@@ -36,6 +36,11 @@ from sturdy.utils.misc import get_scoring_period_length
 from sturdy.utils.taofi_subgraph import PositionFees, calculate_fee_growth, get_pool_tick
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
+
+# a day in blocktime
+BLOCK_ONE_DAY_AGO = 7200  # 2 hours in blocks, assuming 1 block per second
+# we use this as a buffer in case the subgraph is not updated in time
+BLOCK_BUFFER = 1
 
 
 @alru_cache(maxsize=512, ttl=60)
@@ -434,17 +439,13 @@ async def get_rewards_uniswap_v3_lp(
 
     # track highest miner lp_score
     highest_miner_fees = 0
-    # a day in blocktime
-    BLOCK_ONE_DAY_AGO = 7200  # 2 hours in blocks, assuming 1 block per second
-    # we use this as a buffer in case the subgraph is not updated in time
-    BLOCK_BUFFER = 1
-
     try:
+        req = requests[0]
         current_block = await subtensor.get_current_block() - BLOCK_BUFFER
         one_day_ago = max(1, current_block - BLOCK_ONE_DAY_AGO)
         _, _, positions_growth = await calculate_fee_growth(block_start=one_day_ago, block_end=current_block)
-        current_tick = await get_pool_tick(pool_id=request.pool_address, block_number=current_block)
-        bt.logging.debug(f"Current tick for pool {request.pool_address}: {current_tick}")
+        current_tick = await get_pool_tick(pool_id=req.pool_address, block_number=current_block)
+        bt.logging.debug(f"Current tick for pool {req.pool_address}: {current_tick}")
     except Exception as e:
         bt.logging.error(f"Error fetching information from Taofi subgraph: {e}")
 
@@ -471,7 +472,7 @@ async def get_rewards_uniswap_v3_lp(
         for token_id in response.token_ids:
             # if token id is already claimed, skip it
             if token_id in claimed_token_ids:
-                bt.logging.warning(f"Miner {miner_uid} has already claimed token_id {token_id}, skipping...")
+                bt.logging.warning(f"{token_id} has already been claimed, skipping...")
                 continue
 
             # get the position info from the contract
@@ -497,6 +498,7 @@ async def get_rewards_uniswap_v3_lp(
                 sig = HexBytes(response.signature)
                 msg = encode_defunct(text=request.message)
                 sig_addr = w3.eth.account.recover_message(signable_message=msg, signature=sig)
+                bt.logging.info(f"Verifying signature {response.signature} for {request.message} for miner {miner_uid}")
                 if sig_addr != owner:
                     bt.logging.warning(
                         f"Miner {miner_uid} has invalid signature for token_id {token_id}, "

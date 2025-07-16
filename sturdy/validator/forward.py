@@ -396,6 +396,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
             pool_address="0x6647dcbeb030dc8E227D8B1A2Cb6A49F3C887E3c",
             token_0="0x9Dc08C6e2BF0F1eeD1E00670f80Df39145529F81",
             token_1="0xB833E8137FEDf80de7E908dc6fea43a029142F20",
+            signature=None,
             message=str(uuid.uuid4()).replace("-", ""),
         )
         for uid in uids_to_query
@@ -406,14 +407,18 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         axon = self.metagraph.axons[uid]
         query_task = self.dendrite.call(
             target_axon=axon,
-            synapse=synapses[idx],
+            synapse=synapses[idx].model_copy(),
             timeout=LP_QUERY_TIMEOUT,
             deserialize=False,
         )
         query_tasks.append(query_task)
 
     responses = await asyncio.gather(*query_tasks)
-    bt.logging.debug(f"Received responses: {responses}")
+    uids_to_queries = {str(uid): synapse for uid, synapse in zip(uids_to_query, synapses, strict=False)}
+    uids_to_responses = {str(uid): response for uid, response in zip(uids_to_query, responses, strict=False)}
+
+    bt.logging.debug(f"Sent requests: {uids_to_queries}")
+    bt.logging.debug(f"Received responses: {uids_to_responses}")
 
     # score the responses
     # get the bittensor mainnet provider
