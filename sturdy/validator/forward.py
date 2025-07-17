@@ -33,7 +33,6 @@ from sturdy.constants import (
     MIN_TOTAL_ASSETS_AMOUNT,
     MINER_GROUP_EMISSIONS,
     MINER_GROUP_THRESHOLDS,
-    ALLOC_QUERY_TIMEOUT,
     SCORING_PERIOD_STEP,
 )
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
@@ -423,12 +422,14 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
     # score the responses
     # get the bittensor mainnet provider
     bt_mainnet_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET]
+    bt_web3_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3]
     miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
         self,
         requests=synapses,
         responses=responses,
         lp_miner_uids=uids_to_query,
         subtensor=bt_mainnet_provider,
+        web3_provider=bt_web3_provider,
     )
 
     # Sort rewards dict by value in descending order
