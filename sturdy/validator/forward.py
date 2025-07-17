@@ -396,7 +396,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
             token_0="0x9Dc08C6e2BF0F1eeD1E00670f80Df39145529F81",
             token_1="0xB833E8137FEDf80de7E908dc6fea43a029142F20",
             signature=None,
-            message=str(uuid.uuid4()).replace("-", ""),
+            message=self.wallet.hotkey + "-" + str(uuid.uuid4()).replace("-", ""),
         )
         for uid in uids_to_query
     ]
