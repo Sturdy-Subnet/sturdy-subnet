@@ -495,15 +495,19 @@ async def get_rewards_uniswap_v3_lp(
             # if so, then we don't need to verify the signature
             if miner_hotkey is None or (miner_hotkey not in LP_MINER_WHITELIST):
                 # verify that the signature is valid with web3
-                sig = HexBytes(response.signature)
-                msg = encode_defunct(text=request.message)
-                sig_addr = w3.eth.account.recover_message(signable_message=msg, signature=sig)
-                bt.logging.info(f"Verifying signature {response.signature} for {request.message} for miner {miner_uid}")
-                if sig_addr != owner:
-                    bt.logging.warning(
-                        f"Miner {miner_uid} has invalid signature for token_id {token_id}, "
-                        f"expected owner {owner}, got {sig_addr}"
-                    )
+                try:
+                    sig = HexBytes(response.signature)
+                    msg = encode_defunct(text=request.message)
+                    sig_addr = w3.eth.account.recover_message(signable_message=msg, signature=sig)
+                    bt.logging.info(f"Verifying signature {response.signature} for {request.message} for miner {miner_uid}")
+                    if sig_addr != owner:
+                        bt.logging.warning(
+                            f"Miner {miner_uid} has invalid signature for token_id {token_id}, "
+                            f"expected owner {owner}, got {sig_addr}"
+                        )
+                        continue
+                except Exception as e:
+                    bt.logging.error(f"Error verifying signature for miner {miner_uid} and token_id {token_id}: {e}")
                     continue
             else:
                 # if the miner hotkey is in the whitelist, we don't need to verify the signature
@@ -516,8 +520,7 @@ async def get_rewards_uniswap_v3_lp(
             miner_fees += fees_pos
 
             bt.logging.debug(
-                f"Miner {miner_uid} has made {fees_pos} in fees from token_id {token_id} "
-                f"in the past {BLOCK_ONE_DAY_AGO} blocks"
+                f"Miner {miner_uid} has made {fees_pos} in fees from token_id {token_id} in the past {BLOCK_ONE_DAY_AGO} blocks"
             )
 
         # store the miner's scores in the rewards dictionary
