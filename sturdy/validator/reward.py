@@ -25,7 +25,7 @@ from async_lru import alru_cache
 from bittensor import Balance
 from eth_account.messages import encode_defunct
 from hexbytes import HexBytes
-from web3 import EthereumTesterProvider, Web3
+from web3 import AsyncWeb3, EthereumTesterProvider, Web3
 
 from sturdy.constants import ALLOC_QUERY_TIMEOUT, LP_MINER_WHITELIST
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
@@ -33,7 +33,7 @@ from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
-from sturdy.utils.taofi_subgraph import PositionFees, calculate_fee_growth, get_pool_tick
+from sturdy.utils.taofi_subgraph import PositionFees, calculate_fee_growth
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
@@ -420,6 +420,7 @@ async def get_rewards_uniswap_v3_lp(
     responses: list[UniswapV3PoolLiquidity],
     lp_miner_uids: list[int],
     subtensor: bt.AsyncSubtensor,
+    web3_provider: AsyncWeb3,
 ) -> tuple[list, dict]:
     """
     Returns rewards for Uniswap V3 LP miners based on their responses.
@@ -440,12 +441,11 @@ async def get_rewards_uniswap_v3_lp(
     # track highest miner lp_score
     highest_miner_fees = 0
     try:
-        req = requests[0]
         current_block = await subtensor.get_current_block() - BLOCK_BUFFER
         one_day_ago = max(1, current_block - BLOCK_ONE_DAY_AGO)
-        _, _, positions_growth = await calculate_fee_growth(block_start=one_day_ago, block_end=current_block)
-        current_tick = await get_pool_tick(pool_id=req.pool_address, block_number=current_block)
-        bt.logging.debug(f"Current tick for pool {req.pool_address}: {current_tick}")
+        _, _, positions_growth = await calculate_fee_growth(
+            block_start=one_day_ago, block_end=current_block, web3_provider=web3_provider
+        )
     except Exception as e:
         bt.logging.error(f"Error fetching information from Taofi subgraph: {e}")
 
@@ -515,7 +515,10 @@ async def get_rewards_uniswap_v3_lp(
             fees_pos = position_info.total_fees_token1_equivalent
             miner_fees += fees_pos
 
-            bt.logging.debug(f"Miner {miner_uid} has made {fees_pos} in fees for token_id {token_id} in the past 7200 blocks")
+            bt.logging.debug(
+                f"Miner {miner_uid} has made {fees_pos} in fees from token_id {token_id} "
+                f"in the past {BLOCK_ONE_DAY_AGO} blocks"
+            )
 
         # store the miner's scores in the rewards dictionary
         rewards[miner_uid] = miner_fees
