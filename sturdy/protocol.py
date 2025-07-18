@@ -207,9 +207,8 @@ class UniswapV3PoolLiquidity(bt.Synapse, UniswapV3PoolLiquidityBase):
 
     def __str__(self) -> str:
         return (
-            f"UniswapV3PoolLiquidity(pool_address={self.pool_address}, "
-            f"token0={self.token0}, token1={self.token1}, token_id={self.token_id}, "
-            f"message={self.message}, signature={self.signature})"
+            f"UniswapV3PoolLiquidity(pool_address={self.pool_address}, token_0={self.token_0}, token_1={self.token_1}, "
+            f"message={self.message}, token_ids={self.token_ids}, signature={self.signature})"
         )
 
 
