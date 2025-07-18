@@ -15,7 +15,7 @@ async def uniswap_v3_lp_forward(
     synapse.token_ids = [33, 36, 49, 164]
 
     # sign the message with your wallet that owns the position(s)
-    if not synapse.message.startswith(synapse.dendrite.hotkey):
+    if not synapse.message.startswith(f"{synapse.dendrite.hotkey}_{self.wallet.hotkey}"):
         return synapse
     
     message = encode_defunct(text=synapse.message)
