@@ -15,6 +15,13 @@ async def uniswap_v3_lp_forward(
     synapse.token_ids = [33, 36, 49, 164]
 
     # sign the message with your wallet that owns the position(s)
+    if not synapse.message.startswith(f"{synapse.dendrite.hotkey}-{self.wallet.hotkey.ss58_address}"):
+        bt.logging.warning(
+            f"Message is not intended for this hotkey: {synapse.message} does not start with "
+            f"{synapse.dendrite.hotkey}-{self.wallet.hotkey.ss58_address}"
+        )
+        return synapse
+
     message = encode_defunct(text=synapse.message)
     signed_msg: SignedMessage = self.test_w3.eth.account.sign_message(message, private_key=self.uniswap_pos_owner_key)
     synapse.signature = signed_msg.signature.hex()
