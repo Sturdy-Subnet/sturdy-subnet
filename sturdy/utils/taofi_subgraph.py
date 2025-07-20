@@ -37,9 +37,9 @@ def sub_in_256(x: int, y: int) -> int:
     return difference
 
 
-# dataclass for position fees return type
+# dataclass for position fees info return type
 @dataclass
-class PositionFees:
+class PositionFeesInfo:
     uncollected_fees_0: float
     uncollected_fees_1: float
     collected_fees_0: float
@@ -52,6 +52,9 @@ class PositionFees:
     total_fees_token1_equivalent: float
     token0_to_token1_rate: float
     position_liquidity: float
+    current_tick: int
+    tick_lower: int
+    tick_upper: int
     owner: str
     token_0_symbol: str
     token_1_symbol: str
@@ -61,7 +64,7 @@ class PositionFees:
 
 async def get_position_infos_subgraph(
     block_number: int, client: Client = GQL_CLIENT, first: int = QUERY_BATCH_SIZE, skip: int = 0
-) -> dict[int, PositionFees]:
+) -> dict[int, PositionFeesInfo]:
     """
     Get position fees for all positions at a specific block.
 
@@ -72,7 +75,7 @@ async def get_position_infos_subgraph(
         skip: Number of positions to skip for pagination (default: 0)
 
     Returns:
-        Dictionary mapping position IDs to PositionFees objects
+        Dictionary mapping position IDs to PositionFeesInfo objects
     """
 
     data = await client.execute_async(
@@ -105,7 +108,12 @@ async def get_position_infos_subgraph(
         collected_fees_0_token1_equivalent = collected_fees_adjusted_0 * token0_to_token1_rate
         collected_fees_1_token1_equivalent = collected_fees_adjusted_1
 
-        positions_fees[int(position["id"])] = PositionFees(
+        # Tick information
+        current_tick = int(position["pool"]["tick"])
+        tick_lower = int(position["tickLower"]["tickIdx"])
+        tick_upper = int(position["tickUpper"]["tickIdx"])
+
+        positions_fees[int(position["id"])] = PositionFeesInfo(
             0.0,
             0.0,
             collected_fees_adjusted_0,  # Use adjusted value
@@ -117,6 +125,9 @@ async def get_position_infos_subgraph(
             0.0,
             token0_to_token1_rate,
             position_liquidity,
+            current_tick,
+            tick_lower,
+            tick_upper,
             owner,
             token_0_symbol,
             token_1_symbol,
@@ -132,7 +143,7 @@ async def get_position_infos_subgraph(
 # use this to calculate the uncalculated fees, liuqidity, etc. growth from starting block to end block
 async def calculate_fee_growth(
     web3_provider: AsyncWeb3, block_start: int, block_end: int, client: Client = GQL_CLIENT
-) -> tuple[dict[int, PositionFees], dict[int, PositionFees], dict[int, PositionFees]]:
+) -> tuple[dict[int, PositionFeesInfo], dict[int, PositionFeesInfo], dict[int, PositionFeesInfo]]:
     """
     Calculate the fee growth for positions between two blocks.
 
@@ -161,7 +172,7 @@ async def calculate_fee_growth(
 
         # If liquidity growth is negative, assume fee growths are zero
         if liquidity_growth < 0:
-            growth = PositionFees(
+            growth = PositionFeesInfo(
                 uncollected_fees_0=0.0,
                 uncollected_fees_1=0.0,
                 collected_fees_0=0.0,
@@ -173,6 +184,9 @@ async def calculate_fee_growth(
                 total_fees_token1_equivalent=0.0,
                 token0_to_token1_rate=end_fees.token0_to_token1_rate,
                 position_liquidity=0.0,
+                current_tick=end_fees.current_tick,
+                tick_lower=end_fees.tick_lower,
+                tick_upper=end_fees.tick_upper,
                 owner=end_fees.owner,
                 token_0_symbol=end_fees.token_0_symbol,
                 token_1_symbol=end_fees.token_1_symbol,
@@ -180,7 +194,7 @@ async def calculate_fee_growth(
                 token_1_decimals=end_fees.token_1_decimals,
             )
         else:
-            growth = PositionFees(
+            growth = PositionFeesInfo(
                 max(0, end_fees.uncollected_fees_0 - start_fees.uncollected_fees_0),
                 max(0, end_fees.uncollected_fees_1 - start_fees.uncollected_fees_1),
                 max(0, end_fees.collected_fees_0 - start_fees.collected_fees_0),
@@ -192,6 +206,9 @@ async def calculate_fee_growth(
                 max(0, end_fees.total_fees_token1_equivalent - start_fees.total_fees_token1_equivalent),
                 end_fees.token0_to_token1_rate,
                 liquidity_growth,
+                end_fees.current_tick,
+                end_fees.tick_lower,
+                end_fees.tick_upper,
                 end_fees.owner,
                 end_fees.token_0_symbol,
                 end_fees.token_1_symbol,
@@ -211,6 +228,12 @@ POSITIONS_QUERY = """
             owner
             collectedFeesToken0
             collectedFeesToken1
+            tickLower {
+                tickIdx
+            }
+            tickUpper {
+                tickIdx
+            }
             pool {
                 liquidity
                 tick
@@ -238,7 +261,7 @@ POSITIONS_QUERY = """
 
 async def get_all_positions_infos_subgraph(
     block_number: int, client: Client = GQL_CLIENT, batch_size: int = QUERY_BATCH_SIZE
-) -> dict[int, PositionFees]:
+) -> dict[int, PositionFeesInfo]:
     """
     Get all position fees at a specific block, handling pagination automatically.
 
@@ -248,7 +271,7 @@ async def get_all_positions_infos_subgraph(
         batch_size: Number of positions to fetch per request (default: 1000)
 
     Returns:
-        Dictionary mapping position IDs to PositionFees objects for all positions
+        Dictionary mapping position IDs to PositionFeesInfo objects for all positions
     """
     position_infos = {}
     skip = 0
@@ -299,7 +322,7 @@ async def collect_fees(web3_provider: AsyncWeb3, token_id, block_number: int) ->
 # TODO(uniswap_v3_lp): split this more apporpriately into seperate functions?
 async def get_all_positions_fees(
     web3_provider: AsyncWeb3, block_identifier: BlockIdentifier, client: Client = GQL_CLIENT
-) -> dict[int, PositionFees]:
+) -> dict[int, PositionFeesInfo]:
     """
     Get uncollected fees for all positions at a specific block.
     This is done by static calling the collect() function of the NonfungiblePositionManager contract.
@@ -335,12 +358,12 @@ async def get_all_positions_fees(
 
 
 # function to display position fee growth information in a table format
-def display_position_fees_growth(positions_growth: dict[int, PositionFees]) -> None:
+def display_position_fees_growth(positions_growth: dict[int, PositionFeesInfo]) -> None:
     """
     Display position fees growth in a table format.
 
     Args:
-        positions_growth: Dictionary mapping position IDs to PositionFees objects with growth data
+        positions_growth: Dictionary mapping position IDs to PositionFeesInfo objects with growth data
     """
     table = BeautifulTable()
     table.column_headers = [
