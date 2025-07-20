@@ -6,6 +6,7 @@ from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 
+import bittensor as bt
 from beautifultable import BeautifulTable
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
@@ -27,6 +28,70 @@ NFT_POS_MGR_PATH = Path(__file__).parent.parent / "abi" / "NonfungiblePositionMa
 # TODO: use read_text() everywhere else?
 NFT_POS_ABI = json.loads(NFT_POS_MGR_PATH.read_text())
 NFT_POS_MGR_ADDR = "0x61EeA4770d7E15e7036f8632f4bcB33AF1Af1e25"
+
+POSITIONS_QUERY = """
+    query GetTokenPositions($blockNumber: Int!, $first: Int = 1000, $skip: Int = 0) {
+        positions(first: $first, skip: $skip, block: {number: $blockNumber}) {
+            id
+            owner
+            collectedFeesToken0
+            collectedFeesToken1
+            tickLower {
+                tickIdx
+            }
+            tickUpper {
+                tickIdx
+            }
+            pool {
+                liquidity
+                tick
+                token1Price
+            }
+            token0 {
+                symbol
+                id
+                decimals
+            }
+            token1 {
+                symbol
+                id
+                decimals
+            }
+            liquidity
+            transaction {
+                timestamp
+                blockNumber
+            }
+        }
+    }
+"""
+
+BURNS_QUERY = """
+    query GetBurns($timestampStart: BigInt, $first: Int = 1000, $skip: Int = 0) {
+        burns(
+            where: {timestamp_gte: $timestampStart}
+            first: $first
+            skip: $skip
+            orderBy: timestamp
+            orderDirection: desc
+        ) {
+            origin
+            timestamp
+            amount0
+            amount1
+            tickLower
+            tickUpper
+            pool {
+                token0 {
+                    decimals
+                }
+                token1 {
+                    decimals
+                }
+            }
+        }
+    }
+"""
 
 
 def sub_in_256(x: int, y: int) -> int:
@@ -60,6 +125,93 @@ class PositionFeesInfo:
     token_1_symbol: str
     token_0_decimals: int
     token_1_decimals: int
+
+
+async def get_burns_for_timeframe(
+    timestamp_start: int, client: Client = GQL_CLIENT, batch_size: int = QUERY_BATCH_SIZE
+) -> list[dict]:
+    """
+    Get all burn events for the given timeframe.
+
+    Args:
+        timestamp_start: Start timestamp to query burns from
+        client: The GraphQL client to use
+        batch_size: Number of burns to fetch per request
+
+    Returns:
+        List of burn events with normalized amounts
+    """
+    all_burns = []
+    skip = 0
+
+    while True:
+        data = await client.execute_async(
+            gql(BURNS_QUERY), variable_values={"timestampStart": timestamp_start, "first": batch_size, "skip": skip}
+        )
+
+        burns = data["burns"]
+        if not burns:
+            break
+
+        for burn in burns:
+            burn_data = {
+                "origin": burn["origin"].lower(),
+                "tickLower": int(burn["tickLower"]),
+                "tickUpper": int(burn["tickUpper"]),
+                "amount0": float(burn["amount0"]),
+                "amount1": float(burn["amount1"]),
+                "timestamp": int(burn["timestamp"]),
+            }
+            all_burns.append(burn_data)
+
+        # If we got fewer burns than requested, we've reached the end
+        if len(burns) < batch_size:
+            break
+
+        skip += batch_size
+
+    return all_burns
+
+
+def match_burns_to_positions(position_infos: dict[int, PositionFeesInfo], burns: list[dict]) -> dict[int, tuple[float, float]]:
+    """
+    Match burn events to position IDs based on owner, tickLower, and tickUpper.
+
+    Args:
+        position_infos: Dictionary of position IDs to PositionFeesInfo
+        burns: List of burn events
+
+    Returns:
+        Dictionary mapping position IDs to (total_burnt_amount0, total_burnt_amount1)
+    """
+    burns_by_position = {}
+
+    burns_lookup = {}
+    for burn in burns:
+        key = (burn["origin"], burn["tickLower"], burn["tickUpper"])
+        if key not in burns_lookup:
+            burns_lookup[key] = []
+        burns_lookup[key].append(burn)
+
+    # Match positions to burns
+    for position_id, position_info in position_infos.items():
+        position_key = (
+            position_info.owner.lower(),
+            position_info.tick_lower,
+            position_info.tick_upper,
+        )
+
+        if position_key in burns_lookup:
+            total_burnt_0 = 0.0
+            total_burnt_1 = 0.0
+
+            for burn in burns_lookup[position_key]:
+                total_burnt_0 += burn["amount0"]
+                total_burnt_1 += burn["amount1"]
+
+            burns_by_position[position_id] = (total_burnt_0, total_burnt_1)
+
+    return burns_by_position
 
 
 async def get_position_infos_subgraph(
@@ -135,28 +287,32 @@ async def get_position_infos_subgraph(
             token_1_decimals,
         )
 
-        # log the prices for debugging
-
     return positions_fees
 
 
 # use this to calculate the uncalculated fees, liuqidity, etc. growth from starting block to end block
 async def calculate_fee_growth(
-    web3_provider: AsyncWeb3, block_start: int, block_end: int, client: Client = GQL_CLIENT
+    web3_provider: AsyncWeb3,
+    block_start: int,
+    block_end: int,
+    client: Client = GQL_CLIENT,
+    subtract_burns_from_timestamp: int | None = None,
 ) -> tuple[dict[int, PositionFeesInfo], dict[int, PositionFeesInfo], dict[int, PositionFeesInfo]]:
     """
     Calculate the fee growth for positions between two blocks.
 
     Args:
+        web3_provider: Web3 provider for blockchain calls
         block_start: Starting block number
         block_end: Ending block number
         client: The GraphQL client to use
+        subtract_burns_from_timestamp: If provided, subtract burn amounts from this timestamp onwards
 
     Returns:
         Tuple of (start_positions, end_positions, growth_positions)
     """
-    positions_fees_start = await get_all_positions_fees(web3_provider, block_start, client)
-    positions_fees_end = await get_all_positions_fees(web3_provider, block_end, client)
+    positions_fees_start = await get_all_positions_fees(web3_provider, block_start, client, subtract_burns_from_timestamp)
+    positions_fees_end = await get_all_positions_fees(web3_provider, block_end, client, subtract_burns_from_timestamp)
 
     positions_growth = {}
     for position_id in positions_fees_end:
@@ -218,45 +374,6 @@ async def calculate_fee_growth(
         positions_growth[position_id] = growth
 
     return positions_fees_start, positions_fees_end, positions_growth
-
-
-# GraphQL queries with proper parametrization and formatting
-POSITIONS_QUERY = """
-    query GetTokenPositions($blockNumber: Int!, $first: Int = 1000, $skip: Int = 0) {
-        positions(first: $first, skip: $skip, block: {number: $blockNumber}) {
-            id
-            owner
-            collectedFeesToken0
-            collectedFeesToken1
-            tickLower {
-                tickIdx
-            }
-            tickUpper {
-                tickIdx
-            }
-            pool {
-                liquidity
-                tick
-                token1Price
-            }
-            token0 {
-                symbol
-                id
-                decimals
-            }
-            token1 {
-                symbol
-                id
-                decimals
-            }
-            liquidity
-            transaction {
-                timestamp
-                blockNumber
-            }
-        }
-    }
-"""
 
 
 async def get_all_positions_infos_subgraph(
@@ -321,16 +438,42 @@ async def collect_fees(web3_provider: AsyncWeb3, token_id, block_number: int) ->
 
 # TODO(uniswap_v3_lp): split this more apporpriately into seperate functions?
 async def get_all_positions_fees(
-    web3_provider: AsyncWeb3, block_identifier: BlockIdentifier, client: Client = GQL_CLIENT
+    web3_provider: AsyncWeb3,
+    block_identifier: BlockIdentifier,
+    client: Client = GQL_CLIENT,
+    subtract_burns_from_timestamp: int | None = None,
 ) -> dict[int, PositionFeesInfo]:
     """
-    Get uncollected fees for all positions at a specific block.
-    This is done by static calling the collect() function of the NonfungiblePositionManager contract.
+    This function retrieves fee information for all Uniswap V3 positions by static calling
+    the collect() function of the NonfungiblePositionManager contract. It handles the edge
+    case where burnt position NFTs have their deposited liquidity incorrectly counted as
+    uncollected fees by the Uniswap V3 core contract.
+
+    When a position NFT gets burnt, the deposited liquidity associated with the position
+    gets considered as uncollected fees (see Uniswap V3 core contract's burn() function).
+    This shouldn't be considered as fees in our calculation, because it's really just the
+    deposited liquidity for the position. This function optionally subtracts "burn" amounts
+    from the specified timestamp onwards to correct for this behavior.
+
+    Args:
+        web3_provider: Web3 provider for blockchain calls
+        block_identifier: Block to query at
+        client: GraphQL client
+        subtract_burns_from_timestamp: If provided, subtract "burn" amounts from this timestamp onwards
     """
     position_infos = await get_all_positions_infos_subgraph(block_identifier, client)
     token_ids = list(position_infos.keys())
 
-    # create ascynio tasks and gather them for all token IDs to call collect_fees, and place results in a dictionary
+    # Get burn events if timestamp provided
+    burns_by_position = {}
+    if subtract_burns_from_timestamp is not None:
+        burns = await get_burns_for_timeframe(subtract_burns_from_timestamp, client)
+        burns_by_position = match_burns_to_positions(position_infos, burns)
+
+    bt.logging.debug(f"Found {len(position_infos)} positions at block {block_identifier}.")
+    bt.logging.debug(f"Found {len(burns_by_position)} burns matching positions.")
+
+    # create async tasks and gather them for all token IDs to call collect_fees, and place results in a dictionary
     tasks = [collect_fees(web3_provider, token_id, block_identifier) for token_id in token_ids]
     results = await asyncio.gather(*tasks)
     uncollected_fees = {token_id: (amount0, amount1) for token_id, amount0, amount1 in results}
@@ -341,8 +484,19 @@ async def get_all_positions_fees(
         position_info = position_infos[token_id]
         token0_to_token1_rate = position_info.token0_to_token1_rate
         positions_fees[token_id] = copy(position_info)
-        positions_fees[token_id].uncollected_fees_0 = amount0 / math.pow(10, position_info.token_0_decimals)
-        positions_fees[token_id].uncollected_fees_1 = amount1 / math.pow(10, position_info.token_1_decimals)
+
+        # Adjust uncollected fees for decimals
+        uncollected_fees_0_adjusted = amount0 / math.pow(10, position_info.token_0_decimals)
+        uncollected_fees_1_adjusted = amount1 / math.pow(10, position_info.token_1_decimals)
+
+        # Subtract burns if position had burn events
+        if token_id in burns_by_position:
+            burnt_amount0, burnt_amount1 = burns_by_position[token_id]
+            uncollected_fees_0_adjusted = max(0, uncollected_fees_0_adjusted - burnt_amount0)
+            uncollected_fees_1_adjusted = max(0, uncollected_fees_1_adjusted - burnt_amount1)
+
+        positions_fees[token_id].uncollected_fees_0 = uncollected_fees_0_adjusted
+        positions_fees[token_id].uncollected_fees_1 = uncollected_fees_1_adjusted
         positions_fees[token_id].uncollected_fees_0_token1_equivalent = (
             positions_fees[token_id].uncollected_fees_0 * token0_to_token1_rate
         )
