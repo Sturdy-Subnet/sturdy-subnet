@@ -443,8 +443,12 @@ async def get_rewards_uniswap_v3_lp(
     try:
         current_block = await subtensor.get_current_block() - BLOCK_BUFFER
         one_day_ago = max(1, current_block - BLOCK_ONE_DAY_AGO)
+        one_day_block_timestamp = int((await subtensor.get_timestamp(block=one_day_ago)).timestamp())
         _, _, positions_growth = await calculate_fee_growth(
-            block_start=one_day_ago, block_end=current_block, web3_provider=web3_provider
+            block_start=one_day_ago,
+            block_end=current_block,
+            web3_provider=web3_provider,
+            subtract_burns_from_timestamp=one_day_block_timestamp,
         )
     except Exception as e:
         bt.logging.error(f"Error fetching information from Taofi subgraph: {e}")
