@@ -387,10 +387,12 @@ def optimize_database(conn: sqlite3.Connection) -> tuple[bool, str]:
 
 def garbage_collect_db(conn: sqlite3.Connection) -> None:
     # 1. First delete stale active allocations
+    bt.logging.debug("Deleting stale active allocations...")
     rows_affected_active_allocs, latest_creation_date = delete_stale_active_allocs(conn)
     bt.logging.debug(
         f"Purged {rows_affected_active_allocs} stale active allocations | Latest creation date: {latest_creation_date}"
     )
+    bt.logging.debug("Deleting stale allocations...")
     rows_affected_allocations, deleted_uids = delete_stale_allocations(conn, latest_creation_date)
     bt.logging.debug(f"Purged {rows_affected_allocations} stale allocations")
     bt.logging.debug(f"Uids deleted: {deleted_uids[:10]}...")  # Log only first 10 uids for brevity
@@ -404,6 +406,7 @@ def garbage_collect_db(conn: sqlite3.Connection) -> None:
     bt.logging.debug(f"Purged {rows_affected_allocations_age} stale allocations by age of {ALLOCATION_REQUEST_AGE} seconds")
     bt.logging.debug(f"Uids deleted: {deleted_uids_age[:10]}...")
     # 2. Then delete parent records
+    bt.logging.debug("Deleting stale allocation requests...")
     try:
         rows_affected_allocation_requests = delete_stale_allocation_requests(conn)
     except Exception as e:
@@ -413,6 +416,7 @@ def garbage_collect_db(conn: sqlite3.Connection) -> None:
         f"Purged {rows_affected_allocation_requests} stale allocation requests from the past {ALLOCATION_REQUEST_AGE} seconds"
     )
     # 3. Finally, optimize the database
+    bt.logging.debug("Optimizing database... (this may take some time on the first run)")
     success, msg = optimize_database(conn)
     if not success:
         bt.logging.error(f"Failed to optimize database: {msg}")
