@@ -330,6 +330,7 @@ def optimize_database(conn: sqlite3.Connection) -> tuple[bool, str]:
 
 
 def garbage_collect_db(conn: sqlite3.Connection) -> None:
+    # 1. First delete stale active allocations
     rows_affected_active_allocs, latest_creation_date = delete_stale_active_allocs(conn)
     bt.logging.debug(
         f"Purged {rows_affected_active_allocs} stale active allocations | Latest creation date: {latest_creation_date}"
