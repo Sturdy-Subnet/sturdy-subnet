@@ -30,7 +30,7 @@ SCORING_PERIOD_STEP = 3600  # scoring period increments in seconds
 SCORING_WINDOW = 420  # scoring window
 
 # Age of allocations requests to delete
-ALLOCATION_REQUEST_AGE = 7 * 86400  # 7 days in seconds
+ALLOCATION_REQUEST_AGE = 3 * 86400  # 3 days in seconds
 
 TOTAL_ALLOC_THRESHOLD = 0.98
 ALLOCATION_SIMILARITY_THRESHOLD = 1e-4  # similarity threshold for plagiarism checking
