@@ -526,7 +526,8 @@ async def get_rewards_uniswap_v3_lp(
                 miner_fees += fees_pos
 
                 bt.logging.debug(
-                    f"Miner {miner_uid} has made {fees_pos} in fees from token_id {token_id} in the past {BLOCK_ONE_DAY_AGO} blocks"
+                    f"Miner {miner_uid} has made {fees_pos} in fees from token_id {token_id} "
+                    f"in the past {BLOCK_ONE_DAY_AGO} blocks"
                 )
             else:
                 bt.logging.warning(f"Position with token_id {token_id} for miner {miner_uid} is out of range, skipping...")
