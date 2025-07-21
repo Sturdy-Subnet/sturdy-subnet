@@ -29,6 +29,9 @@ SCORING_PERIOD_STEP = 3600  # scoring period increments in seconds
 
 SCORING_WINDOW = 420  # scoring window
 
+# Age of allocations requests to delete
+ALLOCATION_REQUEST_AGE = 3 * 86400  # 3 days in seconds
+
 TOTAL_ALLOC_THRESHOLD = 0.98
 ALLOCATION_SIMILARITY_THRESHOLD = 1e-4  # similarity threshold for plagiarism checking
 MIN_DELEGATE_STAKE = 10000.0  # minimum amount of nominator alpha stake to be considered a valid delegate

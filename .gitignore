@@ -19,6 +19,8 @@ pyrightconfig.json
 db/schema.sql
 validator_database.db
 *test.db
+*.db-wal
+*.db-shm
 
 # backups
 *.bak

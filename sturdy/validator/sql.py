@@ -5,9 +5,10 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 
+import bittensor as bt
 from fastapi.encoders import jsonable_encoder
 
-from sturdy.constants import DB_DIR, SCORING_WINDOW
+from sturdy.constants import ALLOCATION_REQUEST_AGE, DB_DIR, SCORING_WINDOW
 from sturdy.protocol import REQUEST_TYPES, AllocInfo, ChainBasedPoolModel
 
 BALANCE = "balance"
@@ -239,19 +240,188 @@ def get_active_allocs(conn: sqlite3.Connection, scoring_window: float = SCORING_
     return [dict(row) for row in rows]
 
 
-def delete_stale_active_allocs(conn: sqlite3.Connection, scoring_window: int = SCORING_WINDOW) -> int:
-    query = f"""
-    DELETE FROM {ACTIVE_ALLOCS}
+def delete_stale_active_allocs(conn: sqlite3.Connection, scoring_window: int = SCORING_WINDOW) -> tuple[int, datetime | None]:
+    # First get the latest creation date before deletion
+    latest_query = f"""
+    SELECT MAX(created_at) as latest_creation_date
+    FROM {ACTIVE_ALLOCS}
     WHERE scoring_period_end < ?
     """
+
     ts_now = datetime.utcnow().timestamp()
     expiry_ts = ts_now - scoring_window
     expiration_date = datetime.fromtimestamp(expiry_ts)  # noqa: DTZ006
 
-    cur = conn.execute(query, [expiration_date])
+    cur = conn.execute(latest_query, [expiration_date])
+    result = cur.fetchone()
+    latest_creation_date = result[0] if result and result[0] else None
+
+    # Now delete the stale records
+    delete_query = f"""
+    DELETE FROM {ACTIVE_ALLOCS}
+    WHERE scoring_period_end < ?
+    """
+
+    cur = conn.execute(delete_query, [expiration_date])
     conn.commit()
 
+    return cur.rowcount, latest_creation_date
+
+
+def delete_stale_allocation_requests(conn: sqlite3.Connection, age: int = ALLOCATION_REQUEST_AGE) -> int:
+    if age is None:
+        # If no age provided, don't delete any records
+        return 0
+
+    # Delete records older than the specified age
+    query = f"""
+    DELETE FROM {ALLOCATION_REQUESTS_TABLE}
+    WHERE created_at < ?
+    """
+    cur = conn.execute(query, [datetime.utcnow() - timedelta(seconds=age)])
+    conn.commit()
     return cur.rowcount
+
+
+def delete_stale_allocations(conn: sqlite3.Connection, latest_creation_date: datetime | None = None) -> tuple[int, list[str]]:
+    if latest_creation_date is None:
+        # If no date provided, don't delete any records
+        return 0, []
+
+    # First get the UIDs that will be deleted
+    select_query = f"""
+    SELECT DISTINCT request_uid FROM {ALLOCATIONS_TABLE}
+    WHERE created_at < ?
+    """
+    cur = conn.execute(select_query, [latest_creation_date])
+    deleted_uids = [row[0] for row in cur.fetchall()]
+
+    # Delete records older than the latest creation date
+    delete_query = f"""
+    DELETE FROM {ALLOCATIONS_TABLE}
+    WHERE created_at < ?
+    """
+    cur = conn.execute(delete_query, [latest_creation_date])
+
+    conn.commit()
+
+    # Return the count of deleted records and the UIDs
+    return cur.rowcount, deleted_uids
+
+
+def delete_stale_allocations(conn: sqlite3.Connection, latest_creation_date: datetime | None = None) -> tuple[int, list[str]]:
+    if latest_creation_date is None:
+        # If no date provided, don't delete any records
+        return 0, []
+
+    # First get the UIDs that will be deleted
+    select_query = f"""
+    SELECT DISTINCT request_uid FROM {ALLOCATIONS_TABLE}
+    WHERE created_at < ?
+    """
+    cur = conn.execute(select_query, [latest_creation_date])
+    deleted_uids = [row[0] for row in cur.fetchall()]
+
+    # Delete records older than the latest creation date
+    delete_query = f"""
+    DELETE FROM {ALLOCATIONS_TABLE}
+    WHERE created_at < ?
+    """
+    cur = conn.execute(delete_query, [latest_creation_date])
+
+    conn.commit()
+
+    # Return the count of deleted records and the UIDs
+    return cur.rowcount, deleted_uids
+
+
+def delete_stale_allocations_age(conn: sqlite3.Connection, age: int = ALLOCATION_REQUEST_AGE) -> tuple[int, list[str]]:
+    if age is None:
+        # If no age provided, don't delete any records
+        return 0, []
+
+    # First get the UIDs that will be deleted
+    select_query = f"""
+    SELECT DISTINCT request_uid FROM {ALLOCATIONS_TABLE}
+    WHERE created_at < ?
+    """
+    cutoff_date = datetime.utcnow() - timedelta(seconds=age)
+    cur = conn.execute(select_query, [cutoff_date])
+    deleted_uids = [row[0] for row in cur.fetchall()]
+
+    # Delete records older than the specified age
+    delete_query = f"""
+    DELETE FROM {ALLOCATIONS_TABLE}
+    WHERE created_at < ?
+    """
+    cur = conn.execute(delete_query, [cutoff_date])
+
+    conn.commit()
+
+    # Return the count of deleted records and the UIDs
+    return cur.rowcount, deleted_uids
+
+
+# a function to run VACUUM to optimize the database
+def optimize_database(conn: sqlite3.Connection) -> tuple[bool, str]:
+    """
+    Optimize the database by running VACUUM.
+
+    Args:
+        conn (sqlite3.Connection): SQLite connection object.
+
+    Returns:
+        tuple: A tuple containing a boolean indicating success and a string message.
+    """
+    try:
+        # Ensure we're in autocommit mode for VACUUM
+        original_isolation_level = conn.isolation_level
+        conn.isolation_level = None
+        conn.execute("VACUUM")
+        conn.isolation_level = original_isolation_level
+    except sqlite3.Error as e:
+        return False, f"Error optimizing database: {e!s}"
+    else:
+        return True, "Database optimized successfully."
+
+
+def garbage_collect_db(conn: sqlite3.Connection) -> None:
+    # 1. First delete stale active allocations
+    bt.logging.debug("Deleting stale active allocations...")
+    rows_affected_active_allocs, latest_creation_date = delete_stale_active_allocs(conn)
+    bt.logging.debug(
+        f"Purged {rows_affected_active_allocs} stale active allocations | Latest creation date: {latest_creation_date}"
+    )
+    bt.logging.debug("Deleting stale allocations...")
+    rows_affected_allocations, deleted_uids = delete_stale_allocations(conn, latest_creation_date)
+    bt.logging.debug(f"Purged {rows_affected_allocations} stale allocations")
+    bt.logging.debug(f"Uids deleted: {deleted_uids[:10]}...")  # Log only first 10 uids for brevity
+    # also use delete_stale_allocations_age to delete stale allocations based on age
+    try:
+        rows_affected_allocations_age, deleted_uids_age = delete_stale_allocations_age(conn)
+    except Exception as e:
+        bt.logging.warning(f"Error deleting stale allocations by age: {e}")
+        rows_affected_allocations_age = 0
+        deleted_uids_age = []
+    bt.logging.debug(f"Purged {rows_affected_allocations_age} stale allocations by age of {ALLOCATION_REQUEST_AGE} seconds")
+    bt.logging.debug(f"Uids deleted: {deleted_uids_age[:10]}...")
+    # 2. Then delete parent records
+    bt.logging.debug("Deleting stale allocation requests...")
+    try:
+        rows_affected_allocation_requests = delete_stale_allocation_requests(conn)
+    except Exception as e:
+        bt.logging.warning(f"Error deleting stale allocation requests: {e}")
+        rows_affected_allocation_requests = 0
+    bt.logging.debug(
+        f"Purged {rows_affected_allocation_requests} stale allocation requests from the past {ALLOCATION_REQUEST_AGE} seconds"
+    )
+    # 3. Finally, optimize the database
+    bt.logging.debug("Optimizing database... (this may take some time on the first run)")
+    success, msg = optimize_database(conn)
+    if not success:
+        bt.logging.error(f"Failed to optimize database: {msg}")
+    else:
+        bt.logging.debug("Database optimized successfully.")
 
 
 def delete_active_allocs(conn: sqlite3.Connection, uids_to_delete: list[str]) -> int:

@@ -42,7 +42,7 @@ from sturdy.validator.request import Request
 from sturdy.validator.reward import filter_allocations, get_rewards_allocs, get_rewards_uniswap_v3_lp
 from sturdy.validator.sql import (
     delete_active_allocs,
-    delete_stale_active_allocs,
+    garbage_collect_db,
     get_active_allocs,
     get_db_connection,
     get_request_info,
@@ -69,11 +69,12 @@ async def forward(self) -> Any:
     """
 
     while True:
-        # delete stale active allocations after expiry time
-        bt.logging.debug("Purging stale active allocation requests")
+        # delete stale active allocations and requests
+        bt.logging.debug("Purging stale rows from the database...")
         with get_db_connection(self.config.db_dir) as conn:
-            rows_affected = delete_stale_active_allocs(conn)
-        bt.logging.debug(f"Purged {rows_affected} stale active allocation requests")
+            # TODO: consider just using a cascade delete for the allocation requests?
+            # NOTE: cascades likely won't work if we decide to implement db syncing with cr-sqlite
+            garbage_collect_db(conn)
 
         chain_data_provider = np.random.choice(list(self.pool_data_providers.values()))
         try:
