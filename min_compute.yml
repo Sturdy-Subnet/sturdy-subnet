@@ -10,7 +10,7 @@
 # Even then - storage isn't utilized very often - so disk performance won't really be a bottleneck vs, CPU, RAM, 
 # and network bandwidth.
 
-version: '4.0.8' # update this version key as needed, ideally should match your release version
+version: '4.0.9' # update this version key as needed, ideally should match your release version
 
 compute_spec:
 
