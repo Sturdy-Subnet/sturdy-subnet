@@ -376,6 +376,50 @@ async def calculate_fee_growth(
     return positions_fees_start, positions_fees_end, positions_growth
 
 
+async def get_fees_in_range(
+    web3_provider: AsyncWeb3,
+    block_start: int,
+    block_end: int,
+    client: Client = GQL_CLIENT,
+    subtract_burns_from_timestamp: int | None = None,
+) -> tuple[dict[int, PositionFeesInfo], dict[int, bool]]:
+    """
+    Get fee growth for positions, with out of range positions' fees set to zero.
+
+    Args:
+        web3_provider: Web3 provider for blockchain calls
+        block_start: Starting block number
+        block_end: Ending block number
+        client: The GraphQL client to use
+        subtract_burns_from_timestamp: If provided, subtract burn amounts from this timestamp onwards
+
+    Returns:
+        Tuple of (positions_fees_dict, in_range_mapping) where:
+        - positions_fees_dict: Dictionary mapping position IDs to PositionFeesInfo objects with fees zeroed for out of range positions
+        - in_range_mapping: Dictionary mapping position IDs to boolean indicating if position is in range
+    """
+    _, _, positions_growth = await calculate_fee_growth(
+        web3_provider, block_start, block_end, client, subtract_burns_from_timestamp
+    )
+
+    in_range_mapping = {}
+
+    # Zero out fees for out of range positions and track which are in range
+    for position_id, pos_info in positions_growth.items():
+        is_in_range = pos_info.tick_lower <= pos_info.current_tick <= pos_info.tick_upper
+        in_range_mapping[position_id] = is_in_range
+
+        if not is_in_range:
+            pos_info.total_fees_token1_equivalent = 0.0
+
+    # Sort by total fees (descending)
+    sorted_positions = dict(
+        sorted(positions_growth.items(), key=lambda item: item[1].total_fees_token1_equivalent, reverse=True)
+    )
+
+    return sorted_positions, in_range_mapping
+
+
 async def get_all_positions_infos_subgraph(
     block_number: int, client: Client = GQL_CLIENT, batch_size: int = QUERY_BATCH_SIZE
 ) -> dict[int, PositionFeesInfo]:
