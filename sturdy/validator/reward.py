@@ -421,7 +421,7 @@ async def get_rewards_uniswap_v3_lp(
     lp_miner_uids: list[int],
     subtensor: bt.AsyncSubtensor,
     web3_provider: AsyncWeb3,
-) -> tuple[list, dict]:
+) -> tuple[list, dict, set[int]]:
     """
     Returns rewards for Uniswap V3 LP miners based on their responses.
 
@@ -429,7 +429,8 @@ async def get_rewards_uniswap_v3_lp(
         responses (list): List of miner responses.
 
     Returns:
-        tuple: A tuple containing a list of miner UIDs and a dictionary mappping uids to rewards.
+        tuple: A tuple containing a list of miner UIDs, a dictionary mapping uids to rewards,
+               and claimed token ids by non-whitelisted miners.
     """
 
     miner_uids = []
@@ -455,6 +456,8 @@ async def get_rewards_uniswap_v3_lp(
 
     # set to keep track of token ids from miners
     claimed_token_ids = set()
+    # set to keep track of token ids from non-whitelisted miners only
+    non_whitelisted_claimed_token_ids = set()
 
     for idx, response in enumerate(responses):
         request = requests[idx]
@@ -471,6 +474,14 @@ async def get_rewards_uniswap_v3_lp(
 
         # track the fees for the miners' positions
         miner_fees = 0.0
+
+        miner_hotkey = None
+        try:
+            miner_hotkey = self.metagraph.hotkeys[miner_uid]
+        except KeyError:
+            bt.logging.warning(f"Miner {miner_uid} hotkey not found in metagraph")
+
+        is_whitelisted = miner_hotkey is not None and miner_hotkey in LP_MINER_WHITELIST
 
         # inspect each position specified by the token_ids in the response
         for token_id in response.token_ids:
@@ -489,15 +500,9 @@ async def get_rewards_uniswap_v3_lp(
                 bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
                 continue
 
-            miner_hotkey = None
-            try:
-                miner_hotkey = self.metagraph.hotkeys[miner_uid]
-            except KeyError:
-                bt.logging.warning(f"Miner {miner_uid} hotkey not found in metagraph")
-
             # check that the miner hotkey is not None, and that it is in the whitelist,
             # if so, then we don't need to verify the signature
-            if miner_hotkey is None or (miner_hotkey not in LP_MINER_WHITELIST):
+            if not is_whitelisted:
                 # verify that the signature is valid with web3
                 try:
                     sig = HexBytes(response.signature)
@@ -519,6 +524,10 @@ async def get_rewards_uniswap_v3_lp(
 
             bt.logging.debug(f"Miner {miner_uid} has position with token_id {token_id} owned by {owner}")
             claimed_token_ids.add(token_id)
+
+            # Only add to non_whitelisted_claimed_token_ids if miner is not whitelisted
+            if not is_whitelisted:
+                non_whitelisted_claimed_token_ids.add(token_id)
 
             fees_pos = position_info.total_fees_token1_equivalent
             miner_fees += fees_pos
@@ -545,4 +554,4 @@ async def get_rewards_uniswap_v3_lp(
             rewards[uid] = 0
     bt.logging.debug(f"Miner rewards: {rewards}")
 
-    return (miner_uids, rewards)
+    return (miner_uids, rewards, non_whitelisted_claimed_token_ids)
