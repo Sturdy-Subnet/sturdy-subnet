@@ -23,7 +23,7 @@ import bittensor as bt
 from loguru import logger
 
 from sturdy import __spec_version__ as spec_version
-from sturdy.constants import DB_DIR, ALLOC_QUERY_TIMEOUT
+from sturdy.constants import ALLOC_QUERY_TIMEOUT, DB_DIR
 
 
 def check_config(_cls, config: "bt.Config") -> None:

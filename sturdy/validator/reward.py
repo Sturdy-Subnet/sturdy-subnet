@@ -33,7 +33,7 @@ from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
-from sturdy.utils.taofi_subgraph import PositionFeesInfo, calculate_fee_growth
+from sturdy.utils.taofi_subgraph import PositionFeesInfo, get_fees_in_range
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
@@ -444,7 +444,7 @@ async def get_rewards_uniswap_v3_lp(
         current_block = await subtensor.get_current_block() - BLOCK_BUFFER
         one_day_ago = max(1, current_block - BLOCK_ONE_DAY_AGO)
         one_day_block_timestamp = int((await subtensor.get_timestamp(block=one_day_ago)).timestamp())
-        _, _, positions_growth = await calculate_fee_growth(
+        in_range_fee_growth, in_range_mapping = await get_fees_in_range(
             block_start=one_day_ago,
             block_end=current_block,
             web3_provider=web3_provider,
@@ -481,9 +481,9 @@ async def get_rewards_uniswap_v3_lp(
 
             # get the position info from the contract
             try:
-                position_info: PositionFeesInfo = positions_growth[int(token_id)]
-                bt.logging.debug(f"Position info for token_id {token_id}: {position_info}")
-                # TODO(uniswap_v3_lp): why is this in all caps, not a valid checksum by default?
+                position_info: PositionFeesInfo = in_range_fee_growth[int(token_id)]
+                # this is set to trace because it is very noisy
+                bt.logging.trace(f"Position info for token_id {token_id}: {position_info}")
                 owner = Web3.to_checksum_address(position_info.owner)
             except Exception as e:
                 bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
@@ -520,17 +520,13 @@ async def get_rewards_uniswap_v3_lp(
             bt.logging.debug(f"Miner {miner_uid} has position with token_id {token_id} owned by {owner}")
             claimed_token_ids.add(token_id)
 
-            # Check if position is in range before adding fees
-            if position_info.tick_lower <= position_info.current_tick <= position_info.tick_upper:
-                fees_pos = position_info.total_fees_token1_equivalent
-                miner_fees += fees_pos
-
-                bt.logging.debug(
-                    f"Miner {miner_uid} has made {fees_pos} in fees from token_id {token_id} "
-                    f"in the past {BLOCK_ONE_DAY_AGO} blocks"
-                )
-            else:
-                bt.logging.warning(f"Position with token_id {token_id} for miner {miner_uid} is out of range, skipping...")
+            fees_pos = position_info.total_fees_token1_equivalent
+            miner_fees += fees_pos
+            # log the fees for the position
+            bt.logging.debug(
+                f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
+                f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
+            )
 
         # store the miner's scores in the rewards dictionary
         rewards[miner_uid] = miner_fees
@@ -538,6 +534,7 @@ async def get_rewards_uniswap_v3_lp(
         total_miners_fees += miner_fees
 
     bt.logging.debug(f"Sum of all miners' fees: {total_miners_fees}")
+
     # normalize the rewards
     if highest_miner_fees > 0:
         for uid, reward in rewards.items():
