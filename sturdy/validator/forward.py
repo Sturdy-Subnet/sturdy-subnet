@@ -21,6 +21,7 @@ import json
 import uuid
 from typing import Any
 
+import aiofiles
 import bittensor as bt
 import numpy as np
 from web3 import AsyncWeb3, Web3
@@ -424,7 +425,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
     # get the bittensor mainnet provider
     bt_mainnet_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET]
     bt_web3_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3]
-    miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
+    miner_uids, rewards_dict, lp_claimed_token_ids = await get_rewards_uniswap_v3_lp(
         self,
         requests=synapses,
         responses=responses,
@@ -432,6 +433,12 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         subtensor=bt_mainnet_provider,
         web3_provider=bt_web3_provider,
     )
+
+    # log the token ids to disk as a JSON file
+    if len(lp_claimed_token_ids) > 0:
+        async with aiofiles.open(self.config.validator.miner_token_ids_file, "w") as f:
+            await f.write(json.dumps(list(lp_claimed_token_ids), indent=2))
+        bt.logging.info(f"Non-whitelisted miner-claimed token ids written to disk: {lp_claimed_token_ids}")
 
     # Sort rewards dict by value in descending order
     sorted_rewards = sorted(rewards_dict.items(), key=lambda x: x[1], reverse=True)

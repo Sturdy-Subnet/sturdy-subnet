@@ -1,3 +1,6 @@
+# claimed token ids
+claimed_token_ids.json
+
 # docker
 docker-compose-override.yml
 
