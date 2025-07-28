@@ -435,10 +435,12 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
     )
 
     # log the token ids to disk as a JSON file
-    if len(lp_claimed_token_ids) > 0:
+    try:
         async with aiofiles.open(self.config.validator.miner_token_ids_file, "w") as f:
             await f.write(json.dumps(list(lp_claimed_token_ids), indent=2))
         bt.logging.info(f"Non-whitelisted miner-claimed token ids written to disk: {lp_claimed_token_ids}")
+    except Exception as e:
+        bt.logging.error(f"Failed to write miner-claimed token ids to disk: {e}")
 
     # Sort rewards dict by value in descending order
     sorted_rewards = sorted(rewards_dict.items(), key=lambda x: x[1], reverse=True)
