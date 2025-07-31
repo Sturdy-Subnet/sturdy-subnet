@@ -20,6 +20,16 @@ Make sure you have installed the correct python version, and then follow these s
 pip install --upgrade pip
 pip install -e .
 ```
+## Miner Types
+
+There are two different types of tasks that can be performed by participants in the subnet:
+1. **Pool allocators** are responsible for allocating assets across alpha token pools and lending pools on EVM-based chains.
+2. **TaoFi liquidity providers** are responsible for providing liquidity to the TaoFi TAO<>USDC pool on TaoFi. 
+
+There can only be a certain number of miners in each group, and emissions are split amongst them as defined in [constants.py](../sturdy/constants.py) by `MINER_GROUP_THRESHOLDS` and `MINER_GROUP_EMISSIONS` respectively.
+
+Miners can only be one type at a time. Miners can advertise themselves as either a pool allocator or a TaoFi liquidity provider by setting defining the response to the `QueryMinerType` synapse.
+An example of this is provided in the `miner_type` function in [miner.py](../sturdy/base/miner.py). For more information on how to run a TaoFi liquidity provider miner, see the [TaoFi Liquidity Provider Miner Setup](taofi_lp.md) documentation.
 
 ## Running a Miner
 
@@ -37,17 +47,6 @@ We recommend using a third party service to connect to an RPC to perform on-chai
 
 
 We also support bittensor alpha token pools, so you may want access to an archive subtensor node for historical data. The environment variable for this is `BITTENSOR_MAINNET_PROVIDER_URL`. Thankfully, there is already a public one that can be used (see `.env.example`).
-
-### Miner Types
-
-There are two different types of miners that can be run on the Sturdy Subnet:
-1. **Pool allocator**: This type of miner is responsible for allocating the pools and yields for the subnet. 
-2. **TaoFi liquidity provider**: This type of miner is responsible for providing liquidity to the TaoFi TAO<>USDC pool on TaoFi.
-
-There can only be a certain number of miners in each group, and emissions are split amongst them as defined in [constants.py](../sturdy/constants.py) by `MINER_GROUP_THRESHOLDS` and `MINER_GROUP_EMISSIONS` respectively.
-
-Miners can only be one type at a time. Miners can advertise themselves as either a pool allocator or a TaoFi liquidity provider by setting defining the response to the `QueryMinerType` synapse.
-An example of this is provided in the `miner_type` function in [miner.py](../sturdy/base/miner.py). For more information on how to run a TaoFi liquidity provider miner, see the [TaoFi Liquidity Provider Miner Setup](taofi_lp.md) documentation.
 
 #### Starting a miner
 

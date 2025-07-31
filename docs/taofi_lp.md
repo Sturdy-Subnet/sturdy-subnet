@@ -1,9 +1,9 @@
-# TaoFi Liquidity Provider Miner Setup
+# Earning Rewards by providing Liquidity to the TaoFi TAO<>USDC pool
 
 ## Providing liquidity to the TaoFi TAO<>USDC pool
 
 ### EVM Wallet
-The first step is to actually start providing liquidity to the TaoFi TAO<>USDC pool. To do this you;ll need to set up an EVM wallet that is compatible with the TaoFi platform. 
+The first step is to actually start providing liquidity to the TaoFi TAO<>USDC pool. To do this you'll need to set up an EVM wallet that is compatible with the TaoFi platform.
 We recommend using [MetaMask](https://metamask.io/) for this.
 
 ### Providing Liquidity
@@ -25,13 +25,20 @@ Approve             |  Add Liquidity
 
     ![position](../assets/position.png)
 
-## Running the Miner
+- You will now earn rewards from the pool as long as your position(s) are in-range, and receive fees from the trades that occur in the pool. Rewards will be automatically distributed on a daily basis to your wallet address, and can be viewed and transferred here: [https://sturdy-subnet.github.io/alpha/](https://sturdy-subnet.github.io/alpha/)
+
+    ![staking_precompile](../assets/staking_precompile.png)
+
+## Running a Miner (OPTIONAL)
+
+You may optionally register a hotkey and run a miner to earn SN10 alpha tokens, and instead of receiving rewards directly to your wallet, you will receive them to your miner's hotkey address.
+
 - Edit your `.env` file to include the seed phrase for the EVM wallet you used to provide liquidity to the pool:
 
 ```plaintext
 UNISWAP_POS_OWNER_KEY="your seed phrase here"
 ```
-- Change the token ids that the mienr will respond with in `uniswap_v3_lp_forward` in [uniswap_lp.py](../neurons/uniswap_lp.py) to bethe positions you own:
+- Change the token ids that the miner will respond with in `uniswap_v3_lp_forward` in [uniswap_lp.py](../neurons/uniswap_lp.py) to bethe positions you own:
 ```python
 async def uniswap_v3_lp_forward(
     self, synapse: sturdy.protocol.UniswapV3PoolLiquidity
