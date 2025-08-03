@@ -389,6 +389,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         bt.logging.error("No miners available to query for allocations.")
         return [], {}
 
+    # TODO(commitment): use commitments from chain instead of having to query the miners
     # query all miners
     synapses = [
         # TODO(uniswap_v3_lp): Move these constants to a config file or constants module

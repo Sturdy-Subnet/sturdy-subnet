@@ -85,9 +85,6 @@ class BaseNeuron(ABC):
         # Set up logging with the provided configuration and directory.
         bt.logging(config=self.config, logging_dir=self.config.full_path)
 
-        # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
-        self.device = self.config.neuron.device
-
         # Log the configuration for reference.
         bt.logging.info(self.config)
 
@@ -96,8 +93,6 @@ class BaseNeuron(ABC):
         bt.logging.info("Setting up bittensor objects.")
 
         self.wallet = bt.wallet(config=self.config)
-        # TODO: remove
-        # self.subtensor = bt.AsyncSubtensor(config=self.config)
         self.subtensor = await get_async_subtensor(config=self.config)
         # await self.subtensor.initialize()
         self.metagraph = await self.subtensor.metagraph(self.config.netuid)

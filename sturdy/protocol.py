@@ -212,36 +212,6 @@ class UniswapV3PoolLiquidity(bt.Synapse, UniswapV3PoolLiquidityBase):
         )
 
 
-class QueryMinerTypeBase(BaseModel):
-    """Request model for querying miner type."""
-
-    miner_type: MINER_TYPE = Field(
-        default=MINER_TYPE.UNISWAP_V3_LP,
-        description="Type of miner to query. Defaults to ALLOC.",
-    )
-
-    # make it so that it auto converts to MINER_TYPE enum
-    @field_validator("miner_type", mode="before")
-    def validator_miner_type(cls, value) -> MINER_TYPE:
-        if isinstance(value, MINER_TYPE):
-            return value
-        if isinstance(value, int):
-            return MINER_TYPE(value)
-        if isinstance(value, str):
-            try:
-                return MINER_TYPE[value]
-            except KeyError:
-                raise ValueError(f"Invalid enum name: {value}")  # noqa: B904
-        return None
-
-
-class QueryMinerType(bt.Synapse, QueryMinerTypeBase):
-    """Synapse for querying miner type."""
-
-    def __str__(self) -> str:
-        return f"QueryMinerType(miner_type={self.miner_type})"
-
-
 class GetAllocationResponse(BaseModel):
     request_uid: str
     miner_uid: str

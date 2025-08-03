@@ -34,7 +34,7 @@ Approve             |  Add Liquidity
 You may optionally register a hotkey and run a miner to earn SN10 alpha tokens, and instead of receiving rewards directly to your wallet, you will receive them to your miner's hotkey address.
 
 - Edit your `.env` file to include the seed phrase for the EVM wallet you used to provide liquidity to the pool:
-
+<!-- TODO(uniswap_v3_lp): REMOVE THIS -->
 ```plaintext
 UNISWAP_POS_OWNER_KEY="your seed phrase here"
 ```

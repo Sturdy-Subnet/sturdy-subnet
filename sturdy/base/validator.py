@@ -11,9 +11,9 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import MINER_TYPE_QUERY_TIMEOUT, QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
+from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
-from sturdy.protocol import QueryMinerType
+from sturdy.protocol import MINER_TYPE
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
@@ -331,25 +331,18 @@ class BaseValidatorNeuron(BaseNeuron):
         # Sync the metagraph.
         await self.metagraph.sync(subtensor=self.subtensor)
 
-        # Query miners to check what kind of miners they are
-        synapse = QueryMinerType()
-        responses = [
-            await self.dendrite.call(
-                target_axon=axon,
-                synapse=synapse.model_copy(),
-                timeout=MINER_TYPE_QUERY_TIMEOUT,
-                deserialize=False,
-            )
-            for axon in self.metagraph.axons
-        ]
+        # TODO(commitments): fetch miner commitments from the chain to determine miner types
 
         old_miner_types = copy.deepcopy(self.miner_types)
 
-        bt.logging.debug(f"Responses from miners: {responses}")
+        # bt.logging.debug(f"Responses from miners: {responses}")
 
         # update self.miner_types based on responses
-        for uid, response in enumerate(responses):
-            self.miner_types[uid] = response.miner_type
+        # for uid, response in enumerate(responses):
+        #     self.miner_types[uid] = response.miner_type
+        # TODO(commitments): this here as a placeholder for future miner type queries
+        for uid in range(self.metagraph.n):
+            self.miner_types[uid] = MINER_TYPE.UNISWAP_V3_LP  # Placeholder, replace with actual logic
 
         bt.logging.debug(f"Updated miner types: {self.miner_types}")
 
