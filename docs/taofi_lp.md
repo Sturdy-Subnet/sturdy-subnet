@@ -33,8 +33,26 @@ Approve             |  Add Liquidity
 
 You may optionally register a hotkey and run a miner to earn SN10 alpha tokens, and instead of receiving rewards directly to your wallet, you will receive them to your miner's hotkey address.
 
-- Edit your `.env` file to include the seed phrase for the EVM wallet you used to provide liquidity to the pool:
-<!-- TODO(commitment): update these docs -->
+### Setup Environment
+- Edit your `.env` file to include the private key for the EVM wallet you used to provide liquidity to the pool:
 ```plaintext
-UNISWAP_POS_OWNER_KEY="your seed phrase here"
+UNISWAP_POS_OWNER_KEY="your_private_key_here"
+```
+
+### Commit Miner Type
+Before starting your TaoFi liquidity provider miner, you need to commit your miner type to the network:
+
+```bash
+python3 scripts/commit.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --miner-type UNISWAP_V3_LP
+```
+
+This script will:
+1. Commit your miner type as `UNISWAP_V3_LP`
+2. Automatically generate a signature and associate your EVM address with your hotkey
+
+### Start the Miner
+After successfully committing your miner type, you can start your miner:
+
+```bash
+python3 neurons/miner.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT
 ```

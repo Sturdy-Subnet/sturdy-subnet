@@ -249,15 +249,6 @@ def add_validator_args(_cls, parser) -> None:
         default=None,
     )
 
-    # argument for where to store latest claimed token ids
-    parser.add_argument(
-        "--validator.miner_token_ids_file",
-        type=str,
-        help="File to store the latest claimed token ids.",
-        default="claimed_token_ids.json",
-    )
-
-
 def config(cls) -> bt.config:
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
