@@ -497,7 +497,6 @@ async def get_rewards_uniswap_v3_lp(
     else:
         bt.logging.warning("Total fees earned by all miners is zero, not normalizing rewards")
 
-    bt.logging.debug(f"Miner rewards: {rewards}")
     return (miner_uids, rewards)
 
 
