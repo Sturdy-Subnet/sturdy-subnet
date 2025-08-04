@@ -516,11 +516,10 @@ def calculate_miner_fees(
             miner_fees += fees_pos
             claimed_token_ids.add(token_id)
 
-            if fees_pos > 0:
-                bt.logging.debug(
-                    f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
-                    f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
-                )
+            bt.logging.debug(
+                f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
+                f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
+            )
         except Exception as e:
             bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
 
@@ -540,10 +539,11 @@ def calculate_whitelisted_fees(
             fees_pos = position_info.total_fees_token1_equivalent
             whitelisted_fees += fees_pos
 
-            bt.logging.debug(
-                f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
-                f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
-            )
+            if fees_pos > 0:
+                bt.logging.debug(
+                    f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
+                    f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
+                )
         except Exception as e:
             bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
 
