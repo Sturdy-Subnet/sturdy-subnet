@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import concurrent.futures
 import copy
+import json
 import os
 import time
 
@@ -331,18 +332,30 @@ class BaseValidatorNeuron(BaseNeuron):
         # Sync the metagraph.
         await self.metagraph.sync(subtensor=self.subtensor)
 
-        # TODO(commitments): fetch miner commitments from the chain to determine miner types
+        # Get commitments and convert to uid-based mapping
+        commitments_raw = await self.subtensor.get_all_commitments(netuid=self.config.netuid)
+        commitments = {}
+
+        for hotkey, commitment in commitments_raw.items():
+            try:
+                uid = self.metagraph.hotkeys.index(hotkey)
+                try:
+                    commitments[uid] = json.loads(commitment)
+                except json.JSONDecodeError as e:
+                    bt.logging.warning(f"Failed to parse commitment JSON for hotkey {hotkey}: {e}")
+                    commitments[uid] = {}
+            except ValueError:
+                bt.logging.warning(f"Hotkey {hotkey} not found in metagraph, skipping commitment")
 
         old_miner_types = copy.deepcopy(self.miner_types)
+        bt.logging.debug(f"Miner type commitments: {commitments}")
 
-        # bt.logging.debug(f"Responses from miners: {responses}")
-
-        # update self.miner_types based on responses
-        # for uid, response in enumerate(responses):
-        #     self.miner_types[uid] = response.miner_type
-        # TODO(commitments): this here as a placeholder for future miner type queries
-        for uid in range(self.metagraph.n):
-            self.miner_types[uid] = MINER_TYPE.UNISWAP_V3_LP  # Placeholder, replace with actual logic
+        # Update miner types from commitments
+        for uid, commitment in commitments.items():
+            new_type = MINER_TYPE(commitment.get("miner_type", MINER_TYPE.UNISWAP_V3_LP))
+            if uid not in self.miner_types or self.miner_types[uid] != new_type:
+                bt.logging.info(f"Miner {uid} changed type to {new_type}")
+            self.miner_types[uid] = new_type
 
         bt.logging.debug(f"Updated miner types: {self.miner_types}")
 
