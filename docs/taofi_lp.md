@@ -25,7 +25,10 @@ Approve             |  Add Liquidity
 
     ![position](../assets/position.png)
 
-- You will now earn rewards from the pool as long as your position(s) are in-range, and receive fees from the trades that occur in the pool. Rewards will be automatically distributed on a daily basis to your wallet address, and can be viewed and transferred here: [https://sturdy-subnet.github.io/alpha/](https://sturdy-subnet.github.io/alpha/)
+## DISCLAIMER ⚠️
+The mechanism for distributing rewards to liquidity providers is currently currently being reworked. In the meantime, you can still provide liquidity to the pool, but rewards will not be distributed automatically. You will need to register a miner to receive rewards.
+
+- ~~You will now earn rewards from the pool as long as your position(s) are in-range, and receive fees from the trades that occur in the pool. Rewards will be automatically distributed on a daily basis to your wallet address, and can be viewed and transferred here: [https://sturdy-subnet.github.io/alpha/](https://sturdy-subnet.github.io/alpha/)~~ 
 
     ![staking_precompile](../assets/staking_precompile.png)
 
