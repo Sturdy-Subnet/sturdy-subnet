@@ -358,9 +358,10 @@ async def query_and_score_miners_allocs(
     # array of zeros the length of the filtered out uids
     bt.logging.warning("Scoring filtered out miners with zero scores.")
     bt.logging.warning(f"Filtered out uids: {filtered_out_uids}")
-    unresponsive_miner_scores = np.zeros(len(filtered_out_uids), dtype=np.float64)
-    # update the scores of the filtered out uids
-    self.update_scores(unresponsive_miner_scores, filtered_out_uids, self.config.neuron.alloc_moving_average_alpha)
+    if len(filtered_out_uids) > 0:
+        unresponsive_miner_scores = np.zeros(len(filtered_out_uids), dtype=np.float64)
+        # update the scores of the filtered out uids
+        self.update_scores(unresponsive_miner_scores, filtered_out_uids, self.config.neuron.alloc_moving_average_alpha)
 
     sorted_allocs = sort_allocation_by_score(filtered_allocs, self.scores)
 
