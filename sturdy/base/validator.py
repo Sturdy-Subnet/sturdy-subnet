@@ -16,6 +16,7 @@ from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
 from sturdy.protocol import MINER_TYPE
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
+from sturdy.utils.association import get_associated_evm_keys
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
 from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
@@ -100,7 +101,8 @@ class BaseValidatorNeuron(BaseNeuron):
         self.similarity_penalties = {}
         self.sorted_apys = {}
         self.sorted_axon_times = {}
-        self.miner_types = {}
+        self.miner_types: list[int, MINER_TYPE] = {}
+        self.associated_evm_addresses: list[int, str] = {}
 
         # Load state
         bt.logging.info("load_state()")
@@ -323,7 +325,10 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.error("set_weights failed", msg)
 
     async def resync_metagraph(self) -> None:
-        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
+        """
+        Resyncs the metagraph, miner types, evm address associations,
+        and updates the hotkeys and moving averages based on the new metagraph.
+        """
         bt.logging.info("resync_metagraph()")
 
         # Copies state of metagraph before syncing.
@@ -366,6 +371,13 @@ class BaseValidatorNeuron(BaseNeuron):
                     f"Miner {uid} changed type from {old_miner_types[uid]} to {self.miner_types[uid]}, resetting score!!!"
                 )
                 self.scores[uid] = 0
+
+        # Get the associated EVM addresses for each hotkey that is a LP miner type.
+        lp_miner_uids = [uid for uid, miner_type in self.miner_types.items() if miner_type == MINER_TYPE.UNISWAP_V3_LP]
+        self.associated_evm_addresses: dict[int, str] = await get_associated_evm_keys(
+            self.config.netuid, lp_miner_uids, self.subtensor
+        )
+        bt.logging.debug(f"Associated EVM addresses: {self.associated_evm_addresses}")
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:

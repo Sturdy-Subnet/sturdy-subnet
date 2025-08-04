@@ -2,7 +2,6 @@ SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 
 QUERY_FREQUENCY = 600  # time in seconds between validator queries
 ALLOC_QUERY_TIMEOUT = 3  # timeout for challenge requests to miners (seconds)
-LP_QUERY_TIMEOUT = 10  # timeout for lp miners
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 
 UNISWAP_V3_LP_QUERY_FREQUENCY = 3600  # time in seconds between Uniswap V3 LP queries
@@ -14,7 +13,7 @@ MINER_GROUP_THRESHOLDS = {
 }
 
 # Validators don't have to verify signatures from miners in the whitelist.
-LP_MINER_WHITELIST = ["5H3QttLgF7nzWGLSpXkH6gMC6XnSovfGa1xRosqyjVqB7XoS"]
+WHITELISTED_LP_MINER = "5H3QttLgF7nzWGLSpXkH6gMC6XnSovfGa1xRosqyjVqB7XoS"
 
 # Emissions split
 MINER_GROUP_EMISSIONS = {

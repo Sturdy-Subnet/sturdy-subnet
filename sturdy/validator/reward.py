@@ -23,13 +23,11 @@ import bittensor as bt
 import numpy.typing as npt
 from async_lru import alru_cache
 from bittensor import Balance
-from eth_account.messages import encode_defunct
-from hexbytes import HexBytes
 from web3 import AsyncWeb3, EthereumTesterProvider, Web3
 
-from sturdy.constants import ALLOC_QUERY_TIMEOUT, LP_MINER_WHITELIST
+from sturdy.constants import ALLOC_QUERY_TIMEOUT, WHITELISTED_LP_MINER
 from sturdy.pools import POOL_TYPES, ChainBasedPoolModel, PoolFactory, check_allocations
-from sturdy.protocol import AllocationsDict, AllocInfo, UniswapV3PoolLiquidity
+from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
@@ -416,142 +414,132 @@ async def get_rewards_allocs(
 
 async def get_rewards_uniswap_v3_lp(
     self,
-    requests: list[UniswapV3PoolLiquidity],
-    responses: list[UniswapV3PoolLiquidity],
-    lp_miner_uids: list[int],
+    associated_evm_addresses: dict[int, str],
     subtensor: bt.AsyncSubtensor,
     web3_provider: AsyncWeb3,
-) -> tuple[list, dict, set[int]]:
+) -> tuple[list, dict]:
     """
     Returns rewards for Uniswap V3 LP miners based on their responses.
 
     Args:
-        responses (list): List of miner responses.
+        self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
+        associated_evm_addresses (dict[int, str]): A dictionary mapping miner UIDs to their associated EVM addresses.
+        subtensor (:obj:`bittensor.AsyncSubtensor`): The Bittensor async subtensor instance.
+        web3_provider (:obj:`web3.AsyncWeb3`): The web3 provider to interact with the Ethereum blockchain.
 
     Returns:
         tuple: A tuple containing a list of miner UIDs, a dictionary mapping uids to rewards,
                and claimed token ids by non-whitelisted miners.
     """
 
-    miner_uids = []
-    rewards = {}
-    total_miners_fees = 0
+    miner_uids = list(associated_evm_addresses.keys())
+    rewards = {uid: 0 for uid in miner_uids}
     w3 = Web3(EthereumTesterProvider())
-    bt.logging.debug(f"UIDS: {lp_miner_uids}")
 
-    # track highest miner lp_score
-    highest_miner_fees = 0
     try:
         current_block = await subtensor.get_current_block() - BLOCK_BUFFER
         one_day_ago = max(1, current_block - BLOCK_ONE_DAY_AGO)
         one_day_block_timestamp = int((await subtensor.get_timestamp(block=one_day_ago)).timestamp())
-        in_range_fee_growth, in_range_mapping = await get_fees_in_range(
+        fees_in_range_ret: tuple[dict[int, PositionFeesInfo], dict[int, bool]] = await get_fees_in_range(
             block_start=one_day_ago,
             block_end=current_block,
             web3_provider=web3_provider,
             subtract_burns_from_timestamp=one_day_block_timestamp,
         )
+        in_range_fee_growth, in_range_mapping = fees_in_range_ret
     except Exception as e:
         bt.logging.error(f"Error fetching information from Taofi subgraph: {e}")
+        return (miner_uids, rewards)
 
-    # set to keep track of token ids from miners
+    # Generate mapping from owners to token ids
+    owners_to_token_ids = {}
+    for token_id, position_info in in_range_fee_growth.items():
+        owner = w3.to_checksum_address(position_info.owner)
+        owners_to_token_ids.setdefault(owner, []).append(token_id)
+
+    bt.logging.debug(f"Owners to token ids mapping: {owners_to_token_ids}")
+
+    # Track claimed token ids to identify unclaimed ones
     claimed_token_ids = set()
-    # set to keep track of token ids from non-whitelisted miners only
-    non_whitelisted_claimed_token_ids = set()
 
-    for idx, response in enumerate(responses):
-        request = requests[idx]
-        miner_uid = lp_miner_uids[idx]
-        rewards[miner_uid] = 0  # initialize rewards for each miner
-        miner_uids.append(miner_uid)
+    whitelisted_uid = None
+    # Process regular miners first
+    for miner_uid, evm_address in associated_evm_addresses.items():
+        miner_hotkey = self.metagraph.hotkeys[miner_uid]
+        if miner_hotkey == WHITELISTED_LP_MINER:
+            whitelisted_uid = miner_uid
+            continue  # Skip whitelisted miner for now
 
-        if not isinstance(response, UniswapV3PoolLiquidity):
-            raise TypeError(f"Expected UniswapV3PoolLiquidity, got {type(response)}")
-        # check if token_id is not None
-        if response.token_ids is None:
-            bt.logging.warning(f"Miner {miner_uid} has no token_ids, skipping...")
-            continue
+        miner_fees = calculate_miner_fees(
+            miner_uid, evm_address, owners_to_token_ids, in_range_fee_growth, in_range_mapping, claimed_token_ids
+        )
+        rewards[miner_uid] = miner_fees
 
-        # track the fees for the miners' positions
-        miner_fees = 0.0
+    if whitelisted_uid is not None:
+        unclaimed_token_ids = set(in_range_fee_growth.keys()) - claimed_token_ids
+        whitelisted_fees = calculate_whitelisted_fees(
+            whitelisted_uid, unclaimed_token_ids, in_range_fee_growth, in_range_mapping
+        )
+        rewards[whitelisted_uid] = whitelisted_fees
 
-        miner_hotkey = None
+    # Normalize rewards
+    max_fees = max(rewards.values()) if rewards.values() else 0
+    if max_fees > 0:
+        rewards = {uid: fees / max_fees for uid, fees in rewards.items()}
+    else:
+        bt.logging.warning("Total fees earned by all miners is zero, not normalizing rewards")
+
+    bt.logging.debug(f"Miner rewards: {rewards}")
+    return (miner_uids, rewards)
+
+
+def calculate_miner_fees(
+    miner_uid: int,
+    evm_address: str,
+    owners_to_token_ids: dict,
+    in_range_fee_growth: dict,
+    in_range_mapping: dict,
+    claimed_token_ids: set,
+) -> float:
+    """Calculate fees for a regular (non-whitelisted) miner."""
+    miner_fees = 0.0
+    owner_token_ids = owners_to_token_ids.get(evm_address, [])
+
+    for token_id in owner_token_ids:
         try:
-            miner_hotkey = self.metagraph.hotkeys[miner_uid]
-        except KeyError:
-            bt.logging.warning(f"Miner {miner_uid} hotkey not found in metagraph")
-
-        is_whitelisted = miner_hotkey is not None and miner_hotkey in LP_MINER_WHITELIST
-
-        # inspect each position specified by the token_ids in the response
-        for token_id in response.token_ids:
-            # if token id is already claimed, skip it
-            if token_id in claimed_token_ids:
-                bt.logging.warning(f"{token_id} has already been claimed, skipping...")
-                continue
-
-            # get the position info from the contract
-            try:
-                position_info: PositionFeesInfo = in_range_fee_growth[int(token_id)]
-                # this is set to trace because it is very noisy
-                bt.logging.trace(f"Position info for token_id {token_id}: {position_info}")
-                owner = Web3.to_checksum_address(position_info.owner)
-            except Exception as e:
-                bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
-                continue
-
-            # check that the miner hotkey is not None, and that it is in the whitelist,
-            # if so, then we don't need to verify the signature
-            if not is_whitelisted:
-                # verify that the signature is valid with web3
-                try:
-                    sig = HexBytes(response.signature)
-                    msg = encode_defunct(text=request.message)
-                    sig_addr = w3.eth.account.recover_message(signable_message=msg, signature=sig)
-                    bt.logging.info(f"Verifying signature {response.signature} for {request.message} for miner {miner_uid}")
-                    if sig_addr != owner:
-                        bt.logging.warning(
-                            f"Miner {miner_uid} has invalid signature for token_id {token_id}, "
-                            f"expected owner {owner}, got {sig_addr}"
-                        )
-                        continue
-                except Exception as e:
-                    bt.logging.error(f"Error verifying signature for miner {miner_uid} and token_id {token_id}: {e}")
-                    continue
-            else:
-                # if the miner hotkey is in the whitelist, we don't need to verify the signature
-                bt.logging.info(f"Miner {miner_uid} is in the whitelist, skipping signature verification!!!")
-
-            bt.logging.debug(f"Miner {miner_uid} has position with token_id {token_id} owned by {owner}")
-            claimed_token_ids.add(token_id)
-
-            # Only add to non_whitelisted_claimed_token_ids if miner is not whitelisted
-            if not is_whitelisted:
-                non_whitelisted_claimed_token_ids.add(token_id)
-
+            position_info = in_range_fee_growth[token_id]
             fees_pos = position_info.total_fees_token1_equivalent
             miner_fees += fees_pos
-            # log the fees for the position
+            claimed_token_ids.add(token_id)
+
             bt.logging.debug(
                 f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
                 f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
             )
+        except Exception as e:
+            bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
 
-        # store the miner's scores in the rewards dictionary
-        rewards[miner_uid] = miner_fees
-        highest_miner_fees = max(highest_miner_fees, miner_fees)
-        total_miners_fees += miner_fees
+    return miner_fees
 
-    bt.logging.debug(f"Sum of all miners' fees: {total_miners_fees}")
 
-    # normalize the rewards
-    if highest_miner_fees > 0:
-        for uid, reward in rewards.items():
-            rewards[uid] = reward / highest_miner_fees
-    else:
-        bt.logging.warning("Total fees earned by all miners is zero, not normalizing rewards")
-        for uid in rewards:
-            rewards[uid] = 0
-    bt.logging.debug(f"Miner rewards: {rewards}")
+def calculate_whitelisted_fees(
+    miner_uid: int, unclaimed_token_ids: set, in_range_fee_growth: dict, in_range_mapping: dict
+) -> float:
+    """Calculate fees for the whitelisted miner from unclaimed positions."""
+    bt.logging.debug(f"Miner {miner_uid} is whitelisted, claiming {len(unclaimed_token_ids)} unclaimed positions")
 
-    return (miner_uids, rewards, non_whitelisted_claimed_token_ids)
+    whitelisted_fees = 0.0
+    for token_id in unclaimed_token_ids:
+        try:
+            position_info = in_range_fee_growth[token_id]
+            fees_pos = position_info.total_fees_token1_equivalent
+            whitelisted_fees += fees_pos
+
+            bt.logging.debug(
+                f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
+                f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
+            )
+        except Exception as e:
+            bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
+
+    return whitelisted_fees

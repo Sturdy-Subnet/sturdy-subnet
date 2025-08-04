@@ -34,23 +34,7 @@ Approve             |  Add Liquidity
 You may optionally register a hotkey and run a miner to earn SN10 alpha tokens, and instead of receiving rewards directly to your wallet, you will receive them to your miner's hotkey address.
 
 - Edit your `.env` file to include the seed phrase for the EVM wallet you used to provide liquidity to the pool:
-<!-- TODO(uniswap_v3_lp): REMOVE THIS -->
+<!-- TODO(commitment): update these docs -->
 ```plaintext
 UNISWAP_POS_OWNER_KEY="your seed phrase here"
 ```
-- Change the token ids that the miner will respond with in `uniswap_v3_lp_forward` in [uniswap_lp.py](../neurons/uniswap_lp.py) to bethe positions you own:
-```python
-async def uniswap_v3_lp_forward(
-    self, synapse: sturdy.protocol.UniswapV3PoolLiquidity
-) -> sturdy.protocol.UniswapV3PoolLiquidity:
-    bt.logging.warning("Received UniswapV3PoolLiquidity synapse")
-    # set the token ids of your position
-    synapse.token_ids = [36] # <-- replace with your position token id(s)
-    # sign the message with your wallet that owns the position(s)
-    message = encode_defunct(text=synapse.message)
-    signed_msg: SignedMessage = self.test_w3.eth.account.sign_message(message, private_key=self.uniswap_pos_owner_key)
-    synapse.signature = signed_msg.signature.hex()
-
-    return synapse
-```
-- Then start your miner as shown shown in [Starting a miner](miner.md#starting-a-miner)

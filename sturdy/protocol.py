@@ -188,30 +188,6 @@ class AllocateAssets(bt.Synapse, AllocateAssetsBase):
             user_address={self.user_address}, allocations={self.allocations})"""
 
 
-class UniswapV3PoolLiquidityBase(BaseModel):
-    """Request model for Uniswap V3 pool liquidity checks"""
-
-    pool_address: str = Field(..., description="Uniswap V3 pool address to check liquidity for")
-    token_0: str = Field(..., description="Address of the first token in the pool")
-    token_1: str = Field(..., description="Address of the second token in the pool")
-    message: str = Field(..., description="Message to be signed and used for user identification in the request")
-    token_ids: list[int] | None = Field(None, description="Token IDs for the Uniswap V3 positions")
-    signature: str | None = Field(None, description="Signature of the request, used for user identity verification")
-
-
-class UniswapV3PoolLiquidity(bt.Synapse, UniswapV3PoolLiquidityBase):
-    """
-    Synapse for checking liquidity in a Uniswap V3 pool.
-    This synapse is used to verify if a user has sufficient liquidity in a specific Uniswap V3 pool.
-    """
-
-    def __str__(self) -> str:
-        return (
-            f"UniswapV3PoolLiquidity(pool_address={self.pool_address}, token_0={self.token_0}, token_1={self.token_1}, "
-            f"message={self.message}, token_ids={self.token_ids}, signature={self.signature})"
-        )
-
-
 class GetAllocationResponse(BaseModel):
     request_uid: str
     miner_uid: str
