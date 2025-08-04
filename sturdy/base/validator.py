@@ -379,10 +379,6 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         bt.logging.debug(f"Associated EVM addresses: {self.associated_evm_addresses}")
 
-        # Check if the metagraph axon info has changed.
-        if previous_metagraph.axons == self.metagraph.axons:
-            return
-
         bt.logging.info("Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages")
         # Zero out all hotkeys that have been replaced.
         for uid, hotkey in enumerate(self.hotkeys):

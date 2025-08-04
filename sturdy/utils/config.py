@@ -249,6 +249,7 @@ def add_validator_args(_cls, parser) -> None:
         default=None,
     )
 
+
 def config(cls) -> bt.config:
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.

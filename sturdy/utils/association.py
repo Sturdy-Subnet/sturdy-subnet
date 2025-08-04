@@ -73,4 +73,4 @@ async def get_associated_evm_keys(netuid: int, uids: list[int], subtensor: bt.As
     results = await asyncio.gather(*tasks)
 
     # Create a dictionary mapping UIDs to their associated EVM keys
-    return {uid: evm_key for uid, evm_key in zip(uids, results, strict=False) if evm_key is not None}
+    return dict(zip(uids, results, strict=False))

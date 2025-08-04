@@ -38,7 +38,7 @@ from sturdy.validator.sql import get_db_connection, get_miner_responses, get_req
 # a day in blocktime
 BLOCK_ONE_DAY_AGO = 7200  # 2 hours in blocks, assuming 1 block per second
 # we use this as a buffer in case the subgraph is not updated in time
-BLOCK_BUFFER = 1
+BLOCK_BUFFER = 10  # 10 block (2 minutes) buffer
 
 
 @alru_cache(maxsize=512, ttl=60)
@@ -468,7 +468,11 @@ async def get_rewards_uniswap_v3_lp(
         miner_hotkey = self.metagraph.hotkeys[miner_uid]
         if miner_hotkey == WHITELISTED_LP_MINER:
             whitelisted_uid = miner_uid
-            continue  # Skip whitelisted miner for now
+            continue  # Skip whitelisted miner for nowCurrent block: {current_block}")
+
+        if evm_address is None:
+            bt.logging.warning(f"Miner {miner_uid} has no associated EVM address, skipping...")
+            continue
 
         miner_fees = calculate_miner_fees(
             miner_uid, evm_address, owners_to_token_ids, in_range_fee_growth, in_range_mapping, claimed_token_ids
@@ -512,10 +516,11 @@ def calculate_miner_fees(
             miner_fees += fees_pos
             claimed_token_ids.add(token_id)
 
-            bt.logging.debug(
-                f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
-                f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
-            )
+            if fees_pos > 0:
+                bt.logging.debug(
+                    f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
+                    f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
+                )
         except Exception as e:
             bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
 
