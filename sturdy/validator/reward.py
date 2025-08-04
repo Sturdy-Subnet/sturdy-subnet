@@ -486,6 +486,10 @@ async def get_rewards_uniswap_v3_lp(
         )
         rewards[whitelisted_uid] = whitelisted_fees
 
+    # Log total fees earned by all miners
+    total_fees = sum(rewards.values())
+    bt.logging.info(f"Total fees earned by all miners: {total_fees}")
+
     # Normalize rewards
     max_fees = max(rewards.values()) if rewards.values() else 0
     if max_fees > 0:
