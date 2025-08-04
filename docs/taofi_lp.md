@@ -49,10 +49,3 @@ python3 scripts/commit.py --netuid NETUID --subtensor.network NETWORK --wallet.n
 This script will:
 1. Commit your miner type as `UNISWAP_V3_LP`
 2. Automatically generate a signature and associate your EVM address with your hotkey
-
-### Start the Miner
-After successfully committing your miner type, you can start your miner:
-
-```bash
-python3 neurons/miner.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --logging.debug --axon.port PORT
-```
