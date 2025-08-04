@@ -21,7 +21,6 @@ import time
 import typing
 
 import bittensor as bt
-from eth_account.datastructures import SignedMessage
 
 # Bittensor Miner Template:
 import sturdy

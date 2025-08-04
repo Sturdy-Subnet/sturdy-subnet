@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import concurrent.futures
 import copy
+import json
 import os
 import time
 
@@ -11,10 +12,11 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import MINER_TYPE_QUERY_TIMEOUT, QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
+from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
-from sturdy.protocol import QueryMinerType
+from sturdy.protocol import MINER_TYPE
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
+from sturdy.utils.association import get_associated_evm_keys
 from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
 from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
@@ -99,7 +101,8 @@ class BaseValidatorNeuron(BaseNeuron):
         self.similarity_penalties = {}
         self.sorted_apys = {}
         self.sorted_axon_times = {}
-        self.miner_types = {}
+        self.miner_types: list[int, MINER_TYPE] = {}
+        self.associated_evm_addresses: list[int, str] = {}
 
         # Load state
         bt.logging.info("load_state()")
@@ -322,7 +325,10 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.error("set_weights failed", msg)
 
     async def resync_metagraph(self) -> None:
-        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
+        """
+        Resyncs the metagraph, miner types, evm address associations,
+        and updates the hotkeys and moving averages based on the new metagraph.
+        """
         bt.logging.info("resync_metagraph()")
 
         # Copies state of metagraph before syncing.
@@ -331,25 +337,30 @@ class BaseValidatorNeuron(BaseNeuron):
         # Sync the metagraph.
         await self.metagraph.sync(subtensor=self.subtensor)
 
-        # Query miners to check what kind of miners they are
-        synapse = QueryMinerType()
-        responses = [
-            await self.dendrite.call(
-                target_axon=axon,
-                synapse=synapse.model_copy(),
-                timeout=MINER_TYPE_QUERY_TIMEOUT,
-                deserialize=False,
-            )
-            for axon in self.metagraph.axons
-        ]
+        # Get commitments and convert to uid-based mapping
+        commitments_raw = await self.subtensor.get_all_commitments(netuid=self.config.netuid)
+        commitments = {}
+
+        for hotkey, commitment in commitments_raw.items():
+            try:
+                uid = self.metagraph.hotkeys.index(hotkey)
+                try:
+                    commitments[uid] = json.loads(commitment)
+                except json.JSONDecodeError as e:
+                    bt.logging.warning(f"Failed to parse commitment JSON for hotkey {hotkey}: {e}")
+                    commitments[uid] = {}
+            except ValueError:
+                bt.logging.warning(f"Hotkey {hotkey} not found in metagraph, skipping commitment")
 
         old_miner_types = copy.deepcopy(self.miner_types)
+        bt.logging.debug(f"Miner type commitments: {commitments}")
 
-        bt.logging.debug(f"Responses from miners: {responses}")
-
-        # update self.miner_types based on responses
-        for uid, response in enumerate(responses):
-            self.miner_types[uid] = response.miner_type
+        # Update miner types from commitments
+        for uid, commitment in commitments.items():
+            new_type = MINER_TYPE(commitment.get("miner_type", MINER_TYPE.UNISWAP_V3_LP))
+            if uid not in self.miner_types or self.miner_types[uid] != new_type:
+                bt.logging.info(f"Miner {uid} changed type to {new_type}")
+            self.miner_types[uid] = new_type
 
         bt.logging.debug(f"Updated miner types: {self.miner_types}")
 
@@ -361,9 +372,12 @@ class BaseValidatorNeuron(BaseNeuron):
                 )
                 self.scores[uid] = 0
 
-        # Check if the metagraph axon info has changed.
-        if previous_metagraph.axons == self.metagraph.axons:
-            return
+        # Get the associated EVM addresses for each hotkey that is a LP miner type.
+        lp_miner_uids = [uid for uid, miner_type in self.miner_types.items() if miner_type == MINER_TYPE.UNISWAP_V3_LP]
+        self.associated_evm_addresses: dict[int, str] = await get_associated_evm_keys(
+            self.config.netuid, lp_miner_uids, self.subtensor
+        )
+        bt.logging.debug(f"Associated EVM addresses: {self.associated_evm_addresses}")
 
         bt.logging.info("Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages")
         # Zero out all hotkeys that have been replaced.

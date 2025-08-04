@@ -25,7 +25,10 @@ Approve             |  Add Liquidity
 
     ![position](../assets/position.png)
 
-- You will now earn rewards from the pool as long as your position(s) are in-range, and receive fees from the trades that occur in the pool. Rewards will be automatically distributed on a daily basis to your wallet address, and can be viewed and transferred here: [https://sturdy-subnet.github.io/alpha/](https://sturdy-subnet.github.io/alpha/)
+## DISCLAIMER ⚠️
+The mechanism for distributing rewards to liquidity providers is currently currently being reworked. In the meantime, you can still provide liquidity to the pool, but rewards will not be distributed automatically. You will need to register a miner to receive rewards.
+
+- ~~You will now earn rewards from the pool as long as your position(s) are in-range, and receive fees from the trades that occur in the pool. Rewards will be automatically distributed on a daily basis to your wallet address, and can be viewed and transferred here: [https://sturdy-subnet.github.io/alpha/](https://sturdy-subnet.github.io/alpha/)~~ 
 
     ![staking_precompile](../assets/staking_precompile.png)
 
@@ -33,24 +36,19 @@ Approve             |  Add Liquidity
 
 You may optionally register a hotkey and run a miner to earn SN10 alpha tokens, and instead of receiving rewards directly to your wallet, you will receive them to your miner's hotkey address.
 
-- Edit your `.env` file to include the seed phrase for the EVM wallet you used to provide liquidity to the pool:
-
+### Setup Environment
+- Edit your `.env` file to include the private key for the EVM wallet you used to provide liquidity to the pool:
 ```plaintext
-UNISWAP_POS_OWNER_KEY="your seed phrase here"
+UNISWAP_POS_OWNER_KEY="your_private_key_here"
 ```
-- Change the token ids that the miner will respond with in `uniswap_v3_lp_forward` in [uniswap_lp.py](../neurons/uniswap_lp.py) to bethe positions you own:
-```python
-async def uniswap_v3_lp_forward(
-    self, synapse: sturdy.protocol.UniswapV3PoolLiquidity
-) -> sturdy.protocol.UniswapV3PoolLiquidity:
-    bt.logging.warning("Received UniswapV3PoolLiquidity synapse")
-    # set the token ids of your position
-    synapse.token_ids = [36] # <-- replace with your position token id(s)
-    # sign the message with your wallet that owns the position(s)
-    message = encode_defunct(text=synapse.message)
-    signed_msg: SignedMessage = self.test_w3.eth.account.sign_message(message, private_key=self.uniswap_pos_owner_key)
-    synapse.signature = signed_msg.signature.hex()
 
-    return synapse
+### Commit Miner Type
+Before starting your TaoFi liquidity provider miner, you need to commit your miner type to the network:
+
+```bash
+python3 scripts/commit.py --netuid NETUID --subtensor.network NETWORK --wallet.name NAME --wallet.hotkey HOTKEY --miner-type UNISWAP_V3_LP
 ```
-- Then start your miner as shown shown in [Starting a miner](miner.md#starting-a-miner)
+
+This script will:
+1. Commit your miner type as `UNISWAP_V3_LP`
+2. Automatically generate a signature and associate your EVM address with your hotkey

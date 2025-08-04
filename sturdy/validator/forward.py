@@ -19,16 +19,15 @@
 import asyncio
 import json
 import uuid
+from copy import copy
 from typing import Any
 
-import aiofiles
 import bittensor as bt
 import numpy as np
 from web3 import AsyncWeb3, Web3
 from web3.constants import ADDRESS_ZERO
 
 from sturdy.constants import (
-    LP_QUERY_TIMEOUT,
     MAX_SCORING_PERIOD,
     MIN_SCORING_PERIOD,
     MIN_TOTAL_ASSETS_AMOUNT,
@@ -37,7 +36,7 @@ from sturdy.constants import (
     SCORING_PERIOD_STEP,
 )
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
-from sturdy.protocol import MINER_TYPE, REQUEST_TYPES, AllocateAssets, AllocInfo, UniswapV3PoolLiquidity
+from sturdy.protocol import MINER_TYPE, REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE
 from sturdy.validator.request import Request
 from sturdy.validator.reward import filter_allocations, get_rewards_allocs, get_rewards_uniswap_v3_lp
@@ -359,9 +358,10 @@ async def query_and_score_miners_allocs(
     # array of zeros the length of the filtered out uids
     bt.logging.warning("Scoring filtered out miners with zero scores.")
     bt.logging.warning(f"Filtered out uids: {filtered_out_uids}")
-    unresponsive_miner_scores = np.zeros(len(filtered_out_uids), dtype=np.float64)
-    # update the scores of the filtered out uids
-    self.update_scores(unresponsive_miner_scores, filtered_out_uids, self.config.neuron.alloc_moving_average_alpha)
+    if len(filtered_out_uids) > 0:
+        unresponsive_miner_scores = np.zeros(len(filtered_out_uids), dtype=np.float64)
+        # update the scores of the filtered out uids
+        self.update_scores(unresponsive_miner_scores, filtered_out_uids, self.config.neuron.alloc_moving_average_alpha)
 
     sorted_allocs = sort_allocation_by_score(filtered_allocs, self.scores)
 
@@ -372,75 +372,34 @@ async def query_and_score_miners_allocs(
 
 async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, float]]:
     """
-    Query the network for Uniswap V3 LP positions and score the responses.
+    Query the chain for Uniswap V3 LP positions and score the responses.
+
     Args:
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
+
     Returns:
-        tuple: A tuple containing the axon times and the amount of fees they have earned in the past scoring period.
+        tuple: A tuple containing the rewards and a dictionary of miner UIDs to their rewards.
     """
+
     bt.logging.info("Querying miners for Uniswap V3 LP positions...")
 
     # filter out uids to query
     uids_to_query = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.UNISWAP_V3_LP]
-    np.random.shuffle(uids_to_query)
-    bt.logging.debug(f"Miners to query for Uniswap V3 LP positions: {uids_to_query}")
+    bt.logging.debug(f"Miners who claim to have Uniswap V3 LP positions: {uids_to_query}")
 
     if uids_to_query is None or len(uids_to_query) < 1:
-        bt.logging.error("No miners available to query for allocations.")
+        bt.logging.error("No LP miners registered")
         return [], {}
 
-    # query all miners
-    synapses = [
-        # TODO(uniswap_v3_lp): Move these constants to a config file or constants module
-        # much like the pool registry for evm-based pools
-        UniswapV3PoolLiquidity(
-            pool_address="0x6647dcbeb030dc8E227D8B1A2Cb6A49F3C887E3c",
-            token_0="0x9Dc08C6e2BF0F1eeD1E00670f80Df39145529F81",
-            token_1="0xB833E8137FEDf80de7E908dc6fea43a029142F20",
-            signature=None,
-            message=f"{self.wallet.hotkey.ss58_address}-{self.metagraph.hotkeys[uid]}-{str(uuid.uuid4()).replace('-', '')}",
-        )
-        for uid in uids_to_query
-    ]
-
-    query_tasks = []
-    for idx, uid in enumerate(uids_to_query):
-        axon = self.metagraph.axons[uid]
-        query_task = self.dendrite.call(
-            target_axon=axon,
-            synapse=synapses[idx].model_copy(),
-            timeout=LP_QUERY_TIMEOUT,
-            deserialize=False,
-        )
-        query_tasks.append(query_task)
-
-    responses = await asyncio.gather(*query_tasks)
-    uids_to_queries = {str(uid): synapse for uid, synapse in zip(uids_to_query, synapses, strict=False)}
-    uids_to_responses = {str(uid): response for uid, response in zip(uids_to_query, responses, strict=False)}
-
-    bt.logging.debug(f"Sent requests: {uids_to_queries}")
-    bt.logging.debug(f"Received responses: {uids_to_responses}")
-
-    # score the responses
-    # get the bittensor mainnet provider
     bt_mainnet_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET]
     bt_web3_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3]
-    miner_uids, rewards_dict, lp_claimed_token_ids = await get_rewards_uniswap_v3_lp(
+    # score lp miners
+    miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
         self,
-        requests=synapses,
-        responses=responses,
-        lp_miner_uids=uids_to_query,
+        associated_evm_addresses=copy(self.associated_evm_addresses),
         subtensor=bt_mainnet_provider,
         web3_provider=bt_web3_provider,
     )
-
-    # log the token ids to disk as a JSON file
-    try:
-        async with aiofiles.open(self.config.validator.miner_token_ids_file, "w") as f:
-            await f.write(json.dumps(list(lp_claimed_token_ids), indent=2))
-        bt.logging.info(f"Non-whitelisted miner-claimed token ids written to disk: {lp_claimed_token_ids}")
-    except Exception as e:
-        bt.logging.error(f"Failed to write miner-claimed token ids to disk: {e}")
 
     # Sort rewards dict by value in descending order
     sorted_rewards = sorted(rewards_dict.items(), key=lambda x: x[1], reverse=True)

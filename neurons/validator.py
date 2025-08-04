@@ -18,11 +18,8 @@
 
 
 import asyncio
-import json
 import uuid
 from typing import Any
-
-import aiofiles
 
 # Bittensor
 import bittensor as bt
@@ -166,21 +163,6 @@ async def vali() -> dict:
 @app.get("/status")
 async def status() -> dict:
     return {"status": "OK"}
-
-
-@app.get("/claimed_token_ids")
-async def get_claimed_token_ids() -> dict:
-    """
-    Returns the latest claimed token ids from disk.
-    """
-    try:
-        async with aiofiles.open(core_validator.config.validator.miner_token_ids_file) as f:
-            content = await f.read()
-            claimed_token_ids = json.loads(content)
-    except FileNotFoundError:
-        return {"claimed_token_ids": []}
-    else:
-        return {"claimed_token_ids": claimed_token_ids}
 
 
 @app.post("/allocate", response_model=AllocateAssetsResponse)

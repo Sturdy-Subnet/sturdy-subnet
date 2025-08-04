@@ -1,6 +1,7 @@
 from enum import Enum
 
 import bittensor as bt
+from bittensor.core.async_subtensor import get_async_subtensor
 from web3 import AsyncWeb3
 
 
@@ -24,9 +25,7 @@ class PoolProviderFactory:
         if provider == POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET:
             return AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url, **kwargs))
         if provider == POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET:
-            subtensor = bt.AsyncSubtensor(url)
-            await subtensor.initialize()
-            return subtensor
+            return await get_async_subtensor(url)
         # TODO(uniwap_v3_lp): remove this if we believe that the bittensor web3 provider is not needed
         if provider == POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3:
             return AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url, **kwargs))
