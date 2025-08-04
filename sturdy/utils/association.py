@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import asdict, dataclass
 
 import bittensor as bt
+from web3 import Web3
 
 
 @dataclass
@@ -52,7 +53,7 @@ async def get_associated_evm_key(netuid: int, uid: int, subtensor: bt.AsyncSubte
 
     address_bytes = result.value[0][0]
     evm_addr = "0x" + bytes(address_bytes).hex()
-    return evm_addr if evm_addr != "0x" else None
+    return Web3.to_checksum_address(evm_addr) if evm_addr != "0x" else None
 
 
 async def get_associated_evm_keys(netuid: int, uids: list[int], subtensor: bt.AsyncSubtensor) -> dict[int, str]:
