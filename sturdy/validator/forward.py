@@ -97,37 +97,45 @@ async def forward(self) -> Any:
 
         break
 
-    bt.logging.info("Querying miners...")
-    axon_times, allocations = await query_and_score_miners_allocs(
-        self,
-        assets_and_pools=challenge_data["assets_and_pools"],
-        chain_data_provider=chain_data_provider,
-        request_type=REQUEST_TYPES.SYNTHETIC,
-        user_address=user_address if user_address is not None else ADDRESS_ZERO,
-    )
+    # NOTE: we don't query allocations for now
+    # TODO(alloc-refactor): we should query allocations again
+    # bt.logging.info("Querying miners...")
+    # axon_times, allocations = await query_and_score_miners_allocs(
+    #     self,
+    #     assets_and_pools=challenge_data["assets_and_pools"],
+    #     chain_data_provider=chain_data_provider,
+    #     request_type=REQUEST_TYPES.SYNTHETIC,
+    #     user_address=user_address if user_address is not None else ADDRESS_ZERO,
+    # )
+    # set all the miner scores to 0
+    miner_uids = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.ALLOC]
+    self.update_scores(np.zeros(len(miner_uids)), miner_uids, 1.0)
 
-    if not allocations:
-        bt.logging.warning("No allocations received from miners, skipping forward step.")
-        return
+    bt.logging.info("Skipping forward step since we don't query allocation miners for now")
+    # NOTE: we don't log allocations for now
+    # TODO(alloc-refactor): we should log allocations again
+    # if not allocations:
+    #     bt.logging.warning("No allocations received from miners, skipping forward step.")
+    #     return
 
-    assets_and_pools = challenge_data["assets_and_pools"]
-    pools = assets_and_pools["pools"]
-    metadata = await get_metadata(pools, chain_data_provider)
+    # assets_and_pools = challenge_data["assets_and_pools"]
+    # pools = assets_and_pools["pools"]
+    # metadata = await get_metadata(pools, chain_data_provider)
 
-    scoring_period = get_scoring_period()
+    # scoring_period = get_scoring_period()
 
-    with get_db_connection(self.config.db_dir) as conn:
-        log_allocations(
-            conn,
-            request_uuid,
-            self.metagraph.hotkeys,
-            assets_and_pools,
-            metadata,
-            allocations,
-            axon_times,
-            REQUEST_TYPES.SYNTHETIC,
-            scoring_period,
-        )
+    # with get_db_connection(self.config.db_dir) as conn:
+    #     log_allocations(
+    #         conn,
+    #         request_uuid,
+    #         self.metagraph.hotkeys,
+    #         assets_and_pools,
+    #         metadata,
+    #         allocations,
+    #         axon_times,
+    #         REQUEST_TYPES.SYNTHETIC,
+    #         scoring_period,
+    #     )
 
 
 # TODO: have a better way to determine how to obtain metadata from the inputted pools
