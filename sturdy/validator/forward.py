@@ -18,6 +18,7 @@
 
 import asyncio
 import json
+import time
 import uuid
 from copy import copy
 from typing import Any
@@ -34,12 +35,19 @@ from sturdy.constants import (
     MINER_GROUP_EMISSIONS,
     MINER_GROUP_THRESHOLDS,
     SCORING_PERIOD_STEP,
+    VOLUME_GENERATOR_LOOKBACK,
 )
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import MINER_TYPE, REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE
+from sturdy.utils.taofi_subgraph import get_swaps
 from sturdy.validator.request import Request
-from sturdy.validator.reward import filter_allocations, get_rewards_allocs, get_rewards_uniswap_v3_lp
+from sturdy.validator.reward import (
+    filter_allocations,
+    get_rewards_allocs,
+    get_rewards_uniswap_v3_lp,
+    get_rewards_volume_generators,
+)
 from sturdy.validator.sql import (
     delete_active_allocs,
     garbage_collect_db,
@@ -55,6 +63,12 @@ async def uniswap_v3_lp_forward(self) -> Any:
     """This is periodically called to query miners for their LP positions into TaoFi's Uniswap V3 pool."""
     bt.logging.info("Running Uniswap V3 LP forward function...")
     await query_and_score_miners_uniswap_v3_lp(self)
+
+
+async def volume_generator_forward(self) -> Any:
+    """This is periodically called to query miners for their volume generation."""
+    bt.logging.info("Running Volume Generator forward function...")
+    await query_and_score_miners_volume_generator(self)
 
 
 async def forward(self) -> Any:
@@ -422,6 +436,44 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
     bt.logging.debug(f"miner rewards: {rewards_dict}")
 
     self.update_scores(rewards, miner_uids, self.config.neuron.lp_moving_average_alpha)
+
+    return rewards, rewards_dict
+
+
+async def query_and_score_miners_volume_generator(self) -> tuple[list, dict[int, float]]:
+    """This is periodically called to check how much volume miners have generated."""
+    bt.logging.info("Querying miners for volume generation...")
+
+    # filter out uids to query
+    uids_to_query = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.VOLUME_GENERATOR]
+    bt.logging.debug(f"Miners who claim to have volume generated: {uids_to_query}")
+
+    if uids_to_query is None or len(uids_to_query) < 1:
+        bt.logging.error("No volume generating miners registered")
+        return [], {}
+
+    # get the swaps from the last VOLUME_GENERATOR_LOOKBACK seconds
+    timestamp_now = int(time.time())
+    swaps = await get_swaps(timestamp_now - VOLUME_GENERATOR_LOOKBACK)
+    bt.logging.debug(f"Swaps: {swaps}")
+
+    miner_uids, rewards_dict = get_rewards_volume_generators(
+        self,
+        associated_evm_addresses=copy(self.associated_evm_addresses),
+        swaps=swaps,
+    )
+
+    # Sort rewards dict by value in descending order
+    sorted_rewards = sorted(rewards_dict.items(), key=lambda x: x[1], reverse=True)
+    if len(rewards_dict) > MINER_GROUP_THRESHOLDS["VOLUME_GENERATOR"]:
+        # Apply penalties to the lowest performing miners
+        for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["VOLUME_GENERATOR"] :]:
+            rewards_dict[uid] = 0
+
+    # Create rewards array for update_scores, and scale it by the miner group emissions
+    rewards = MINER_GROUP_EMISSIONS["VOLUME_GENERATOR"] * np.array([rewards_dict[uid] for uid in miner_uids], dtype=np.float64)
+
+    self.update_scores(rewards, miner_uids, self.config.neuron.volume_generator_moving_average_alpha)
 
     return rewards, rewards_dict
 

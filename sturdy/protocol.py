@@ -37,6 +37,7 @@ class REQUEST_TYPES(IntEnum):
 class MINER_TYPE(IntEnum):
     ALLOC = 0  # miner that provides lending pool and alpha token pool allocations
     UNISWAP_V3_LP = 1  # miner that provides Uniswap V3 liquidity providing pools for TaoFi
+    VOLUME_GENERATOR = 2  # miner that's resposible for generating volume
 
 
 class AlphaTokenPoolAllocation(BaseModel):

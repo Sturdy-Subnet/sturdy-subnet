@@ -36,7 +36,7 @@ You may optionally register a hotkey and run a miner to earn SN10 alpha tokens, 
 ### Setup Environment
 - Edit your `.env` file to include the private key for the EVM wallet you used to provide liquidity to the pool:
 ```plaintext
-UNISWAP_POS_OWNER_KEY="your_private_key_here"
+EVM_KEY="your_private_key_here"
 ```
 
 ### Commit Miner Type

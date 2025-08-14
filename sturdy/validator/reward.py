@@ -31,7 +31,7 @@ from sturdy.protocol import AllocationsDict, AllocInfo
 from sturdy.utils.bt_alpha import fetch_dynamic_info, get_vali_avg_apy
 from sturdy.utils.ethmath import wei_div
 from sturdy.utils.misc import get_scoring_period_length
-from sturdy.utils.taofi_subgraph import PositionFeesInfo, get_fees_in_range
+from sturdy.utils.taofi_subgraph import PositionFeesInfo, get_fees_in_range, get_swaps
 from sturdy.validator.apy_binning import calculate_bin_rewards, create_apy_bins, sort_bins_by_processing_time
 from sturdy.validator.sql import get_db_connection, get_miner_responses, get_request_info
 
@@ -551,3 +551,17 @@ def calculate_whitelisted_fees(
             bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
 
     return whitelisted_fees
+
+
+def get_rewards_volume_generators(
+    self,
+    associated_evm_addresses: dict[int, str],
+    swaps: list,
+) -> tuple[list, dict]:
+    """Get rewards for volume generators."""
+    miner_uids = list(associated_evm_addresses.keys())
+    rewards = {uid: 0 for uid in miner_uids}
+    for swap in swaps:
+        if swap["recipient"] in associated_evm_addresses.values():
+            rewards[associated_evm_addresses.index(swap["recipient"])] += swap["amountUSD"]
+    return (miner_uids, rewards)

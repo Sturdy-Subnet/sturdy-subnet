@@ -12,7 +12,12 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_INITIAL_DELAY, UNISWAP_V3_LP_QUERY_FREQUENCY
+from sturdy.constants import (
+    NEW_TASK_INITIAL_DELAY,
+    QUERY_FREQUENCY,
+    UNISWAP_V3_LP_QUERY_FREQUENCY,
+    VOLUME_GENERATOR_QUERY_FREQUENCY,
+)
 from sturdy.mock import MockDendrite
 from sturdy.protocol import MINER_TYPE
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
@@ -21,7 +26,7 @@ from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
 from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
 from sturdy.utils.weight_utils import process_weights_for_netuid
-from sturdy.validator.forward import uniswap_v3_lp_forward
+from sturdy.validator.forward import uniswap_v3_lp_forward, volume_generator_forward
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -134,9 +139,15 @@ class BaseValidatorNeuron(BaseNeuron):
         """Start validator tasks"""
         self._tasks.append(asyncio.create_task(self.run_main_loop()))
         # Add the uniswap v3 lp loop as a separate task
-        # We add a delay here so that the validator has a chance to sync before the uniswap v3 lp loop starts on initial startup
-        await asyncio.sleep(UNISWAP_V3_LP_INITIAL_DELAY)
+        # We add a delay here so that the validator has a chance to sync before the
+        # uniswap v3 lp loop starts on initial startup
+        await asyncio.sleep(NEW_TASK_INITIAL_DELAY)
         self._tasks.append(asyncio.create_task(self.run_uniswap_v3_lp_loop()))
+        # Add the volume generator loop as a separate task
+        # We add a delay here so that the validator has a chance to sync before the
+        # volume generator loop starts on initial startup
+        await asyncio.sleep(NEW_TASK_INITIAL_DELAY)
+        self._tasks.append(asyncio.create_task(self.run_volume_generator_loop()))
 
     async def stop(self) -> None:
         """Stop all validator tasks"""
@@ -188,10 +199,16 @@ class BaseValidatorNeuron(BaseNeuron):
     async def uniswap_v3_lp_forward(self) -> any:
         """
         Forward pass for Uniswap V3 LP allocations.
-        This is a placeholder method that can be implemented in the future.
         """
         bt.logging.debug("uniswap_v3_lp_forward()")
         return await uniswap_v3_lp_forward(self)
+
+    async def volume_generator_forward(self) -> any:
+        """
+        Forward pass for volume generator allocations.
+        """
+        bt.logging.debug("volume_generator_forward()")
+        return await volume_generator_forward(self)
 
     async def run_uniswap_v3_lp_loop(self) -> None:
         """Uniswap V3 LP validator loop running in parallel"""
@@ -216,6 +233,28 @@ class BaseValidatorNeuron(BaseNeuron):
 
         except Exception as e:
             bt.logging.exception(f"Error in uniswap v3 lp loop: {e}")
+
+    async def run_volume_generator_loop(self) -> None:
+        """Volume generator validator loop running in parallel"""
+        bt.logging.info("Volume generator validator starting...")
+
+        try:
+            while not self._stop_event.is_set():
+                current_time = time.time()
+                if current_time - self.last_volume_generator_query_time > VOLUME_GENERATOR_QUERY_FREQUENCY:
+                    bt.logging.info("Running volume_generator_forward")
+
+                    try:
+                        await self.volume_generator_forward()
+                    except Exception as e:
+                        bt.logging.exception(f"Error in volume_generator_forward: {e}")
+
+                    self.last_volume_generator_query_time = current_time
+
+                await asyncio.sleep(1)
+
+        except Exception as e:
+            bt.logging.exception(f"Error in volume generator loop: {e}")
 
     def log_metrics(self) -> None:
         """Log metrics to wandb"""
@@ -374,10 +413,14 @@ class BaseValidatorNeuron(BaseNeuron):
                 )
                 self.scores[uid] = 0
 
-        # Get the associated EVM addresses for each hotkey that is a LP miner type.
-        lp_miner_uids = [uid for uid, miner_type in self.miner_types.items() if miner_type == MINER_TYPE.UNISWAP_V3_LP]
+        # Get the associated EVM addresses for each hotkey that is a LP miner and volume generator
+        taofi_miner_uids = [
+            uid
+            for uid, miner_type in self.miner_types.items()
+            if miner_type == MINER_TYPE.UNISWAP_V3_LP or miner_type == MINER_TYPE.VOLUME_GENERATOR
+        ]
         self.associated_evm_addresses: dict[int, str] = await get_associated_evm_keys(
-            self.config.netuid, lp_miner_uids, self.subtensor
+            self.config.netuid, taofi_miner_uids, self.subtensor
         )
         bt.logging.debug(f"Associated EVM addresses: {self.associated_evm_addresses}")
 
