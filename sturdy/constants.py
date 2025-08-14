@@ -3,6 +3,7 @@ SIG_FIGS = 8  # significant figures to round to for greedy algorithm allocations
 QUERY_FREQUENCY = 600  # time in seconds between validator queries
 ALLOC_QUERY_TIMEOUT = 3  # timeout for challenge requests to miners (seconds)
 MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
+UNISWAP_V3_LP_INITIAL_DELAY = 10  # time in seconds to delay the uniswap v3 lp loop on initial startup
 
 UNISWAP_V3_LP_QUERY_FREQUENCY = 3600  # time in seconds between Uniswap V3 LP queries
 

@@ -12,7 +12,7 @@ import numpy.typing as npt
 from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_QUERY_FREQUENCY
+from sturdy.constants import QUERY_FREQUENCY, UNISWAP_V3_LP_INITIAL_DELAY, UNISWAP_V3_LP_QUERY_FREQUENCY
 from sturdy.mock import MockDendrite
 from sturdy.protocol import MINER_TYPE
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
@@ -134,6 +134,8 @@ class BaseValidatorNeuron(BaseNeuron):
         """Start validator tasks"""
         self._tasks.append(asyncio.create_task(self.run_main_loop()))
         # Add the uniswap v3 lp loop as a separate task
+        # We add a delay here so that the validator has a chance to sync before the uniswap v3 lp loop starts on initial startup
+        await asyncio.sleep(UNISWAP_V3_LP_INITIAL_DELAY)
         self._tasks.append(asyncio.create_task(self.run_uniswap_v3_lp_loop()))
 
     async def stop(self) -> None:
