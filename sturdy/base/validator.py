@@ -52,6 +52,8 @@ class BaseValidatorNeuron(BaseNeuron):
         self.last_query_time = 0
         # Add separate query time for uniswap v3 lp forward
         self.last_uniswap_v3_lp_query_time = 0
+        # Add separate query time for volume generator forward
+        self.last_volume_generator_query_time = 0
 
         # init wandb
         self.wandb_run_log_count = 0
@@ -125,8 +127,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
         self._stop_event = asyncio.Event()
         self._tasks = []
-        self.last_query_time = 0
-        self.last_uniswap_v3_lp_query_time = 0
         self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.config.validator.max_workers)
 
     def __del__(self) -> None:

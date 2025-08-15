@@ -102,10 +102,7 @@ SWAPS_QUERY = """
             first: $first
             skip: $skip
         ) {
-            sender
-            recipient
-            amount0
-            amount1
+            origin
             amountUSD
             timestamp
         }

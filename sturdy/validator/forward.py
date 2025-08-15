@@ -415,10 +415,14 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
 
     bt_mainnet_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET]
     bt_web3_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3]
+
+    # filter out the associated evm addresses that are not in the uids to query
+    taofi_lp_evm_addresses = {uid: evm for uid, evm in self.associated_evm_addresses.items() if uid in uids_to_query}
+
     # score lp miners
     miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
         self,
-        associated_evm_addresses=copy(self.associated_evm_addresses),
+        taofi_lp_evm_addresses=taofi_lp_evm_addresses,
         subtensor=bt_mainnet_provider,
         web3_provider=bt_web3_provider,
     )
@@ -455,11 +459,13 @@ async def query_and_score_miners_volume_generator(self) -> tuple[list, dict[int,
     # get the swaps from the last VOLUME_GENERATOR_LOOKBACK seconds
     timestamp_now = int(time.time())
     swaps = await get_swaps(timestamp_now - VOLUME_GENERATOR_LOOKBACK)
-    bt.logging.debug(f"Swaps: {swaps}")
+
+    # filter out the associated evm addresses that are not in the uids to query
+    volume_generator_evm_addresses = {uid: evm for uid, evm in self.associated_evm_addresses.items() if uid in uids_to_query}
 
     miner_uids, rewards_dict = get_rewards_volume_generators(
         self,
-        associated_evm_addresses=copy(self.associated_evm_addresses),
+        volume_generator_evm_addresses=volume_generator_evm_addresses,
         swaps=swaps,
     )
 

@@ -414,7 +414,7 @@ async def get_rewards_allocs(
 
 async def get_rewards_uniswap_v3_lp(
     self,
-    associated_evm_addresses: dict[int, str],
+    taofi_lp_evm_addresses: dict[int, str],
     subtensor: bt.AsyncSubtensor,
     web3_provider: AsyncWeb3,
 ) -> tuple[list, dict]:
@@ -423,7 +423,7 @@ async def get_rewards_uniswap_v3_lp(
 
     Args:
         self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
-        associated_evm_addresses (dict[int, str]): A dictionary mapping miner UIDs to their associated EVM addresses.
+        taofi_lp_evm_addresses (dict[int, str]): A dictionary mapping miner UIDs to their associated EVM addresses.
         subtensor (:obj:`bittensor.AsyncSubtensor`): The Bittensor async subtensor instance.
         web3_provider (:obj:`web3.AsyncWeb3`): The web3 provider to interact with the Ethereum blockchain.
 
@@ -432,7 +432,7 @@ async def get_rewards_uniswap_v3_lp(
                and claimed token ids by non-whitelisted miners.
     """
 
-    miner_uids = list(associated_evm_addresses.keys())
+    miner_uids = list(taofi_lp_evm_addresses.keys())
     rewards = {uid: 0 for uid in miner_uids}
     w3 = Web3(EthereumTesterProvider())
 
@@ -461,10 +461,12 @@ async def get_rewards_uniswap_v3_lp(
 
     # Track claimed token ids to identify unclaimed ones
     claimed_token_ids = set()
+    # Track claimed owner addresses to avoid double counting
+    claimed_owner_addresses = set()
 
     whitelisted_uid = None
     # Process regular miners first
-    for miner_uid, evm_address in associated_evm_addresses.items():
+    for miner_uid, evm_address in taofi_lp_evm_addresses.items():
         miner_hotkey = self.metagraph.hotkeys[miner_uid]
         if miner_hotkey == WHITELISTED_LP_MINER:
             whitelisted_uid = miner_uid
@@ -475,7 +477,13 @@ async def get_rewards_uniswap_v3_lp(
             continue
 
         miner_fees = calculate_miner_fees(
-            miner_uid, evm_address, owners_to_token_ids, in_range_fee_growth, in_range_mapping, claimed_token_ids
+            miner_uid,
+            evm_address,
+            owners_to_token_ids,
+            in_range_fee_growth,
+            in_range_mapping,
+            claimed_token_ids,
+            claimed_owner_addresses,
         )
         rewards[miner_uid] = miner_fees
 
@@ -507,18 +515,31 @@ def calculate_miner_fees(
     in_range_fee_growth: dict,
     in_range_mapping: dict,
     claimed_token_ids: set,
+    claimed_owner_addresses: set,
 ) -> float:
     """Calculate fees for a regular (non-whitelisted) miner."""
     miner_fees = 0.0
     owner_token_ids = owners_to_token_ids.get(evm_address, [])
 
     for token_id in owner_token_ids:
+        if token_id in claimed_token_ids:
+            bt.logging.debug(f"Token ID {token_id} already claimed, skipping...")
+            continue
         try:
             position_info = in_range_fee_growth[token_id]
+        except KeyError:
+            bt.logging.error(f"Token ID {token_id} not found in in_range_fee_growth")
+            continue
+
+        if position_info.owner in claimed_owner_addresses:
+            bt.logging.debug(f"Owner {position_info.owner} already claimed, skipping...")
+            continue
+
+        try:
             fees_pos = position_info.total_fees_token1_equivalent
             miner_fees += fees_pos
             claimed_token_ids.add(token_id)
-
+            claimed_owner_addresses.add(position_info.owner)
             bt.logging.debug(
                 f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
                 f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
@@ -555,13 +576,39 @@ def calculate_whitelisted_fees(
 
 def get_rewards_volume_generators(
     self,
-    associated_evm_addresses: dict[int, str],
+    volume_generator_evm_addresses: dict[int, str],
     swaps: list,
 ) -> tuple[list, dict]:
     """Get rewards for volume generators."""
-    miner_uids = list(associated_evm_addresses.keys())
-    rewards = {uid: 0 for uid in miner_uids}
+    # lowercase all the EVM addresses
+    # NOTE: this is done because the addresses from the subgraph are in lowercase
+    # TODO: figure out a cleaner solution than this
+    volume_generator_evm_addresses = {uid: evm.lower() for uid, evm in volume_generator_evm_addresses.items()}
+    miner_uids = list(volume_generator_evm_addresses.keys())
+    rewards = {uid: 0.0 for uid in miner_uids}
+
+    bt.logging.debug(f"Calculating rewards for volume generators. Miner UIDs: {miner_uids}")
+    evm_to_uid = {evm: uid for uid, evm in volume_generator_evm_addresses.items()}
+    bt.logging.debug(f"EVM to UID mapping: {evm_to_uid}")
+
     for swap in swaps:
-        if swap["recipient"] in associated_evm_addresses.values():
-            rewards[associated_evm_addresses.index(swap["recipient"])] += swap["amountUSD"]
+        origin = swap.get("origin")
+        amount_usd = float(swap.get("amountUSD", 0.0))
+        if origin in evm_to_uid:
+            uid = evm_to_uid[origin]
+            rewards[uid] += amount_usd
+            bt.logging.debug(
+                f"Miner {uid} (H160: {origin}) received swap of {amount_usd} USD. Miner total so far: {rewards[uid]}"
+            )
+
+    bt.logging.debug(f"Total volume generated by all volume miners: {sum(rewards.values())}")
+
+    # Normalize rewards
+    max_fees = max(rewards.values()) if rewards.values() else 0
+    if max_fees > 0:
+        rewards = {uid: fees / max_fees for uid, fees in rewards.items()}
+    else:
+        bt.logging.warning("Total volume generated by all volume miners is zero, not normalizing rewards")
+
+    bt.logging.debug(f"Final rewards for volume generators: {rewards}")
     return (miner_uids, rewards)
