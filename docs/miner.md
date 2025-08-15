@@ -1,6 +1,6 @@
 # Miner Setup
 
-Welcome to the Sturdy Subnet miner documentation! There are two different types of tasks that can be performed by participants in the subnet:
+Welcome to the Sturdy Subnet miner documentation! There are three different types of tasks that can be performed by participants in the subnet:
 
 ## Miner Types
 
@@ -13,6 +13,11 @@ Pool allocators are responsible for allocating assets across alpha token pools a
 TaoFi liquidity providers are responsible for providing liquidity to the TaoFi TAO<>USDC pool on TaoFi platform.
 
 **👉 [TaoFi Liquidity Provider Miner Setup Guide](taofi_lp.md)**
+
+### 3. Volume Generators 📈
+Volume generators are responsible for generating trading volume on the TaoFi TAO<>USDC pool by executing swaps. They earn rewards based on the total USD value of their trading activity.
+
+**👉 [Volume Generator Miner Setup Guide](volume_miner.md)**
 
 ## Important Information
 

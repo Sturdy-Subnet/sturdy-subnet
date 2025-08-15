@@ -52,7 +52,7 @@ def get_signature_for_evm_key_association(hotkey: str, block: int) -> tuple[str,
     bt.logging.info("Generating signature for EVM key association...")
     # TODO(commitment): This is a temporary solution to get the private key from an environment variable.
     # In the future we'd likely want to make this entire process more streamlined - i.e. through a frontend interface
-    private_key = os.getenv("UNISWAP_POS_OWNER_KEY")
+    private_key = os.getenv("EVM_KEY")
 
     block_number_bytes = block.to_bytes(8, byteorder="little")
     block_number_hash = Web3.keccak(block_number_bytes)
@@ -104,7 +104,9 @@ async def main() -> None:
         bt.logging.error("Failed to commit miner type.")
 
     # if signature, and evm address are provided, associate the EVM key with the hotkey
-    if os.getenv("UNISWAP_POS_OWNER_KEY") and config.miner_type == MINER_TYPE.UNISWAP_V3_LP:
+    if os.getenv("EVM_KEY") and (
+        config.miner_type == MINER_TYPE.UNISWAP_V3_LP or config.miner_type == MINER_TYPE.VOLUME_GENERATOR
+    ):
         bt.logging.info("Getting block number to use as nonce...")
         try:
             block_number = await subtensor.get_current_block()
@@ -126,9 +128,7 @@ async def main() -> None:
         if not success:
             bt.logging.error(f"Failed to associate EVM key with hotkey: {msg}")
     else:
-        bt.logging.warning(
-            "EVM key association skipped. Set miner type to be UNISWAP_V3_LP and UNISWAP_POS_OWNER_KEY env var. to enable."
-        )
+        bt.logging.warning("EVM key association skipped. Set miner type to be UNISWAP_V3_LP and EVM_KEY env var. to enable.")
 
 
 if __name__ == "__main__":

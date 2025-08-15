@@ -18,6 +18,7 @@
 
 import asyncio
 import json
+import time
 import uuid
 from copy import copy
 from typing import Any
@@ -34,12 +35,19 @@ from sturdy.constants import (
     MINER_GROUP_EMISSIONS,
     MINER_GROUP_THRESHOLDS,
     SCORING_PERIOD_STEP,
+    VOLUME_GENERATOR_LOOKBACK,
 )
 from sturdy.pools import POOL_TYPES, BittensorAlphaTokenPool, ChainBasedPoolModel, generate_challenge_data
 from sturdy.protocol import MINER_TYPE, REQUEST_TYPES, AllocateAssets, AllocInfo
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE
+from sturdy.utils.taofi_subgraph import get_swaps
 from sturdy.validator.request import Request
-from sturdy.validator.reward import filter_allocations, get_rewards_allocs, get_rewards_uniswap_v3_lp
+from sturdy.validator.reward import (
+    filter_allocations,
+    get_rewards_allocs,
+    get_rewards_uniswap_v3_lp,
+    get_rewards_volume_generators,
+)
 from sturdy.validator.sql import (
     delete_active_allocs,
     garbage_collect_db,
@@ -55,6 +63,12 @@ async def uniswap_v3_lp_forward(self) -> Any:
     """This is periodically called to query miners for their LP positions into TaoFi's Uniswap V3 pool."""
     bt.logging.info("Running Uniswap V3 LP forward function...")
     await query_and_score_miners_uniswap_v3_lp(self)
+
+
+async def volume_generator_forward(self) -> Any:
+    """This is periodically called to query miners for their volume generation."""
+    bt.logging.info("Running Volume Generator forward function...")
+    await query_and_score_miners_volume_generator(self)
 
 
 async def forward(self) -> Any:
@@ -97,37 +111,45 @@ async def forward(self) -> Any:
 
         break
 
-    bt.logging.info("Querying miners...")
-    axon_times, allocations = await query_and_score_miners_allocs(
-        self,
-        assets_and_pools=challenge_data["assets_and_pools"],
-        chain_data_provider=chain_data_provider,
-        request_type=REQUEST_TYPES.SYNTHETIC,
-        user_address=user_address if user_address is not None else ADDRESS_ZERO,
-    )
+    # NOTE: we don't query allocations for now
+    # TODO(alloc-refactor): we should query allocations again
+    # bt.logging.info("Querying miners...")
+    # axon_times, allocations = await query_and_score_miners_allocs(
+    #     self,
+    #     assets_and_pools=challenge_data["assets_and_pools"],
+    #     chain_data_provider=chain_data_provider,
+    #     request_type=REQUEST_TYPES.SYNTHETIC,
+    #     user_address=user_address if user_address is not None else ADDRESS_ZERO,
+    # )
+    # set all the miner scores to 0
+    miner_uids = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.ALLOC]
+    self.update_scores(np.zeros(len(miner_uids)), miner_uids, 1.0)
 
-    if not allocations:
-        bt.logging.warning("No allocations received from miners, skipping forward step.")
-        return
+    bt.logging.info("Skipping forward step since we don't query allocation miners for now")
+    # NOTE: we don't log allocations for now
+    # TODO(alloc-refactor): we should log allocations again
+    # if not allocations:
+    #     bt.logging.warning("No allocations received from miners, skipping forward step.")
+    #     return
 
-    assets_and_pools = challenge_data["assets_and_pools"]
-    pools = assets_and_pools["pools"]
-    metadata = await get_metadata(pools, chain_data_provider)
+    # assets_and_pools = challenge_data["assets_and_pools"]
+    # pools = assets_and_pools["pools"]
+    # metadata = await get_metadata(pools, chain_data_provider)
 
-    scoring_period = get_scoring_period()
+    # scoring_period = get_scoring_period()
 
-    with get_db_connection(self.config.db_dir) as conn:
-        log_allocations(
-            conn,
-            request_uuid,
-            self.metagraph.hotkeys,
-            assets_and_pools,
-            metadata,
-            allocations,
-            axon_times,
-            REQUEST_TYPES.SYNTHETIC,
-            scoring_period,
-        )
+    # with get_db_connection(self.config.db_dir) as conn:
+    #     log_allocations(
+    #         conn,
+    #         request_uuid,
+    #         self.metagraph.hotkeys,
+    #         assets_and_pools,
+    #         metadata,
+    #         allocations,
+    #         axon_times,
+    #         REQUEST_TYPES.SYNTHETIC,
+    #         scoring_period,
+    #     )
 
 
 # TODO: have a better way to determine how to obtain metadata from the inputted pools
@@ -393,10 +415,14 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
 
     bt_mainnet_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET]
     bt_web3_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3]
+
+    # filter out the associated evm addresses that are not in the uids to query
+    taofi_lp_evm_addresses = {uid: evm for uid, evm in self.associated_evm_addresses.items() if uid in uids_to_query}
+
     # score lp miners
     miner_uids, rewards_dict = await get_rewards_uniswap_v3_lp(
         self,
-        associated_evm_addresses=copy(self.associated_evm_addresses),
+        taofi_lp_evm_addresses=taofi_lp_evm_addresses,
         subtensor=bt_mainnet_provider,
         web3_provider=bt_web3_provider,
     )
@@ -414,6 +440,46 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
     bt.logging.debug(f"miner rewards: {rewards_dict}")
 
     self.update_scores(rewards, miner_uids, self.config.neuron.lp_moving_average_alpha)
+
+    return rewards, rewards_dict
+
+
+async def query_and_score_miners_volume_generator(self) -> tuple[list, dict[int, float]]:
+    """This is periodically called to check how much volume miners have generated."""
+    bt.logging.info("Querying miners for volume generation...")
+
+    # filter out uids to query
+    uids_to_query = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.VOLUME_GENERATOR]
+    bt.logging.debug(f"Miners who claim to have volume generated: {uids_to_query}")
+
+    if uids_to_query is None or len(uids_to_query) < 1:
+        bt.logging.error("No volume generating miners registered")
+        return [], {}
+
+    # get the swaps from the last VOLUME_GENERATOR_LOOKBACK seconds
+    timestamp_now = int(time.time())
+    swaps = await get_swaps(timestamp_now - VOLUME_GENERATOR_LOOKBACK)
+
+    # filter out the associated evm addresses that are not in the uids to query
+    volume_generator_evm_addresses = {uid: evm for uid, evm in self.associated_evm_addresses.items() if uid in uids_to_query}
+
+    miner_uids, rewards_dict = get_rewards_volume_generators(
+        self,
+        volume_generator_evm_addresses=volume_generator_evm_addresses,
+        swaps=swaps,
+    )
+
+    # Sort rewards dict by value in descending order
+    sorted_rewards = sorted(rewards_dict.items(), key=lambda x: x[1], reverse=True)
+    if len(rewards_dict) > MINER_GROUP_THRESHOLDS["VOLUME_GENERATOR"]:
+        # Apply penalties to the lowest performing miners
+        for uid, _ in sorted_rewards[MINER_GROUP_THRESHOLDS["VOLUME_GENERATOR"] :]:
+            rewards_dict[uid] = 0
+
+    # Create rewards array for update_scores, and scale it by the miner group emissions
+    rewards = MINER_GROUP_EMISSIONS["VOLUME_GENERATOR"] * np.array([rewards_dict[uid] for uid in miner_uids], dtype=np.float64)
+
+    self.update_scores(rewards, miner_uids, self.config.neuron.volume_generator_moving_average_alpha)
 
     return rewards, rewards_dict
 

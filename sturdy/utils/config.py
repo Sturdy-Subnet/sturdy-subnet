@@ -23,7 +23,7 @@ import bittensor as bt
 from loguru import logger
 
 from sturdy import __spec_version__ as spec_version
-from sturdy.constants import ALLOC_QUERY_TIMEOUT, DB_DIR
+from sturdy.constants import ALLOC_MINER_ALPHA, ALLOC_QUERY_TIMEOUT, DB_DIR, LP_MINER_ALPHA, VOLUME_GENERATOR_MINER_ALPHA
 
 
 def check_config(_cls, config: "bt.Config") -> None:
@@ -197,14 +197,21 @@ def add_validator_args(_cls, parser) -> None:
         "--neuron.alloc_moving_average_alpha",
         type=float,
         help="Moving average alpha parameter for pool allocation miners, how much to add of the new observation.",
-        default=0.1,
+        default=ALLOC_MINER_ALPHA,
     )
 
     parser.add_argument(
         "--neuron.lp_moving_average_alpha",
         type=float,
         help="Moving average alpha parameter for TaoFi LP miners, how much to add of the new observation.",
-        default=0.5,
+        default=LP_MINER_ALPHA,
+    )
+
+    parser.add_argument(
+        "--neuron.volume_generator_moving_average_alpha",
+        type=float,
+        help="Moving average alpha parameter for TaoFi volume generator miners, how much to add of the new observation.",
+        default=VOLUME_GENERATOR_MINER_ALPHA,
     )
 
     parser.add_argument(

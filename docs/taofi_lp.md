@@ -25,9 +25,10 @@ Approve             |  Add Liquidity
 
     ![position](../assets/position.png)
 
-- You will now earn rewards from the pool as long as your position(s) are in-range, and receive fees from the trades that occur in the pool. Rewards will be automatically distributed on a daily basis to your wallet address, and can be viewed and transferred here: [https://sturdy-subnet.github.io/alpha/](https://sturdy-subnet.github.io/alpha/)
+- You will now earn rewards from the pool as long as your position(s) are in-range, and receive fees from the trades that occur in the pool. Rewards will be automatically distributed on a daily basis to your wallet address, and can be viewed and transferred here:
 
-    ![staking_precompile](../assets/staking_precompile.png)
+    ![pool_reward](../assets/pool_reward.png)
+    ![transfer_reward](../assets/transfer_reward.png)
 
 ## Running a Miner (OPTIONAL)
 
@@ -36,7 +37,7 @@ You may optionally register a hotkey and run a miner to earn SN10 alpha tokens, 
 ### Setup Environment
 - Edit your `.env` file to include the private key for the EVM wallet you used to provide liquidity to the pool:
 ```plaintext
-UNISWAP_POS_OWNER_KEY="your_private_key_here"
+EVM_KEY="your_private_key_here"
 ```
 
 ### Commit Miner Type

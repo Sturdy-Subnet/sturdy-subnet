@@ -93,6 +93,22 @@ BURNS_QUERY = """
     }
 """
 
+SWAPS_QUERY = """
+    query GetSwaps($timestampStart: BigInt, $first: Int = 1000, $skip: Int = 0) {
+        swaps(
+            where: {timestamp_gte: $timestampStart}
+            orderBy: transaction__timestamp
+            orderDirection: asc
+            first: $first
+            skip: $skip
+        ) {
+            origin
+            amountUSD
+            timestamp
+        }
+    }
+"""
+
 
 def sub_in_256(x: int, y: int) -> int:
     """Handle overflow/underflow for subtraction in fee calculations."""
@@ -553,6 +569,13 @@ async def get_all_positions_fees(
         )
 
     return positions_fees
+
+
+async def get_swaps(timestamp_start: int, client: Client = GQL_CLIENT) -> list[dict]:
+    data = await client.execute_async(
+        gql(SWAPS_QUERY), variable_values={"timestampStart": timestamp_start, "first": QUERY_BATCH_SIZE, "skip": 0}
+    )
+    return data["swaps"]
 
 
 # function to display position fee growth information in a table format
