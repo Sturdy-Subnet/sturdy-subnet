@@ -521,6 +521,14 @@ def calculate_miner_fees(
     miner_fees = 0.0
     owner_token_ids = owners_to_token_ids.get(evm_address, [])
 
+    # Check if this owner address has already been claimed by another miner
+    if evm_address in claimed_owner_addresses:
+        bt.logging.debug(f"Owner address {evm_address} already claimed by another miner, skipping...")
+        return 0.0
+
+    # Mark this owner address as claimed
+    claimed_owner_addresses.add(evm_address)
+
     for token_id in owner_token_ids:
         if token_id in claimed_token_ids:
             bt.logging.debug(f"Token ID {token_id} already claimed, skipping...")
@@ -531,15 +539,10 @@ def calculate_miner_fees(
             bt.logging.error(f"Token ID {token_id} not found in in_range_fee_growth")
             continue
 
-        if position_info.owner in claimed_owner_addresses:
-            bt.logging.debug(f"Owner {position_info.owner} already claimed, skipping...")
-            continue
-
         try:
             fees_pos = position_info.total_fees_token1_equivalent
             miner_fees += fees_pos
             claimed_token_ids.add(token_id)
-            claimed_owner_addresses.add(position_info.owner)
             bt.logging.debug(
                 f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
                 f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
