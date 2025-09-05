@@ -1,20 +1,20 @@
 import bittensor as bt
 import numpy as np
+import numpy.typing as npt
 from bittensor.core.metagraph import AsyncMetagraph
 from bittensor.utils.weight_utils import normalize_max_weight
-from numpy import ndarray
 
 U16_MAX = 65535
 
 
 async def process_weights_for_netuid(
-    uids: ndarray[np.int64],
-    weights: ndarray[np.float32],
+    uids: npt.NDArray[np.int64],
+    weights: npt.NDArray[np.float32],
     netuid: int,
     subtensor: bt.AsyncSubtensor,
     metagraph: AsyncMetagraph | None = None,
     exclude_quantile: int = 0,
-) -> tuple[ndarray[np.int64], ndarray[np.float32]]:
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float32]]:
     # TODO: update these docs
     """
     Processes weight tensors for a given subnet id using the provided weight and UID arrays, applying constraints
@@ -43,10 +43,9 @@ async def process_weights_for_netuid(
     bt.logging.debug(f"metagraph: {metagraph}")
 
     # Get latest metagraph from chain if metagraph is None.
-    if metagraph is None:
-        metagraph = subtensor.metagraph(netuid)
+    metagraph = AsyncMetagraph(netuid) if metagraph is None else metagraph
 
-    if not isinstance(weights, np.float32):
+    if weights.dtype != np.float32:
         weights = weights.astype(np.float32)
 
     # Network configuration parameters from an subtensor.

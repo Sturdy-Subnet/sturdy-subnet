@@ -23,7 +23,7 @@ import bittensor as bt
 from loguru import logger
 
 from sturdy import __spec_version__ as spec_version
-from sturdy.constants import ALLOC_MINER_ALPHA, ALLOC_QUERY_TIMEOUT, DB_DIR, LP_MINER_ALPHA, VOLUME_GENERATOR_MINER_ALPHA
+from sturdy.constants import LP_MINER_ALPHA
 
 
 def check_config(_cls, config: "bt.Config") -> None:
@@ -173,13 +173,6 @@ def add_validator_args(_cls, parser) -> None:
     )
 
     parser.add_argument(
-        "--neuron.timeout",
-        type=float,
-        help="The timeout for each forward call in seconds.",
-        default=ALLOC_QUERY_TIMEOUT,
-    )
-
-    parser.add_argument(
         "--neuron.num_concurrent_forwards",
         type=int,
         help="The number of concurrent forwards running at any time.",
@@ -194,24 +187,10 @@ def add_validator_args(_cls, parser) -> None:
     )
 
     parser.add_argument(
-        "--neuron.alloc_moving_average_alpha",
-        type=float,
-        help="Moving average alpha parameter for pool allocation miners, how much to add of the new observation.",
-        default=ALLOC_MINER_ALPHA,
-    )
-
-    parser.add_argument(
         "--neuron.lp_moving_average_alpha",
         type=float,
         help="Moving average alpha parameter for TaoFi LP miners, how much to add of the new observation.",
         default=LP_MINER_ALPHA,
-    )
-
-    parser.add_argument(
-        "--neuron.volume_generator_moving_average_alpha",
-        type=float,
-        help="Moving average alpha parameter for TaoFi volume generator miners, how much to add of the new observation.",
-        default=VOLUME_GENERATOR_MINER_ALPHA,
     )
 
     parser.add_argument(
@@ -240,13 +219,6 @@ def add_validator_args(_cls, parser) -> None:
         type=int,
         help="The port you want the api to run on",
         default=9000,
-    )
-
-    parser.add_argument(
-        "--db_dir",
-        type=str,
-        help="directory of database - used for testing purposes",
-        default=DB_DIR,
     )
 
     parser.add_argument(

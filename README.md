@@ -193,7 +193,7 @@ We extend our heartfelt appreciation to namoray et al. for their exceptional wor
 subnet. Our API, which enables third-party applications to integrate the subnet, draws significant
 inspiration from their work.
 
-### [Miner](docs/miner.md)
+### [Miner](docs/taofi_lp.md)
 ### [Validator](docs/validator.md)
 
 ## License

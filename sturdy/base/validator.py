@@ -14,11 +14,8 @@ from dotenv import load_dotenv
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import (
     NEW_TASK_INITIAL_DELAY,
-    QUERY_FREQUENCY,
     UNISWAP_V3_LP_QUERY_FREQUENCY,
-    VOLUME_GENERATOR_QUERY_FREQUENCY,
 )
-from sturdy.mock import MockDendrite
 from sturdy.protocol import MINER_TYPE
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
 from sturdy.utils.association import get_associated_evm_keys
@@ -26,7 +23,7 @@ from sturdy.utils.config import add_validator_args
 from sturdy.utils.misc import normalize_numpy
 from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
 from sturdy.utils.weight_utils import process_weights_for_netuid
-from sturdy.validator.forward import uniswap_v3_lp_forward, volume_generator_forward
+from sturdy.validator.forward import uniswap_v3_lp_forward
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -95,10 +92,7 @@ class BaseValidatorNeuron(BaseNeuron):
         }
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
-        if self.config.mock:
-            self.dendrite = MockDendrite(wallet=self.wallet)
-        else:
-            self.dendrite = bt.dendrite(wallet=self.wallet)
+        self.dendrite = bt.dendrite(wallet=self.wallet)
 
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
@@ -108,8 +102,8 @@ class BaseValidatorNeuron(BaseNeuron):
         self.similarity_penalties = {}
         self.sorted_apys = {}
         self.sorted_axon_times = {}
-        self.miner_types: list[int, MINER_TYPE] = {}
-        self.associated_evm_addresses: list[int, str] = {}
+        self.miner_types: dict[int, MINER_TYPE] = {}
+        self.associated_evm_addresses: dict[int, str] = {}
 
         # Load state
         bt.logging.info("load_state()")
@@ -137,17 +131,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
     async def start(self) -> None:
         """Start validator tasks"""
-        self._tasks.append(asyncio.create_task(self.run_main_loop()))
-        # Add the uniswap v3 lp loop as a separate task
-        # We add a delay here so that the validator has a chance to sync before the
-        # uniswap v3 lp loop starts on initial startup
         await asyncio.sleep(NEW_TASK_INITIAL_DELAY)
         self._tasks.append(asyncio.create_task(self.run_uniswap_v3_lp_loop()))
-        # Add the volume generator loop as a separate task
-        # We add a delay here so that the validator has a chance to sync before the
-        # volume generator loop starts on initial startup
-        await asyncio.sleep(NEW_TASK_INITIAL_DELAY)
-        self._tasks.append(asyncio.create_task(self.run_volume_generator_loop()))
 
     async def stop(self) -> None:
         """Stop all validator tasks"""
@@ -167,48 +152,12 @@ class BaseValidatorNeuron(BaseNeuron):
         if self.wandb:
             self.wandb.finish()
 
-    async def run_main_loop(self) -> None:
-        """Main validator loop"""
-        await self.sync()
-        bt.logging.info("Validator starting...")
-
-        try:
-            while not self._stop_event.is_set():
-                current_time = time.time()
-                if current_time - self.last_query_time > QUERY_FREQUENCY:
-                    bt.logging.info(f"step({self.step})")
-
-                    try:
-                        await self.concurrent_forward()
-                    except Exception as e:
-                        bt.logging.exception(f"Error in concurrent forward: {e}")
-
-                    self.last_query_time = current_time
-                    await self.sync()
-                    bt.logging.debug("Syncing complete")
-                    self.step += 1
-                    bt.logging.debug("Logging metrics")
-                    self.log_metrics()
-                    bt.logging.debug("Logged metrics")
-
-                await asyncio.sleep(1)
-
-        except Exception as e:
-            bt.logging.exception(f"Error in main loop: {e}")
-
     async def uniswap_v3_lp_forward(self) -> any:
         """
         Forward pass for Uniswap V3 LP allocations.
         """
         bt.logging.debug("uniswap_v3_lp_forward()")
         return await uniswap_v3_lp_forward(self)
-
-    async def volume_generator_forward(self) -> any:
-        """
-        Forward pass for volume generator allocations.
-        """
-        bt.logging.debug("volume_generator_forward()")
-        return await volume_generator_forward(self)
 
     async def run_uniswap_v3_lp_loop(self) -> None:
         """Uniswap V3 LP validator loop running in parallel"""
@@ -233,28 +182,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
         except Exception as e:
             bt.logging.exception(f"Error in uniswap v3 lp loop: {e}")
-
-    async def run_volume_generator_loop(self) -> None:
-        """Volume generator validator loop running in parallel"""
-        bt.logging.info("Volume generator validator starting...")
-
-        try:
-            while not self._stop_event.is_set():
-                current_time = time.time()
-                if current_time - self.last_volume_generator_query_time > VOLUME_GENERATOR_QUERY_FREQUENCY:
-                    bt.logging.info("Running volume_generator_forward")
-
-                    try:
-                        await self.volume_generator_forward()
-                    except Exception as e:
-                        bt.logging.exception(f"Error in volume_generator_forward: {e}")
-
-                    self.last_volume_generator_query_time = current_time
-
-                await asyncio.sleep(1)
-
-        except Exception as e:
-            bt.logging.exception(f"Error in volume generator loop: {e}")
 
     def log_metrics(self) -> None:
         """Log metrics to wandb"""
@@ -398,7 +325,11 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Update miner types from commitments
         for uid, commitment in commitments.items():
-            new_type = MINER_TYPE(commitment.get("miner_type", MINER_TYPE.UNISWAP_V3_LP))
+            try:
+                new_type = MINER_TYPE(commitment.get("miner_type", MINER_TYPE.UNISWAP_V3_LP))
+            except Exception as e:
+                new_type = MINER_TYPE.UNISWAP_V3_LP
+                bt.logging.warning(f"Invalid miner type for uid {uid}, defaulting to UNISWAP_V3_LP: {e}")
             if uid not in self.miner_types or self.miner_types[uid] != new_type:
                 bt.logging.info(f"Miner {uid} changed type to {new_type}")
             self.miner_types[uid] = new_type
@@ -471,8 +402,6 @@ class BaseValidatorNeuron(BaseNeuron):
         np.put_along_axis(scattered_rewards, uids_tensor, rewards, axis=0)
         bt.logging.debug(f"Scattered rewards: {rewards}")
 
-        # Only update scores for UIDs that received rewards in this step
-        # mask = scattered_rewards > 0  # Create mask for UIDs with rewards
         # create mask for the uids that we want to update scores for
         mask = np.isin(np.arange(len(self.scores)), uids_tensor)
         if not np.any(mask):
@@ -513,8 +442,36 @@ class BaseValidatorNeuron(BaseNeuron):
             self.step = state["step"]
             self.scores = state["scores"]
             self.hotkeys = state["hotkeys"]
-            miner_types = state.get("miner_types", {})
-            self.miner_types = miner_types.item() if isinstance(miner_types, np.ndarray) else miner_types
+
+            # Handle miner_types with potential enum errors
+            self.miner_types = {}
+            try:
+                # Check if miner_types exists in state
+                if "miner_types" in state.files:
+                    try:
+                        miner_types = state["miner_types"]
+                        raw_miner_types = miner_types.item() if isinstance(miner_types, np.ndarray) else miner_types
+
+                        # Clean up invalid miner types
+                        for uid, miner_type_value in raw_miner_types.items():
+                            try:
+                                # Try to convert to MINER_TYPE enum
+                                self.miner_types[uid] = MINER_TYPE(miner_type_value)
+                            except ValueError:
+                                # If invalid value, default to UNISWAP_V3_LP
+                                bt.logging.warning(
+                                    f"Invalid miner type {miner_type_value} for UID {uid}, defaulting to UNISWAP_V3_LP"
+                                )
+                                self.miner_types[uid] = MINER_TYPE.UNISWAP_V3_LP
+                    except (ValueError, KeyError) as e:
+                        # If we can't load miner_types at all due to enum issues, start fresh
+                        bt.logging.warning(
+                            f"Could not load miner_types due to enum error: {e}. Starting with empty miner_types."
+                        )
+                        self.miner_types = {}
+            except Exception as e:
+                bt.logging.warning(f"Unexpected error loading miner_types: {e}. Starting with empty miner_types.")
+                self.miner_types = {}
 
             bt.logging.info(f"Loaded state with {len(self.hotkeys)} hotkeys")
 

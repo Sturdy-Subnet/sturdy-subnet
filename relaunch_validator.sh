@@ -1,5 +1,0 @@
-#!/bin/bash
-
-# THIS FILE RELAUNCHES THE VALIDATOR - BY DEFAULT WE ASSUME YOU USE PM2
-
-pm2 restart --update-env $1

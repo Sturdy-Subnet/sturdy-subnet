@@ -7,7 +7,6 @@ services:
       - "${API_PORT:-8000}:${API_PORT:-8000}"
       - "${AXON_PORT:-8001}:${API_PORT:-8001}"
     volumes:
-      - ${DB_DIR:-./validator_database.db}:/app/validator_database.db
       - ~/.bittensor/wallets/:/root/.bittensor/wallets
       - ~/.bittensor/miners/:/root/.bittensor/miners/
       - .env/:/app/.env
