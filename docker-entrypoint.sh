@@ -23,8 +23,6 @@ pm2 start --name validator \
     --wallet.name ${WALLET_NAME:-default} \
     --wallet.hotkey ${WALLET_HOTKEY:-default} \
     --logging.debug \
-    --axon.port ${AXON_PORT:-8001} \
-    --api_port ${API_PORT:-8000} \
     ${WANDB_FLAG}
 
 # Keep the container running and follow logs

@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     g++ \
     make \
     wget \
+    libgmp-dev \
+    libmpfr-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js and PM2
@@ -15,9 +17,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && npm install -g pm2
 
-# Install dbmate
-RUN curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64 \
-    && chmod +x /usr/local/bin/dbmate
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Set working directory
 WORKDIR /app
@@ -26,11 +27,10 @@ WORKDIR /app
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Copy the repository contents
 COPY . .
 
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Install the local package
-RUN pip install -e .
+# Install the local package in editable mode
+RUN uv pip install --system --no-cache -e .
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

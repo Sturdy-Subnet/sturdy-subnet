@@ -16,16 +16,12 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import re
-import os
 import codecs
-
-# import pathlib
+import os
+import re
 from os import path
-from io import open
-from setuptools import setup, find_packages
 
-# from pkg_resources import parse_requirements
+from setuptools import find_packages, setup
 
 
 def read_requirements(path):
@@ -75,11 +71,6 @@ setup(
     license="MIT",
     python_requires=">=3.10,<3.11",
     install_requires=requirements,
-    entry_points={
-        "console_scripts": [
-            "sturdy=sturdy.sturdycli:cli",
-        ],
-    },
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",

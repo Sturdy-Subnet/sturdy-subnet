@@ -19,12 +19,10 @@ import copy
 from abc import ABC, abstractmethod
 
 import bittensor as bt
-from bittensor.core.metagraph import AsyncMetagraph
 from bittensor.core.async_subtensor import get_async_subtensor
-from bittensor_wallet.mock import get_mock_wallet
+from bittensor.core.metagraph import AsyncMetagraph
 
 from sturdy import __spec_version__ as spec_version
-from sturdy.mock import MockMetagraph, MockSubtensor
 
 # Sync calls set weights and also resyncs the metagraph.
 from sturdy.utils.config import add_args, check_config, config
@@ -55,10 +53,8 @@ class BaseNeuron(ABC):
         return config(cls)
 
     subtensor: bt.AsyncSubtensor
-    # subtensor: bt.subtensor
     wallet: bt.wallet
     metagraph: AsyncMetagraph
-    # metagraph: bt.metagraph
     spec_version: int = spec_version
 
     @property
@@ -110,9 +106,6 @@ class BaseNeuron(ABC):
             {self.subtensor.chain_endpoint}"
         )
         self.step = 0
-
-    @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
     async def sync(self) -> None:
         """
