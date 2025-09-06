@@ -52,21 +52,12 @@ class BaseMinerNeuron(BaseNeuron):
             bt.logging.debug("loading wandb")
             init_wandb_miner(self=self)
 
-        # TODO: move setup to a separate function?
-        # setup ethereum mainnet provider
-        eth_provider_url = os.environ.get("ETHEREUM_MAINNET_PROVIDER_URL")
-        if eth_provider_url is None:
-            raise ValueError("You must provide a valid web3 provider url")
-
         # setup bittensor mainnet provider
         bittensor_mainnet_url = os.environ.get("BITTENSOR_MAINNET_PROVIDER_URL")
         if bittensor_mainnet_url is None:
             raise ValueError("You must provide a valid subtensor provider url")
 
         self.pool_data_providers = {
-            POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET: await PoolProviderFactory.create_pool_provider(
-                POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET, url=eth_provider_url
-            ),
             POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET: await PoolProviderFactory.create_pool_provider(
                 POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET, url=bittensor_mainnet_url
             ),

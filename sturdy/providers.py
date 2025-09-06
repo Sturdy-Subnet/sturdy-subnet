@@ -6,7 +6,6 @@ from web3 import AsyncWeb3
 
 
 class POOL_DATA_PROVIDER_TYPE(str, Enum):
-    ETHEREUM_MAINNET = "ETHEREUM_MAINNET"
     BITTENSOR_MAINNET = "BITTENSOR_MAINNET"
     BITTENSOR_WEB3 = "BITTENSOR_WEB3"
 
@@ -22,8 +21,6 @@ class PoolProviderFactory:
         :param kwargs: Additional arguments to pass to the provider constructor.
         :return: An instance of the specified pool provider.
         """
-        if provider == POOL_DATA_PROVIDER_TYPE.ETHEREUM_MAINNET:
-            return AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url, **kwargs))
         if provider == POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET:
             return await get_async_subtensor(url)
         # TODO(uniwap_v3_lp): remove this if we believe that the bittensor web3 provider is not needed
