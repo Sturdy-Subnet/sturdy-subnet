@@ -1,6 +1,6 @@
 [project]
 name = "sturdy-subnet"
-version = "5.0.2"
+version = "6.0.0"
 description = "Bringing liquidity to Bittensor"
 readme = "README.md"
 authors = [
@@ -59,17 +59,15 @@ Homepage = "https://github.com/Sturdy-Subnet/sturdy-subnet"
 Repository = "https://github.com/Sturdy-Subnet/sturdy-subnet"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
+[tool.setuptools]
 packages = ["sturdy"]
+include-package-data = true
 
-[tool.hatch.build]
-include = [
-    "sturdy/**/*.py",
-    "sturdy/abi/*.json",
-]
+[tool.setuptools.package-data]
+sturdy = ["abi/*.json"]
 
 [tool.uv]
 dev-dependencies = [
