@@ -1,6 +1,6 @@
 services:
   validator:
-    image: sturdy-subnet:local
+    image: ghcr.io/sturdy-subnet/sturdy-subnet:latest
     container_name: sturdy-validator
     restart: unless-stopped
     volumes:
