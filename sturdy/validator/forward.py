@@ -49,7 +49,7 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         tuple: A tuple containing the rewards and a dictionary of miner UIDs to their rewards.
     """
 
-    bt.logging.info("Querying miners for Uniswap V3 LP positions...")
+    bt.logging.info("Querying chain for miners with Uniswap V3 LP positions...")
 
     # filter out uids to query
     uids_to_query = [uid for uid, t in self.miner_types.items() if t == MINER_TYPE.UNISWAP_V3_LP]

@@ -13,12 +13,17 @@ cd sturdy-subnet
 ```
 
 ### Install python dependencies
-Make sure you have installed the correct python version, and then follow these steps:
+Make sure you have installed the correct python version (3.10), and then follow these steps:
 
+First, install `uv` for fast Python package management:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then install the dependencies:
 ```bash
 ### Install the local python environment
-pip install --upgrade pip
-pip install -e .
+uv pip install -e .
 ```
 
 ### Install node and pm2
@@ -37,6 +42,8 @@ dbmate --url "sqlite:validator_database.db" up
 
 
 ## Running a Validator
+#### Set up wandb
+We ***highly recommend*** that you set up wandb for your validator. Instructions can be found [here](wandb.md).
 
 #### Local subtensor
 Before running a validator it is **highly** recommended that you run a local subtensor vs. just connecting to the `finney` endpoint. Instructions for setting up a local subtensor can be found [here](https://github.com/opentensor/subtensor/blob/main/docs/running-subtensor-locally.md).
