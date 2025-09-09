@@ -116,52 +116,6 @@ def add_args(_cls, parser) -> None:
     )
 
 
-def add_miner_args(_cls, parser) -> None:
-    """Add miner specific arguments to the parser."""
-
-    parser.add_argument(
-        "--neuron.name",
-        type=str,
-        help="Trials for this neuron go in neuron.root / (wallet_cold - wallet_hot) / neuron.name. ",
-        default="miner",
-    )
-
-    parser.add_argument(
-        "--blacklist.force_validator_permit",
-        action="store_true",
-        help="If set, we will force incoming requests to have a permit.",
-        default=True,
-    )
-
-    parser.add_argument(
-        "--blacklist.allow_non_registered",
-        action="store_true",
-        help="If set, miners will accept queries from non registered entities. (Dangerous!)",
-        default=False,
-    )
-
-    parser.add_argument(
-        "--wandb.project_name",
-        type=str,
-        default="sturdy-subnet",
-        help="Wandb project to log to.",
-    )
-
-    parser.add_argument(
-        "--wandb.entity",
-        type=str,
-        default="shr1ftyy",
-        help="Wandb entity to log to.",
-    )
-
-    parser.add_argument(
-        "--validator.min_stake",
-        type=int,
-        default=1024,
-        help="Minimum validator stake to accept forward requests from as a miner",
-    )
-
-
 def add_validator_args(_cls, parser) -> None:
     """Add validator specific arguments to the parser."""
 
@@ -170,13 +124,6 @@ def add_validator_args(_cls, parser) -> None:
         type=str,
         help="Trials for this neuron go in neuron.root / (wallet_cold - wallet_hot) / neuron.name. ",
         default="validator",
-    )
-
-    parser.add_argument(
-        "--neuron.num_concurrent_forwards",
-        type=int,
-        help="The number of concurrent forwards running at any time.",
-        default=1,
     )
 
     parser.add_argument(
@@ -237,10 +184,7 @@ def config(cls) -> bt.config:
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
     bt.logging.add_args(parser)
-    bt.axon.add_args(parser)
     cls.add_args(parser)
     conf = bt.config(parser)
-    conf.mock_n = 64  # default number of mock miners for testing
-    conf.mock_max_uids = 64  # default number of max allowed ids in a subnet for testing
     conf.spec_version = spec_version
     return conf

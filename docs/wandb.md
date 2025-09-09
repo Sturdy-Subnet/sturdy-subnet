@@ -1,15 +1,14 @@
 # Setup Wandb
 
-Before running your miner and validator, you may also choose to set up Weights & Biases (WANDB). It
+Before running your validator, you may also choose to set up Weights & Biases (WANDB). It
 is a popular tool for tracking and visualizing machine learning experiments, and we use it for
-logging and tracking key metrics across miners and validators, all of which is available publicly
+logging and tracking key metrics across validators, all of which is available publicly
 [here](https://wandb.ai/shr1ftyy/sturdy-subnet/table?nw=nwusershr1ftyy). We ***highly recommend***
 validators use wandb, as it allows subnet developers and miners to diagnose issues more quickly and
 effectively, say, in the event a validator were to be set abnormal weights. Wandb logs are
 collected by default, and done so in an anonymous fashion, but we recommend setting up an account
 to make it easier to differentiate between validators when searching for runs on our dashboard. If
-you would *not* like to run WandB, you can do so by adding the flag `--wandb.off` when running your
-miner/validator.
+you would *not* like to run WandB, you can do so by adding the flag `--wandb.off` when running your validator.
 
 Before getting started, as mentioned previously, you'll first need to
 [register](https://wandb.ai/login?signup=true) for a WANDB account, and then set your API key on
