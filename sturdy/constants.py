@@ -10,7 +10,7 @@ MINER_GROUP_THRESHOLDS = {
 }
 
 # Default moving average alpha parameters for each miner group
-LP_MINER_ALPHA = 0.5
+LP_MINER_ALPHA = 1.0
 
 # Validators don't have to verify signatures from miners in the whitelist.
 WHITELISTED_LP_MINER = "5H3QttLgF7nzWGLSpXkH6gMC6XnSovfGa1xRosqyjVqB7XoS"
