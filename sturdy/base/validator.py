@@ -81,11 +81,6 @@ class BaseValidatorNeuron(BaseNeuron):
             ),
         }
 
-        # Dendrite lets us send messages to other nodes (axons) in the network.
-        self.dendrite = bt.dendrite(wallet=self.wallet)
-
-        bt.logging.info(f"Dendrite: {self.dendrite}")
-
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
@@ -222,28 +217,6 @@ class BaseValidatorNeuron(BaseNeuron):
         except Exception as e:
             bt.logging.error(f"Failed to log metrics: {e}")
 
-    async def serve_axon(self) -> None:
-        """Serve axon to enable external connections."""
-
-        bt.logging.info("serving ip to chain...")
-        try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
-
-            try:
-                await self.subtensor.serve_axon(
-                    netuid=self.config.netuid,
-                    axon=self.axon,
-                )
-                bt.logging.info(
-                    f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: \
-                        {self.config.netuid}"
-                )
-            except Exception as e:
-                bt.logging.error(f"Failed to serve Axon with exception: {e}")
-
-        except Exception as e:
-            bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
-
     async def set_weights(self) -> None:
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights
@@ -360,7 +333,7 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         bt.logging.debug(f"Associated EVM addresses: {self.associated_evm_addresses}")
 
-        bt.logging.info("Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages")
+        bt.logging.info("Metagraph updated, re-syncing hotkeys, and moving averages")
         # Zero out all hotkeys that have been replaced.
         for uid, hotkey in enumerate(self.hotkeys):
             if hotkey != self.metagraph.hotkeys[uid]:

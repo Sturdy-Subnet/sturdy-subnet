@@ -25,4 +25,3 @@ __spec_version__ = (1000 * int(version_split[0])) + (10 * int(version_split[1]))
 from . import protocol
 from . import base
 from . import validator
-from .subnet_links import SUBNET_LINKS
