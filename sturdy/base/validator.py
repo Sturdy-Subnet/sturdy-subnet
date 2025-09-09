@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from sturdy.base.neuron import BaseNeuron
 from sturdy.constants import (
+    MAIN_LOOP_FREQUENCY,
     NEW_TASK_INITIAL_DELAY,
     UNISWAP_V3_LP_QUERY_FREQUENCY,
 )
@@ -46,11 +47,9 @@ class BaseValidatorNeuron(BaseNeuron):
         load_dotenv()
 
         # set last query time to be 0
-        self.last_query_time = 0
+        self.last_main_loop_time = 0
         # Add separate query time for uniswap v3 lp forward
         self.last_uniswap_v3_lp_query_time = 0
-        # Add separate query time for volume generator forward
-        self.last_volume_generator_query_time = 0
 
         # init wandb
         self.wandb_run_log_count = 0
@@ -90,9 +89,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
-        self.similarity_penalties = {}
-        self.sorted_apys = {}
-        self.sorted_axon_times = {}
         self.miner_types: dict[int, MINER_TYPE] = {}
         self.associated_evm_addresses: dict[int, str] = {}
 
@@ -122,8 +118,11 @@ class BaseValidatorNeuron(BaseNeuron):
 
     async def start(self) -> None:
         """Start validator tasks"""
-        await asyncio.sleep(NEW_TASK_INITIAL_DELAY)
         self._tasks.append(asyncio.create_task(self.run_uniswap_v3_lp_loop()))
+        await asyncio.sleep(NEW_TASK_INITIAL_DELAY)
+        # we run the main loop (which includes sync and set_weights) after scoring miners in
+        # the uniswap v3 lp loop, so that we have the latest scores before setting weights
+        self._tasks.append(asyncio.create_task(self.run_main_loop()))
 
     async def stop(self) -> None:
         """Stop all validator tasks"""
@@ -149,6 +148,33 @@ class BaseValidatorNeuron(BaseNeuron):
         """
         bt.logging.debug("uniswap_v3_lp_forward()")
         return await uniswap_v3_lp_forward(self)
+
+    async def run_main_loop(self) -> None:
+        """Main validator loop"""
+        await self.sync()
+        bt.logging.info("Validator starting...")
+
+        try:
+            while not self._stop_event.is_set():
+                current_time = time.time()
+                if current_time - self.last_main_loop_time > MAIN_LOOP_FREQUENCY:
+                    bt.logging.info(f"step({self.step})")
+
+                    self.last_main_loop_time = current_time
+                    try:
+                        await self.sync()
+                        bt.logging.debug("Syncing complete")
+                        self.step += 1
+                    except Exception as e:
+                        bt.logging.exception(f"Error in sync: {e}")
+                    bt.logging.debug("Logging metrics")
+                    self.log_metrics()
+                    bt.logging.debug("Logged metrics")
+
+                await asyncio.sleep(1)
+
+        except Exception as e:
+            bt.logging.exception(f"Error in main loop: {e}")
 
     async def run_uniswap_v3_lp_loop(self) -> None:
         """Uniswap V3 LP validator loop running in parallel"""
@@ -184,9 +210,6 @@ class BaseValidatorNeuron(BaseNeuron):
             metrics.update(
                 {
                     "validator_run_step": self.step,
-                    **{f"similarity_penalties/uid_{uid}": score for uid, score in self.similarity_penalties.items()},
-                    **{f"apys/uid_{uid}": apy for uid, apy in self.sorted_apys.items()},
-                    **{f"axon_times/uid_{uid}": time for uid, time in self.sorted_axon_times.items()},
                 }
             )
 
@@ -220,11 +243,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
         except Exception as e:
             bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
-
-    async def concurrent_forward(self) -> None:
-        bt.logging.info("Running concurrent_forward()")
-        coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
-        await asyncio.gather(*coroutines)
 
     async def set_weights(self) -> None:
         """
@@ -335,12 +353,8 @@ class BaseValidatorNeuron(BaseNeuron):
                 )
                 self.scores[uid] = 0
 
-        # Get the associated EVM addresses for each hotkey that is a LP miner and volume generator
-        taofi_miner_uids = [
-            uid
-            for uid, miner_type in self.miner_types.items()
-            if miner_type == MINER_TYPE.UNISWAP_V3_LP or miner_type == MINER_TYPE.VOLUME_GENERATOR
-        ]
+        # Get the associated EVM addresses for each hotkey that is a LP miner
+        taofi_miner_uids = [uid for uid, miner_type in self.miner_types.items() if miner_type == MINER_TYPE.UNISWAP_V3_LP]
         self.associated_evm_addresses: dict[int, str] = await get_associated_evm_keys(
             self.config.netuid, taofi_miner_uids, self.subtensor
         )

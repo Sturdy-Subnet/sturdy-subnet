@@ -104,9 +104,7 @@ async def main() -> None:
         bt.logging.error("Failed to commit miner type.")
 
     # if signature, and evm address are provided, associate the EVM key with the hotkey
-    if os.getenv("EVM_KEY") and (
-        config.miner_type == MINER_TYPE.UNISWAP_V3_LP or config.miner_type == MINER_TYPE.VOLUME_GENERATOR
-    ):
+    if os.getenv("EVM_KEY") and (config.miner_type == MINER_TYPE.UNISWAP_V3_LP):
         bt.logging.info("Getting block number to use as nonce...")
         try:
             block_number = await subtensor.get_current_block()
