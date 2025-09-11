@@ -431,7 +431,11 @@ class BaseValidatorNeuron(BaseNeuron):
 
             self.step = state["step"]
             self.scores = state["scores"]
-            self.hotkeys = state["hotkeys"]
+            try:
+                self.hotkeys = list(state["hotkeys"])
+            except Exception as e:
+                bt.logging.warning(f"Failed to load hotkeys from state, defaulting to metagraph hotkeys: {e}")
+                self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
             # Handle miner_types with potential enum errors
             self.miner_types = {}
