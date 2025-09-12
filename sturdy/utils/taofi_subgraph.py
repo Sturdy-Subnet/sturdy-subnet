@@ -1,9 +1,9 @@
-# ruff: noqa: RUF003 (ambiguous-unicode-character-comment) - for the equations :)
 import asyncio
 import json
 import math
 from copy import copy
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import bittensor as bt
@@ -30,8 +30,8 @@ NFT_POS_ABI = json.loads(NFT_POS_MGR_PATH.read_text())
 NFT_POS_MGR_ADDR = "0x61EeA4770d7E15e7036f8632f4bcB33AF1Af1e25"
 
 POSITIONS_QUERY = """
-    query GetTokenPositions($blockNumber: Int!, $first: Int = 1000, $skip: Int = 0) {
-        positions(first: $first, skip: $skip, block: {number: $blockNumber}) {
+    query GetTokenPositions($blockNumber: Int!, $limit: Int = 1000, $offset: Int = 0) {
+        positions: positionsAtBlock(limit: $limit, offset: $offset, blockNumber: $blockNumber) {
             id
             owner
             collectedFeesToken0
@@ -58,22 +58,17 @@ POSITIONS_QUERY = """
                 decimals
             }
             liquidity
-            transaction {
-                timestamp
-                blockNumber
-            }
         }
     }
 """
 
 BURNS_QUERY = """
-    query GetBurns($timestampStart: BigInt, $first: Int = 1000, $skip: Int = 0) {
+    query GetBurns($timestampStart: DateTime, $limit: Int = 1000, $offset: Int = 0) {
         burns(
             where: {timestamp_gte: $timestampStart}
-            first: $first
-            skip: $skip
-            orderBy: timestamp
-            orderDirection: desc
+            limit: $limit
+            offset: $offset
+            orderBy: timestamp_DESC
         ) {
             origin
             timestamp
@@ -142,11 +137,11 @@ async def get_burns_for_timeframe(
         List of burn events with normalized amounts
     """
     all_burns = []
-    skip = 0
+    offset = 0
 
     while True:
         data = await client.execute_async(
-            gql(BURNS_QUERY), variable_values={"timestampStart": timestamp_start, "first": batch_size, "skip": skip}
+            gql(BURNS_QUERY), variable_values={"timestampStart": timestamp_start, "limit": batch_size, "offset": offset}
         )
 
         burns = data["burns"]
@@ -160,7 +155,7 @@ async def get_burns_for_timeframe(
                 "tickUpper": int(burn["tickUpper"]),
                 "amount0": float(burn["amount0"]),
                 "amount1": float(burn["amount1"]),
-                "timestamp": int(burn["timestamp"]),
+                "timestamp": burn["timestamp"],
             }
             all_burns.append(burn_data)
 
@@ -168,7 +163,7 @@ async def get_burns_for_timeframe(
         if len(burns) < batch_size:
             break
 
-        skip += batch_size
+        offset += batch_size
 
     return all_burns
 
@@ -215,7 +210,7 @@ def match_burns_to_positions(position_infos: dict[int, PositionFeesInfo], burns:
 
 
 async def get_position_infos_subgraph(
-    block_number: int, client: Client = GQL_CLIENT, first: int = QUERY_BATCH_SIZE, skip: int = 0
+    block_number: int, client: Client = GQL_CLIENT, limit: int = QUERY_BATCH_SIZE, offset: int = 0
 ) -> dict[int, PositionFeesInfo]:
     """
     Get position fees for all positions at a specific block.
@@ -223,15 +218,15 @@ async def get_position_infos_subgraph(
     Args:
         block_number: The block number to query
         client: The GraphQL client to use
-        first: Number of positions to fetch (default: 1000)
-        skip: Number of positions to skip for pagination (default: 0)
+        limit: Number of positions to fetch (default: 1000)
+        offset: Number of positions to offset for pagination (default: 0)
 
     Returns:
         Dictionary mapping position IDs to PositionFeesInfo objects
     """
 
     data = await client.execute_async(
-        gql(POSITIONS_QUERY), variable_values={"blockNumber": block_number, "first": first, "skip": skip}
+        gql(POSITIONS_QUERY), variable_values={"blockNumber": block_number, "limit": limit, "offset": offset}
     )
 
     positions_subgraph_info = data["positions"]
@@ -435,11 +430,11 @@ async def get_all_positions_infos_subgraph(
         Dictionary mapping position IDs to PositionFeesInfo objects for all positions
     """
     position_infos = {}
-    skip = 0
+    offset = 0
 
     while True:
         batch_positions = await get_position_infos_subgraph(
-            block_number=block_number, client=client, first=batch_size, skip=skip
+            block_number=block_number, client=client, limit=batch_size, offset=offset
         )
 
         if not batch_positions:
@@ -451,7 +446,7 @@ async def get_all_positions_infos_subgraph(
         if len(batch_positions) < batch_size:
             break
 
-        skip += batch_size
+        offset += batch_size
 
     return position_infos
 
@@ -507,11 +502,15 @@ async def get_all_positions_fees(
     """
     position_infos = await get_all_positions_infos_subgraph(block_identifier, client)
     token_ids = list(position_infos.keys())
+    # convert timestamp into the following format: 2025-09-09T08:00:00.000000Z
+    burn_start_timestamp = None
+    if subtract_burns_from_timestamp is not None:
+        burn_start_timestamp = datetime.fromtimestamp(subtract_burns_from_timestamp, tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
     # Get burn events if timestamp provided
     burns_by_position = {}
-    if subtract_burns_from_timestamp is not None:
-        burns = await get_burns_for_timeframe(subtract_burns_from_timestamp, client)
+    if burn_start_timestamp is not None:
+        burns = await get_burns_for_timeframe(burn_start_timestamp, client)
         burns_by_position = match_burns_to_positions(position_infos, burns)
 
     bt.logging.debug(f"Found {len(position_infos)} positions at block {block_identifier}.")

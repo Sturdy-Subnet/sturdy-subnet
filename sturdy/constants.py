@@ -21,4 +21,4 @@ MINER_GROUP_EMISSIONS = {
 }
 
 # Uniswap V3 LP subgraph URL for Taofi
-TAOFI_GQL_URL = "https://subgraph.taofi.com/subgraphs/name/uniswap/v3-older"
+TAOFI_GQL_URL = "http://34.55.201.138/graphql"

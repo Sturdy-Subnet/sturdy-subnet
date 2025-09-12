@@ -41,11 +41,11 @@ class BaseNeuron(ABC):
     neuron_type: str = "BaseNeuron"
 
     @classmethod
-    def check_config(cls, config: "bt.Config"):
+    def check_config(cls, config: "bt.Config") -> None:
         check_config(cls, config)
 
     @classmethod
-    def add_args(cls, parser):
+    def add_args(cls, parser) -> None:
         add_args(cls, parser)
 
     @classmethod
