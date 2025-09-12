@@ -1,6 +1,6 @@
 [project]
 name = "sturdy-subnet"
-version = "6.0.3"
+version = "6.0.4"
 description = "Bringing liquidity to Bittensor"
 readme = "README.md"
 authors = [
