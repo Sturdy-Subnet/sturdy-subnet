@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -31,6 +31,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY . .
 
 # Install the local package in editable mode
+RUN uv sync
 RUN uv pip install --system --no-cache -e .
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
