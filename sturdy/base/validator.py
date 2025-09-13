@@ -16,7 +16,6 @@ from sturdy.constants import (
     MAIN_LOOP_FREQUENCY,
     NEW_TASK_INITIAL_DELAY,
     UNISWAP_V3_LP_QUERY_FREQUENCY,
-    WHITELISTED_LP_MINER,
 )
 from sturdy.protocol import MINER_TYPE
 from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
@@ -224,19 +223,8 @@ class BaseValidatorNeuron(BaseNeuron):
         determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
 
-        # NOTE: redirecting all emissions to the the whitelisted hotkey for now
-        bt.logging.info("Redirecting all emissions to the whitelisted LP miner")
-        scores = np.zeros(self.metagraph.n, dtype=np.float32)
-
-        try:
-            whitelisted_miner_uid = self.hotkeys.index(WHITELISTED_LP_MINER)
-            scores[whitelisted_miner_uid] = 1.0
-        except ValueError as e:
-            bt.logging.error(f"Whitelisted LP miner not found in metagraph hotkeys! Setting all weights to 0.: {e}")
-            scores.fill(0)
-
-        # Check if scores contains any NaN values and log a warning if it does.
-        if np.isnan(scores).any():
+        # Check if self.scores contains any NaN values and log a warning if it does.
+        if np.isnan(self.scores).any():
             bt.logging.warning(
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward \
                 functions."
@@ -244,7 +232,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
-        raw_weights = normalize_numpy(scores)
+        raw_weights = normalize_numpy(self.scores)
 
         bt.logging.debug(f"raw_weights {raw_weights}")
         bt.logging.debug(f"raw_weight_uids {self.metagraph.uids}")
@@ -294,7 +282,7 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info("resync_metagraph()")
 
         # Copies state of metagraph before syncing.
-        previous_metagraph = copy.deepcopy(self.metagraph)
+        copy.deepcopy(self.metagraph)
 
         # Sync the metagraph.
         await self.metagraph.sync(subtensor=self.subtensor)

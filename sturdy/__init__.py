@@ -17,11 +17,9 @@
 # DEALINGS IN THE SOFTWARE.
 
 # Define the version of the template module.
-__version__ = "6.0.3"
+__version__ = "6.0.4"
 version_split = __version__.split(".")
 __spec_version__ = (1000 * int(version_split[0])) + (10 * int(version_split[1])) + (1 * int(version_split[2]))
 
 # Import all submodules.
-from . import protocol
-from . import base
-from . import validator
+from . import base, protocol, validator

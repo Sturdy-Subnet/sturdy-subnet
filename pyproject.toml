@@ -1,13 +1,13 @@
 [project]
 name = "sturdy-subnet"
-version = "6.0.3"
+version = "6.0.4"
 description = "Bringing liquidity to Bittensor"
 readme = "README.md"
 authors = [
     { name = "Syeam Bin Abdullah", email = "syeamtechdemon@gmail.com" }
 ]
 license = { text = "MIT" }
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.11,<3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -63,7 +63,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["sturdy"]
+packages = ["sturdy", "sturdy.base", "sturdy.validator", "sturdy.utils", "sturdy.validator.utils"]
 include-package-data = true
 
 [tool.setuptools.package-data]

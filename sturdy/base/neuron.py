@@ -22,7 +22,6 @@ import bittensor as bt
 from bittensor.core.async_subtensor import get_async_subtensor
 from bittensor.core.metagraph import AsyncMetagraph
 
-from sturdy import __spec_version__ as spec_version
 
 # Sync calls set weights and also resyncs the metagraph.
 from sturdy.utils.config import add_args, check_config, config
@@ -41,11 +40,11 @@ class BaseNeuron(ABC):
     neuron_type: str = "BaseNeuron"
 
     @classmethod
-    def check_config(cls, config: "bt.Config"):
+    def check_config(cls, config: "bt.Config") -> None:
         check_config(cls, config)
 
     @classmethod
-    def add_args(cls, parser):
+    def add_args(cls, parser) -> None:
         add_args(cls, parser)
 
     @classmethod
@@ -55,10 +54,10 @@ class BaseNeuron(ABC):
     subtensor: bt.AsyncSubtensor
     wallet: bt.wallet
     metagraph: AsyncMetagraph
-    spec_version: int = spec_version
+    spec_version: int = 6004
 
     @property
-    async def block(self):
+    async def block(self) -> int:
         return await ttl_get_block(self)
 
     @classmethod

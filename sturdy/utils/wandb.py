@@ -40,7 +40,7 @@ def init_wandb_miner(self, reinit=False) -> None:
     )
 
 
-def init_wandb_validator(self, reinit=False):
+def init_wandb_validator(self, reinit=False) -> None:
     """Starts a new wandb run for a validator."""
     tags = [
         self.wallet.hotkey.ss58_address,

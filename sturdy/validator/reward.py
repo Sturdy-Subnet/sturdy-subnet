@@ -54,7 +54,7 @@ async def get_rewards_uniswap_v3_lp(
     """
 
     miner_uids = list(taofi_lp_evm_addresses.keys())
-    rewards = {uid: 0 for uid in miner_uids}
+    rewards = dict.fromkeys(miner_uids, 0)
     w3 = Web3(EthereumTesterProvider())
 
     try:
