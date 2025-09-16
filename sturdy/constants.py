@@ -20,5 +20,5 @@ MINER_GROUP_EMISSIONS = {
     "UNISWAP_V3_LP": 1,  # uniswap lp miners will receive 100% of the emissions
 }
 
-# Uniswap V3 LP subgraph URL for Taofi
-TAOFI_GQL_URL = "http://34.55.201.138/graphql"
+# Graphql URL for Taofi to fetch information about Uniswap V3 LP miners and their positions
+TAOFI_GQL_URL = "https://subgraph.taofi.com/graphql"
