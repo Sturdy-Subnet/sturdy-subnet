@@ -1524,7 +1524,7 @@ wheels = [
 
 [[package]]
 name = "sturdy-subnet"
-version = "6.0.5"
+version = "6.0.6"
 source = { editable = "." }
 dependencies = [
     { name = "annotated-types" },
