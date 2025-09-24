@@ -1,6 +1,6 @@
 [project]
 name = "swap-subnet"
-version = "6.0.6"
+version = "7.0.0"
 description = "Bringing liquidity to Bittensor"
 readme = "README.md"
 authors = [
