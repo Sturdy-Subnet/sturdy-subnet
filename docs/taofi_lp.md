@@ -21,7 +21,7 @@ Approve             |  Add Liquidity
 :-------------------------:|:-------------------------:
  ![approve](../assets/approve.png) | ![add_liquidity](../assets/liquidity.png)
 
-- You will then be able to view your position in the pool. Make sure to note down it's position ID, as you will need it later to receive rewards from the Sturdy Subnet.
+- You will then be able to view your position in the pool. Make sure to note down it's position ID, as you will need it later to receive rewards from the Swap Subnet.
 
     ![position](../assets/position.png)
 

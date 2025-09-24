@@ -1,6 +1,6 @@
 [project]
-name = "sturdy-subnet"
-version = "6.0.6"
+name = "swap-subnet"
+version = "7.0.0"
 description = "Bringing liquidity to Bittensor"
 readme = "README.md"
 authors = [
@@ -55,19 +55,19 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Sturdy-Subnet/sturdy-subnet"
-Repository = "https://github.com/Sturdy-Subnet/sturdy-subnet"
+Homepage = "https://github.com/Swap-Subnet/swap-subnet"
+Repository = "https://github.com/Swap-Subnet/swap-subnet"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["sturdy", "sturdy.base", "sturdy.validator", "sturdy.utils", "sturdy.validator.utils"]
+packages = ["swap", "swap.base", "swap.validator", "swap.utils", "swap.validator.utils"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-sturdy = ["abi/*.json"]
+swap = ["abi/*.json"]
 
 [tool.uv]
 dev-dependencies = [

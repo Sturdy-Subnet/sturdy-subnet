@@ -3,8 +3,8 @@ import copy
 import bittensor as bt
 import wandb
 
-from sturdy import __spec_version__ as THIS_SPEC_VERSION  # noqa: N812
-from sturdy import __version__ as THIS_VERSION  # noqa: N812
+from swap import __spec_version__ as THIS_SPEC_VERSION  # noqa: N812
+from swap import __version__ as THIS_VERSION  # noqa: N812
 
 
 def init_wandb_miner(self, reinit=False) -> None:

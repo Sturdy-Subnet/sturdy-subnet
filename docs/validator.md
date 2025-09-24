@@ -4,8 +4,8 @@
 
 ### Clone the repo
 ```bash
-git clone https://github.com/Sturdy-Subnet/sturdy-subnet/
-cd sturdy-subnet
+git clone https://github.com/Swap-Subnet/swap-subnet/
+cd swap-subnet
 ```
 
 ### Install python dependencies
@@ -79,7 +79,7 @@ This will:
 docker compose logs -f
 
 # View only validator logs
-docker compose logs -f sturdy-validator
+docker compose logs -f swap-validator
 ```
 
 3. Stop the validator:

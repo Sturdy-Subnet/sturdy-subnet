@@ -21,13 +21,13 @@ from typing import Any
 import bittensor as bt
 import numpy as np
 
-from sturdy.constants import (
+from swap.constants import (
     MINER_GROUP_EMISSIONS,
     MINER_GROUP_THRESHOLDS,
 )
-from sturdy.protocol import MINER_TYPE
-from sturdy.providers import POOL_DATA_PROVIDER_TYPE
-from sturdy.validator.reward import (
+from swap.protocol import MINER_TYPE
+from swap.providers import POOL_DATA_PROVIDER_TYPE
+from swap.validator.reward import (
     get_rewards_uniswap_v3_lp,
 )
 

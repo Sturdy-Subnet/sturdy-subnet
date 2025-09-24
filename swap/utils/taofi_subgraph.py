@@ -13,7 +13,7 @@ from gql.transport.aiohttp import AIOHTTPTransport
 from web3 import AsyncWeb3
 from web3.types import BlockIdentifier
 
-from sturdy.constants import TAOFI_GQL_URL
+from swap.constants import TAOFI_GQL_URL
 
 TRANSPORT = AIOHTTPTransport(url=TAOFI_GQL_URL)
 GQL_CLIENT = Client(transport=TRANSPORT, fetch_schema_from_transport=True)

@@ -1,7 +1,7 @@
 services:
   validator:
-    image: ghcr.io/sturdy-subnet/sturdy-subnet:latest
-    container_name: sturdy-validator
+    image: ghcr.io/swap-subnet/swap-subnet:latest
+    container_name: swap-validator
     restart: unless-stopped
     volumes:
       - ~/.bittensor/wallets/:/root/.bittensor/wallets

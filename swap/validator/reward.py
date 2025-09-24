@@ -19,8 +19,8 @@ import bittensor as bt
 from async_lru import alru_cache
 from web3 import AsyncWeb3, EthereumTesterProvider, Web3
 
-from sturdy.constants import WHITELISTED_LP_MINER
-from sturdy.utils.taofi_subgraph import PositionFeesInfo, get_fees_in_range
+from swap.constants import WHITELISTED_LP_MINER
+from swap.utils.taofi_subgraph import PositionFeesInfo, get_fees_in_range
 
 # a day in blocktime
 BLOCK_ONE_DAY_AGO = 7200  # 2 hours in blocks, assuming 1 block per second
