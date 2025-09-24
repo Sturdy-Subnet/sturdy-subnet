@@ -22,7 +22,7 @@ import asyncio
 import bittensor as bt
 
 # import base validator class which takes care of most of the boilerplate
-from sturdy.base.validator import BaseValidatorNeuron
+from swap.base.validator import BaseValidatorNeuron
 
 
 class Validator(BaseValidatorNeuron):

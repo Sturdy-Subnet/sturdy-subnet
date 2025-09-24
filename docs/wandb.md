@@ -20,7 +20,7 @@ Before logging in, make sure you have the WANDB Python package installed. If you
 it yet, you can do so using pip:
 
 ```bash
-# Should already be installed with the sturdy repo
+# Should already be installed with the swap subnet repo
 pip install wandb
 ```
 

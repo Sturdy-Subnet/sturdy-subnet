@@ -11,20 +11,20 @@ import numpy as np
 import numpy.typing as npt
 from dotenv import load_dotenv
 
-from sturdy.base.neuron import BaseNeuron
-from sturdy.constants import (
+from swap.base.neuron import BaseNeuron
+from swap.constants import (
     MAIN_LOOP_FREQUENCY,
     NEW_TASK_INITIAL_DELAY,
     UNISWAP_V3_LP_QUERY_FREQUENCY,
 )
-from sturdy.protocol import MINER_TYPE
-from sturdy.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
-from sturdy.utils.association import get_associated_evm_keys
-from sturdy.utils.config import add_validator_args
-from sturdy.utils.misc import normalize_numpy
-from sturdy.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
-from sturdy.utils.weight_utils import process_weights_for_netuid
-from sturdy.validator.forward import uniswap_v3_lp_forward
+from swap.protocol import MINER_TYPE
+from swap.providers import POOL_DATA_PROVIDER_TYPE, PoolProviderFactory
+from swap.utils.association import get_associated_evm_keys
+from swap.utils.config import add_validator_args
+from swap.utils.misc import normalize_numpy
+from swap.utils.wandb import init_wandb_validator, reinit_wandb, should_reinit_wandb
+from swap.utils.weight_utils import process_weights_for_netuid
+from swap.validator.forward import uniswap_v3_lp_forward
 
 
 class BaseValidatorNeuron(BaseNeuron):

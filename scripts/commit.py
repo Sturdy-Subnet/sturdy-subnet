@@ -11,8 +11,8 @@ from eth_account import Account
 from eth_account.messages import SignableMessage, encode_defunct
 from web3 import Web3
 
-from sturdy.protocol import MINER_TYPE
-from sturdy.utils.association import associate_evm_key_with_hotkey
+from swap.protocol import MINER_TYPE
+from swap.utils.association import associate_evm_key_with_hotkey
 
 dotenv.load_dotenv()
 

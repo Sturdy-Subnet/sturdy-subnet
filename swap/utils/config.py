@@ -22,8 +22,8 @@ import os
 import bittensor as bt
 from loguru import logger
 
-from sturdy import __spec_version__ as spec_version
-from sturdy.constants import LP_MINER_ALPHA
+from swap import __spec_version__ as spec_version
+from swap.constants import LP_MINER_ALPHA
 
 
 def check_config(_cls, config: "bt.Config") -> None:

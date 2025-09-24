@@ -34,8 +34,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### Install
 
 ```bash
-git clone https://github.com/Sturdy-subnet/sturdy-subnet/
-cd sturdy-subnet
+git clone https://github.com/Swap-Subnet/swap-subnet/
+cd swap-subnet
 uv pip install -e .
 ```
 
