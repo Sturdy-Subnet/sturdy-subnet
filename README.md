@@ -1,6 +1,6 @@
 <div align="center">
 
-# **SN10** <!-- omit in toc -->
+# **Swap** <!-- omit in toc -->
 
 [![License:
 MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
@@ -20,7 +20,7 @@ MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.or
 
 ## Introduction
 
-SN10 incentivizes miners to provide liquidity to the TAO<>USDC pool on TaoFi. Miners are scored based on how much fees their positions received in the past 24 hours.
+Swap (SN10 on Bittensor) incentivizes miners to provide liquidity to the TAO<>USDC pool on TaoFi. Miners are scored based on how much fees their positions received in the past 24 hours.
 
 ## Installation
 
