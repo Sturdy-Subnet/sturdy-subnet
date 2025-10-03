@@ -270,60 +270,6 @@ def match_burns_to_positions(position_infos: dict[int, PositionFeesInfo], burns:
     return burns_by_position
 
 
-async def calculate_adjusted_burn_amounts(
-    position_infos: dict[int, PositionFeesInfo],
-    burn_start_timestamp: str,
-    client: Client = GQL_CLIENT,
-) -> dict[int, tuple[float, float]]:
-    """
-    Calculate adjusted burn amounts by accounting for DecreaseLiquidity events.
-
-    The Uniswap V3 contract considers burnt liquidity as uncollected fees. However, when users
-    decrease liquidity, those operations also trigger burn events. We need to subtract the
-    amounts from DecreaseLiquidity events to get the true burn amounts that should be
-    subtracted from uncollected fees.
-
-    Args:
-        position_infos: Dictionary of position IDs to PositionFeesInfo
-        burn_start_timestamp: Timestamp to query events from (formatted as DateTime string)
-        client: The GraphQL client to use
-
-    Returns:
-        Dictionary mapping position IDs to (adjusted_burn_amount0, adjusted_burn_amount1)
-    """
-    # Get all relevant events
-    burns = await get_burns_for_timeframe(burn_start_timestamp, client)
-    decreases = await get_decrease_liquidities_for_timeframe(burn_start_timestamp, client)
-
-    # Match burns to positions
-    burns_by_position = match_burns_to_positions(position_infos, burns)
-
-    # Create lookups for decreases
-    decreases_by_token_id = {}
-    for decrease in decreases:
-        token_id = decrease["tokenId"]
-        if token_id not in decreases_by_token_id:
-            decreases_by_token_id[token_id] = {"amount0": 0.0, "amount1": 0.0}
-        decreases_by_token_id[token_id]["amount0"] += decrease["amount0"]
-        decreases_by_token_id[token_id]["amount1"] += decrease["amount1"]
-
-    # Calculate adjusted burn amounts for each position
-    adjusted_burns = {}
-    for position_id in position_infos:
-        # Start with raw burn amounts
-        burn_amount0, burn_amount1 = burns_by_position.get(position_id, (0.0, 0.0))
-
-        # Subtract DecreaseLiquidity amounts (these should not be counted as burns)
-        if position_id in decreases_by_token_id:
-            burn_amount0 = max(0, burn_amount0 - decreases_by_token_id[position_id]["amount0"])
-            burn_amount1 = max(0, burn_amount1 - decreases_by_token_id[position_id]["amount1"])
-
-        if burn_amount0 > 0 or burn_amount1 > 0:
-            adjusted_burns[position_id] = (burn_amount0, burn_amount1)
-
-    return adjusted_burns
-
-
 async def get_position_infos_subgraph(
     block_number: int, client: Client = GQL_CLIENT, limit: int = QUERY_BATCH_SIZE, offset: int = 0
 ) -> dict[int, PositionFeesInfo]:
@@ -622,13 +568,26 @@ async def get_all_positions_fees(
     if subtract_burns_from_timestamp is not None:
         burn_start_timestamp = datetime.fromtimestamp(subtract_burns_from_timestamp, tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-    # Get adjusted burn amounts if timestamp provided
-    adjusted_burns_by_position = {}
+    # Get burn and decrease liquidity events if timestamp provided
+    burns_by_position = {}
+    decreases_by_position = {}
     if burn_start_timestamp is not None:
-        adjusted_burns_by_position = await calculate_adjusted_burn_amounts(position_infos, burn_start_timestamp, client)
+        # Get burn events
+        burns = await get_burns_for_timeframe(burn_start_timestamp, client)
+        burns_by_position = match_burns_to_positions(position_infos, burns)
+
+        # Get decrease liquidity events
+        decreases = await get_decrease_liquidities_for_timeframe(burn_start_timestamp, client)
+        for decrease in decreases:
+            token_id = decrease["tokenId"]
+            if token_id not in decreases_by_position:
+                decreases_by_position[token_id] = {"amount0": 0.0, "amount1": 0.0}
+            decreases_by_position[token_id]["amount0"] += decrease["amount0"]
+            decreases_by_position[token_id]["amount1"] += decrease["amount1"]
 
     bt.logging.debug(f"Found {len(position_infos)} positions at block {block_identifier}.")
-    bt.logging.debug(f"Found {len(adjusted_burns_by_position)} positions with adjusted burns.")
+    bt.logging.debug(f"Found {len(burns_by_position)} positions with burns.")
+    bt.logging.debug(f"Found {len(decreases_by_position)} positions with decrease liquidity events.")
 
     # create async tasks and gather them for all token IDs to call collect_fees, and place results in a dictionary
     tasks = [collect_fees(web3_provider, token_id, block_identifier) for token_id in token_ids]
@@ -646,11 +605,18 @@ async def get_all_positions_fees(
         uncollected_fees_0_adjusted = amount0 / math.pow(10, position_info.token_0_decimals)
         uncollected_fees_1_adjusted = amount1 / math.pow(10, position_info.token_1_decimals)
 
-        # Subtract adjusted burns if position had burn events
-        if token_id in adjusted_burns_by_position:
-            burnt_amount0, burnt_amount1 = adjusted_burns_by_position[token_id]
+        # Subtract burns if position had burn events
+        if token_id in burns_by_position:
+            burnt_amount0, burnt_amount1 = burns_by_position[token_id]
             uncollected_fees_0_adjusted = max(0, uncollected_fees_0_adjusted - burnt_amount0)
             uncollected_fees_1_adjusted = max(0, uncollected_fees_1_adjusted - burnt_amount1)
+
+        # Also subtract decrease liquidity amounts (these are not fees either)
+        if token_id in decreases_by_position:
+            decrease_amount0 = decreases_by_position[token_id]["amount0"]
+            decrease_amount1 = decreases_by_position[token_id]["amount1"]
+            uncollected_fees_0_adjusted = max(0, uncollected_fees_0_adjusted - decrease_amount0)
+            uncollected_fees_1_adjusted = max(0, uncollected_fees_1_adjusted - decrease_amount1)
 
         positions_fees[token_id].uncollected_fees_0 = uncollected_fees_0_adjusted
         positions_fees[token_id].uncollected_fees_1 = uncollected_fees_1_adjusted
