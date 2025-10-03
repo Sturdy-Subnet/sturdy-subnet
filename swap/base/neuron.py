@@ -54,7 +54,7 @@ class BaseNeuron(ABC):
     subtensor: bt.AsyncSubtensor
     wallet: bt.wallet
     metagraph: AsyncMetagraph
-    spec_version: int = 7000
+    spec_version: int = 7001
 
     @property
     async def block(self) -> int:
