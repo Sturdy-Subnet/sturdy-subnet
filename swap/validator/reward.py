@@ -17,10 +17,10 @@
 # DEALINGS IN THE SOFTWARE.
 import bittensor as bt
 from async_lru import alru_cache
-from web3 import AsyncWeb3, EthereumTesterProvider, Web3
+from web3 import EthereumTesterProvider, Web3
 
 from swap.constants import WHITELISTED_LP_MINER
-from swap.utils.taofi_subgraph import PositionFeesInfo, get_fees_in_range
+from swap.utils.taofi_subgraph import PositionInfo, get_positions_with_scores
 
 # a day in blocktime
 BLOCK_ONE_DAY_AGO = 7200  # 2 hours in blocks, assuming 1 block per second
@@ -37,7 +37,6 @@ async def get_rewards_uniswap_v3_lp(
     self,
     taofi_lp_evm_addresses: dict[int, str],
     subtensor: bt.AsyncSubtensor,
-    web3_provider: AsyncWeb3,
 ) -> tuple[list, dict]:
     """
     Returns rewards for Uniswap V3 LP miners based on their responses.
@@ -59,26 +58,21 @@ async def get_rewards_uniswap_v3_lp(
 
     try:
         current_block = await subtensor.get_current_block() - BLOCK_BUFFER
-        one_day_ago = max(1, current_block - BLOCK_ONE_DAY_AGO)
-        one_day_block_timestamp = int((await subtensor.get_timestamp(block=one_day_ago)).timestamp())
-        fees_in_range_ret: tuple[dict[int, PositionFeesInfo], dict[int, bool]] = await get_fees_in_range(
-            block_start=one_day_ago,
-            block_end=current_block,
-            web3_provider=web3_provider,
-            subtract_burns_from_timestamp=one_day_block_timestamp,
-        )
-        in_range_fee_growth, in_range_mapping = fees_in_range_ret
+        # Get positions with concentration scores at current block
+        positions_with_scores: dict[int, PositionInfo] = await get_positions_with_scores(block_number=current_block)
     except Exception as e:
         bt.logging.error(f"Error fetching information from Taofi subgraph: {e}")
         return (miner_uids, rewards)
 
-    # Generate mapping from owners to token ids
-    owners_to_token_ids = {}
-    for token_id, position_info in in_range_fee_growth.items():
+    # Generate mapping from owners to token ids and their scores
+    owners_to_positions = {}
+    for token_id, position_info in positions_with_scores.items():
         owner = w3.to_checksum_address(position_info.owner)
-        owners_to_token_ids.setdefault(owner, []).append(token_id)
+        if owner not in owners_to_positions:
+            owners_to_positions[owner] = []
+        owners_to_positions[owner].append((token_id, position_info.reward_score))
 
-    bt.logging.debug(f"Owners to token ids mapping: {owners_to_token_ids}")
+    bt.logging.debug(f"Owners to positions mapping: {owners_to_positions}")
 
     # Track claimed token ids to identify unclaimed ones
     claimed_token_ids = set()
@@ -97,50 +91,46 @@ async def get_rewards_uniswap_v3_lp(
             bt.logging.warning(f"Miner {miner_uid} has no associated EVM address, skipping...")
             continue
 
-        miner_fees = calculate_miner_fees(
+        miner_score = calculate_miner_score(
             miner_uid,
             evm_address,
-            owners_to_token_ids,
-            in_range_fee_growth,
-            in_range_mapping,
+            owners_to_positions,
+            positions_with_scores,
             claimed_token_ids,
             claimed_owner_addresses,
         )
-        rewards[miner_uid] = miner_fees
+        rewards[miner_uid] = miner_score
 
     if whitelisted_uid is not None:
-        unclaimed_token_ids = set(in_range_fee_growth.keys()) - claimed_token_ids
-        whitelisted_fees = calculate_whitelisted_fees(
-            whitelisted_uid, unclaimed_token_ids, in_range_fee_growth, in_range_mapping
-        )
-        rewards[whitelisted_uid] = whitelisted_fees
+        unclaimed_token_ids = set(positions_with_scores.keys()) - claimed_token_ids
+        whitelisted_score = calculate_whitelisted_score(whitelisted_uid, unclaimed_token_ids, positions_with_scores)
+        rewards[whitelisted_uid] = whitelisted_score
 
-    # Log total fees earned by all miners
-    total_fees = sum(rewards.values())
-    bt.logging.info(f"Total fees earned by all miners: {total_fees}")
+    # Log total scores earned by all miners
+    total_scores = sum(rewards.values())
+    bt.logging.info(f"Total concentration scores for all miners: {total_scores}")
 
     # Normalize rewards
-    max_fees = max(rewards.values()) if rewards.values() else 0
-    if max_fees > 0:
-        rewards = {uid: fees / max_fees for uid, fees in rewards.items()}
+    max_score = max(rewards.values()) if rewards.values() else 0
+    if max_score > 0:
+        rewards = {uid: score / max_score for uid, score in rewards.items()}
     else:
         bt.logging.warning("Total fees earned by all miners is zero, not normalizing rewards")
 
     return (miner_uids, rewards)
 
 
-def calculate_miner_fees(
+def calculate_miner_score(
     miner_uid: int,
     evm_address: str,
-    owners_to_token_ids: dict,
-    in_range_fee_growth: dict,
-    in_range_mapping: dict,
+    owners_to_positions: dict,
+    positions_with_scores: dict,
     claimed_token_ids: set,
     claimed_owner_addresses: set,
 ) -> float:
-    """Calculate fees for a regular (non-whitelisted) miner."""
-    miner_fees = 0.0
-    owner_token_ids = owners_to_token_ids.get(evm_address, [])
+    """Calculate concentration score for a regular (non-whitelisted) miner."""
+    miner_score = 0.0
+    owner_positions = owners_to_positions.get(evm_address, [])
 
     # Check if this owner address has already been claimed by another miner
     if evm_address in claimed_owner_addresses:
@@ -150,49 +140,43 @@ def calculate_miner_fees(
     # Mark this owner address as claimed
     claimed_owner_addresses.add(evm_address)
 
-    for token_id in owner_token_ids:
+    for token_id, score in owner_positions:
         if token_id in claimed_token_ids:
             bt.logging.debug(f"Token ID {token_id} already claimed, skipping...")
             continue
-        try:
-            position_info = in_range_fee_growth[token_id]
-        except KeyError:
-            bt.logging.error(f"Token ID {token_id} not found in in_range_fee_growth")
-            continue
 
-        try:
-            fees_pos = position_info.total_fees_token1_equivalent
-            miner_fees += fees_pos
-            claimed_token_ids.add(token_id)
+        miner_score += score
+        claimed_token_ids.add(token_id)
+
+        if score > 0:
+            position_info = positions_with_scores[token_id]
             bt.logging.debug(
-                f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
-                f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
+                f"Miner {miner_uid}: token_id {token_id} score {score:.6f} | "
+                f"Liquidity: {position_info.liquidity} | "
+                f"Range: [{position_info.tick_lower}, {position_info.tick_upper}]"
             )
-        except Exception as e:
-            bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
 
-    return miner_fees
+    return miner_score
 
 
-def calculate_whitelisted_fees(
-    miner_uid: int, unclaimed_token_ids: set, in_range_fee_growth: dict, in_range_mapping: dict
-) -> float:
-    """Calculate fees for the whitelisted miner from unclaimed positions."""
+def calculate_whitelisted_score(miner_uid: int, unclaimed_token_ids: set, positions_with_scores: dict) -> float:
+    """Calculate concentration score for the whitelisted miner from unclaimed positions."""
     bt.logging.debug(f"Miner {miner_uid} is whitelisted, claiming {len(unclaimed_token_ids)} unclaimed positions")
 
-    whitelisted_fees = 0.0
+    whitelisted_score = 0.0
     for token_id in unclaimed_token_ids:
         try:
-            position_info = in_range_fee_growth[token_id]
-            fees_pos = position_info.total_fees_token1_equivalent
-            whitelisted_fees += fees_pos
+            position_info = positions_with_scores[token_id]
+            score = position_info.reward_score
+            whitelisted_score += score
 
-            if fees_pos > 0:
+            if score > 0:
                 bt.logging.debug(
-                    f"Miner {miner_uid}: token_id {token_id} earned {fees_pos} fees | "
-                    f"In range: {'✅' if in_range_mapping[token_id] else '❌'}"
+                    f"Miner {miner_uid}: token_id {token_id} score {score:.6f} | "
+                    f"Liquidity: {position_info.liquidity} | "
+                    f"Range: [{position_info.tick_lower}, {position_info.tick_upper}]"
                 )
         except Exception as e:
             bt.logging.error(f"Error fetching position info for token_id {token_id}: {e}")
 
-    return whitelisted_fees
+    return whitelisted_score
