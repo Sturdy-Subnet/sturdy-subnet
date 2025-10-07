@@ -18,9 +18,6 @@ NFT_POS_MGR_PATH = Path(__file__).parent.parent / "abi" / "NonfungiblePositionMa
 NFT_POS_ABI = json.loads(NFT_POS_MGR_PATH.read_text())
 NFT_POS_MGR_ADDR = "0x61EeA4770d7E15e7036f8632f4bcB33AF1Af1e25"
 
-# Reward scoring parameters
-WIDTH_PENALTY_EXPONENT = 1.2  # Controls how strongly wider tick ranges are penalized (higher = stronger penalty)
-
 POSITIONS_QUERY = """
     query GetTokenPositions($blockNumber: Int!, $limit: Int = 1000, $offset: Int = 0) {
         positions: positionsAtBlock(limit: $limit, offset: $offset, blockNumber: $blockNumber) {
@@ -71,13 +68,15 @@ class PositionInfo:
 
 def calculate_reward_score(liquidity: float, tick_lower: int, tick_upper: int, current_tick: int) -> float:
     """
-    Calculate reward score for a position based on liquidity concentration.
+    Calculate reward score for a position based on liquidity density.
+
+    Uses the formula: (1 / #ticks liquidity is in) × total liquidity
+    This measures liquidity concentration - how much liquidity per tick.
 
     This rewards positions that:
     - Are in range (current tick between tick_lower and tick_upper)
-    - Have tighter ranges (more concentrated liquidity)
-    - Are centered close to the current tick
-    - Provide more liquidity
+    - Have tighter ranges (more concentrated liquidity per tick)
+    - Provide more total liquidity
 
     Args:
         liquidity: The amount of liquidity in the position
@@ -99,18 +98,19 @@ def calculate_reward_score(liquidity: float, tick_lower: int, tick_upper: int, c
     if not is_in_range:
         return 0.0
 
-    width = tick_upper - tick_lower
+    # Calculate the number of ticks in the range
+    # Note: We add 1 because the range is inclusive on both ends
+    num_ticks = tick_upper - tick_lower + 1
+
     # invalid range yields zero score
-    if not math.isfinite(width) or width <= 0:
+    if not math.isfinite(num_ticks) or num_ticks <= 0:
         return 0.0
 
-    center = (tick_lower + tick_upper) / 2
-    distance_from_center = abs(center - current_tick)
-    width_penalty = 1 / math.pow(width, WIDTH_PENALTY_EXPONENT)  # Penalize wider ranges
-    center_weight = 1 / (1 + distance_from_center)  # Favor positions close to current_tick
-    base_score = width_penalty * center_weight
+    # Calculate liquidity density: (1 / #ticks) × total liquidity
+    # This is equivalent to: liquidity / num_ticks
+    liquidity_density = liquidity / num_ticks
 
-    return base_score * liquidity  # Incorporate liquidity
+    return liquidity_density
 
 
 async def get_position_scores(
