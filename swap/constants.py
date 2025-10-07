@@ -2,7 +2,7 @@ MINER_SYNC_FREQUENCY = 300  # time in seconds between miner syncs
 NEW_TASK_INITIAL_DELAY = 30  # time in seconds to delay the new task loop on initial startup
 
 MAIN_LOOP_FREQUENCY = 300  # time in seconds between main loop iterations
-UNISWAP_V3_LP_QUERY_FREQUENCY = 3600  # time in seconds between Uniswap V3 LP queries
+UNISWAP_V3_LP_QUERY_FREQUENCY = 300  # time in seconds between Uniswap V3 LP queries
 
 # thresholds for the percentage of miners in each gruop before applying penalties to lowest performing miners in each group
 MINER_GROUP_THRESHOLDS = {
