@@ -63,61 +63,58 @@ class PositionInfo:
     token_1_symbol: str
     token_0_decimals: int
     token_1_decimals: int
-    reward_score: float = 0.0  # Will be calculated based on concentration
+    reward_score: float = 0.0  # The liquidity value L (if in range)
 
 
 def calculate_reward_score(liquidity: float, tick_lower: int, tick_upper: int, current_tick: int) -> float:
     """
-    Calculate reward score for a position based on liquidity density.
+    Calculate reward score for a position based on its liquidity value.
 
-    Uses the formula: (1 / #ticks liquidity is in) × total liquidity
-    This measures liquidity concentration - how much liquidity per tick.
+    In Uniswap V3, the liquidity value L already accounts for concentration.
+    For a given amount of capital, tighter ranges result in higher L values.
+
+    From the Uniswap V3 math (https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf):
+    - L represents the effective liquidity available for swaps
+    - Tighter ranges naturally have higher L for the same capital
+    - L directly determines the price impact of trades
 
     This rewards positions that:
     - Are in range (current tick between tick_lower and tick_upper)
-    - Have tighter ranges (more concentrated liquidity per tick)
-    - Provide more total liquidity
+    - Have higher liquidity L (which means either more capital OR tighter range)
 
     Args:
-        liquidity: The amount of liquidity in the position
+        liquidity: The liquidity value L of the position
         tick_lower: Lower tick boundary of the position
         tick_upper: Upper tick boundary of the position
         current_tick: Current tick of the pool
 
     Returns:
-        Score for the position (0 if out of range or invalid)
+        The liquidity value if in range, 0 otherwise
     """
-    # missing/invalid tick or non-positive liquidity yields zero
+    # Validate inputs
     if not math.isfinite(current_tick):
         return 0.0
     if not math.isfinite(liquidity) or liquidity <= 0:
         return 0.0
 
-    # out-of-range positions get zero score
+    # Check if position is in range
     is_in_range = current_tick >= tick_lower and current_tick <= tick_upper
     if not is_in_range:
         return 0.0
 
-    # Calculate the number of ticks in the range
-    # Note: We add 1 because the range is inclusive on both ends
-    num_ticks = tick_upper - tick_lower + 1
-
-    # invalid range yields zero score
-    if not math.isfinite(num_ticks) or num_ticks <= 0:
-        return 0.0
-
-    # Calculate liquidity density: (1 / #ticks) × total liquidity
-    # This is equivalent to: liquidity / num_ticks
-    liquidity_density = liquidity / num_ticks
-
-    return liquidity_density
+    # Return the liquidity value directly
+    # This already incorporates concentration effects
+    return liquidity
 
 
 async def get_position_scores(
     block_number: int, client: Client = GQL_CLIENT, limit: int = QUERY_BATCH_SIZE, offset: int = 0
 ) -> dict[int, PositionInfo]:
     """
-    Get position concentration scores for all positions at a specific block.
+    Get position liquidity scores for all positions at a specific block.
+
+    Scores positions based on their liquidity value L, which inherently
+    accounts for concentration (tighter ranges have higher L for same capital).
 
     Args:
         block_number: The block number to query
@@ -126,7 +123,7 @@ async def get_position_scores(
         offset: Number of positions to offset for pagination (default: 0)
 
     Returns:
-        Dictionary mapping position IDs to PositionInfo objects with calculated scores
+        Dictionary mapping position IDs to PositionInfo objects with liquidity scores
     """
 
     data = await client.execute_async(
@@ -152,7 +149,7 @@ async def get_position_scores(
         tick_lower = int(position["tickLower"]["tickIdx"])
         tick_upper = int(position["tickUpper"]["tickIdx"])
 
-        # Calculate the reward score based on concentration
+        # Calculate the reward score based on liquidity value
         reward_score = calculate_reward_score(
             liquidity=position_liquidity, tick_lower=tick_lower, tick_upper=tick_upper, current_tick=pool_current_tick
         )
@@ -176,17 +173,17 @@ async def get_position_scores(
 
 async def get_positions_with_scores(block_number: int, client: Client = GQL_CLIENT) -> dict[int, PositionInfo]:
     """
-    Get all positions with concentration scores at a specific block.
+    Get all positions with liquidity-based scores at a specific block.
 
-    This function replaces the fee-based scoring with concentration-based scoring
-    that rewards positions with tight ranges near the current price.
+    Scores are based on the liquidity value L, which naturally rewards
+    concentrated positions (tighter ranges yield higher L for same capital).
 
     Args:
         block_number: Block to query at
         client: GraphQL client
 
     Returns:
-        Dictionary mapping position IDs to PositionInfo objects with calculated scores
+        Dictionary mapping position IDs to PositionInfo objects with liquidity scores
     """
     return await get_all_position_scores(block_number, client)
 
@@ -195,7 +192,11 @@ async def get_all_position_scores(
     block_number: int, client: Client = GQL_CLIENT, batch_size: int = QUERY_BATCH_SIZE
 ) -> dict[int, PositionInfo]:
     """
-    Get all position scores at a specific block, handling pagination automatically.
+    Get all position liquidity scores at a specific block, handling pagination automatically.
+
+    Scores are based on the liquidity value L for in-range positions.
+    The liquidity value inherently rewards concentration since tighter
+    ranges achieve higher L with the same capital.
 
     Args:
         block_number: The block number to query
@@ -203,7 +204,7 @@ async def get_all_position_scores(
         batch_size: Number of positions to fetch per request (default: 1000)
 
     Returns:
-        Dictionary mapping position IDs to PositionInfo objects with calculated scores
+        Dictionary mapping position IDs to PositionInfo objects with liquidity scores
     """
     all_positions = {}
     offset = 0
