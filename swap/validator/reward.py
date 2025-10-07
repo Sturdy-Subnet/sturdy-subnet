@@ -151,8 +151,7 @@ def calculate_miner_score(
         if score > 0:
             position_info = positions_with_scores[token_id]
             bt.logging.debug(
-                f"Miner {miner_uid}: token_id {token_id} score {score:.6f} | "
-                f"Liquidity: {position_info.liquidity} | "
+                f"Miner {miner_uid}: token_id {token_id} Liquidity {position_info.liquidity} | "
                 f"Range: [{position_info.tick_lower}, {position_info.tick_upper}]"
             )
 
@@ -172,8 +171,7 @@ def calculate_whitelisted_score(miner_uid: int, unclaimed_token_ids: set, positi
 
             if score > 0:
                 bt.logging.debug(
-                    f"Miner {miner_uid}: token_id {token_id} score {score:.6f} | "
-                    f"Liquidity: {position_info.liquidity} | "
+                    f"Miner {miner_uid}: token_id {token_id} Liquidity {position_info.liquidity} | "
                     f"Range: [{position_info.tick_lower}, {position_info.tick_upper}]"
                 )
         except Exception as e:
