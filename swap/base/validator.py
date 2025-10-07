@@ -300,7 +300,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     bt.logging.warning(f"Failed to parse commitment JSON for hotkey {hotkey}: {e}")
                     commitments[uid] = {}
             except ValueError:
-                bt.logging.warning(f"Hotkey {hotkey} not found in metagraph, skipping commitment")
+                pass
 
         old_miner_types = copy.deepcopy(self.miner_types)
         bt.logging.debug(f"Miner type commitments: {commitments}")

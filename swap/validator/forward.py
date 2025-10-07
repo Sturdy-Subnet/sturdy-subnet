@@ -60,7 +60,6 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         return [], {}
 
     bt_mainnet_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_MAINNET]
-    bt_web3_provider = self.pool_data_providers[POOL_DATA_PROVIDER_TYPE.BITTENSOR_WEB3]
 
     # filter out the associated evm addresses that are not in the uids to query
     taofi_lp_evm_addresses = {uid: evm for uid, evm in self.associated_evm_addresses.items() if uid in uids_to_query}
@@ -70,7 +69,6 @@ async def query_and_score_miners_uniswap_v3_lp(self) -> tuple[list, dict[int, fl
         self,
         taofi_lp_evm_addresses=taofi_lp_evm_addresses,
         subtensor=bt_mainnet_provider,
-        web3_provider=bt_web3_provider,
     )
 
     # Sort rewards dict by value in descending order
